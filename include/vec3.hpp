@@ -87,3 +87,4 @@ inline vec3 unit_vector(const vec3& v) {
 }
 
 using point3 = vec3;
+using color = vec3;

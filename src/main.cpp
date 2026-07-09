@@ -1,5 +1,6 @@
 #include <iostream>
 #include "vec3.hpp"
+#include "color.hpp"
 
 int main() {
     
@@ -15,11 +16,9 @@ int main() {
             auto g = double(j) / (image_height - 1);
             auto b = 0.0;
 
-            int ir = int(255.999 * r);
-            int ig = int(255.999 * g);
-            int ib = int(255.999 * b);
+            auto pixel_color = color(r, g, b);
 
-            std::cout << ir << ' ' << ig << ' ' << ib << '\n';
+            write_color(std::cout, pixel_color);
         }
     }
 
