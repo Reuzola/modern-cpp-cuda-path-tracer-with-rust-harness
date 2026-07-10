@@ -1,7 +1,9 @@
 #include <iostream>
 #include <limits>
+#include <memory>
 #include "hit_record.hpp"
 #include "hittable.hpp"
+#include "hittable_list.hpp"
 #include "sphere.hpp"
 #include "vec3.hpp"
 #include "color.hpp"
@@ -42,7 +44,9 @@ int main() {
 
     auto pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-    auto sp = sphere(point3(0, 0, -1), 0.5);
+    hittable_list world;
+    world.add(std::make_shared<sphere>(point3(0, 0, -1), 0.5));
+    world.add(std::make_shared<sphere>(point3(0, -100.5, -1), 100));
 
     std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
 
@@ -53,7 +57,7 @@ int main() {
             auto ray_direction = pixel_center - camera_center;
             ray r(camera_center, ray_direction);
 
-            color pixel_color = ray_color(r, sp);
+            color pixel_color = ray_color(r, world);
             write_color(std::cout, pixel_color);
         }
     }
