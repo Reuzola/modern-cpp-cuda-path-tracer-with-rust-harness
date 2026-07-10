@@ -1,9 +1,9 @@
 #include <iostream>
-#include <limits>
 #include <memory>
 #include "hit_record.hpp"
 #include "hittable.hpp"
 #include "hittable_list.hpp"
+#include "interval.hpp"
 #include "sphere.hpp"
 #include "vec3.hpp"
 #include "color.hpp"
@@ -13,7 +13,7 @@
 [[nodiscard]] color ray_color(const ray& r, const hittable& world) {
     hit_record rec;
 
-    if (world.hit(r, 0.0, infinity, rec)) {
+    if (world.hit(r, interval(0, infinity), rec)) {
         return color(0.5 * (rec.normal + color(1, 1, 1)));
     }
     
