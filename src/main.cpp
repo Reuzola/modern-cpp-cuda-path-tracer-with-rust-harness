@@ -1,26 +1,19 @@
 #include <iostream>
-#include <cmath>
+#include <limits>
+#include "hit_record.hpp"
+#include "hittable.hpp"
+#include "sphere.hpp"
 #include "vec3.hpp"
 #include "color.hpp"
 #include "ray.hpp"
 
-[[nodiscard]] double hit_sphere(const point3& center, double radius, const ray& r) {
-    const auto oc = center - r.origin();
-    const double a = r.direction().length_squared();
-    const double h = dot(oc, r.direction());
-    const double c = oc.length_squared() - (radius * radius);
-    const double discriminant = h*h - a*c;
-    if (discriminant < 0) return -1.0;
-    return (h - std::sqrt(discriminant)) / a;
-}
+[[nodiscard]] color ray_color(const ray& r, const hittable& world) {
+    hit_record rec;
 
-[[nodiscard]] color ray_color(const ray& r) {
-    const auto t = hit_sphere(point3(0, 0, -1), 0.5, r);
-    if (t > 0.0) {
-        const auto p = r.at(t);
-        const auto n = unit_vector(p - point3(0, 0, -1));
-        return color(0.5 * (n + vec3(1, 1, 1)));
+    if (world.hit(r, 0.0, std::numeric_limits<double>::infinity(), rec)) {
+        return color(0.5 * (rec.normal + color(1, 1, 1)));
     }
+    
     const vec3 unit_direction = unit_vector(r.direction());
     const auto a = 0.5 * (unit_direction.y() + 1.0);
     return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
@@ -49,6 +42,8 @@ int main() {
 
     auto pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
+    auto sp = sphere(point3(0, 0, -1), 0.5);
+
     std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
 
     for (int j = 0; j < image_height; j++) {
@@ -58,7 +53,7 @@ int main() {
             auto ray_direction = pixel_center - camera_center;
             ray r(camera_center, ray_direction);
 
-            color pixel_color = ray_color(r);
+            color pixel_color = ray_color(r, sp);
             write_color(std::cout, pixel_color);
         }
     }
