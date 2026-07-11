@@ -7,8 +7,6 @@
 #include <vector>
 
 class hittable_list : public hittable {
-    private:
-        std::vector<std::shared_ptr<hittable>> objects;
     public:
         [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {
             double closest_so_far = ray_t.max;
@@ -34,4 +32,7 @@ class hittable_list : public hittable {
         void add(std::shared_ptr<hittable> obj) {
             objects.push_back(std::move(obj));
         }
+
+    private:
+        std::vector<std::shared_ptr<hittable>> objects;
 };

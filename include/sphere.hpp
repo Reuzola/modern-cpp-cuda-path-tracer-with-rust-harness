@@ -5,9 +5,6 @@
 #include <cmath>
 
 class sphere : public hittable {
-    private:
-        point3 center;
-        double radius;
     public:
         sphere(const point3& center, double radius) : center(center), radius(std::fmax(0.0, radius)) {}
 
@@ -35,4 +32,8 @@ class sphere : public hittable {
             rec.set_face_normal(r, outward_normal);
             return true;
         }
+
+    private:
+        point3 center;
+        double radius;
 };
