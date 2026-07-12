@@ -7,6 +7,7 @@
 #include "vec3.hpp"
 #include "color.hpp"
 #include "random.hpp"
+#include "material.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -75,9 +76,11 @@ class camera {
             hit_record rec;
 
             if (world.hit(r, interval(0.001, infinity), rec)) {
-                ray scattered(rec.p, rec.normal + random_unit_vector());
+                if (auto sr = rec.mat->scatter(r, rec)) {
+                    return sr->attenuation * ray_color(sr->scattered, depth - 1, world);
+                }
 
-                return ray_color(scattered, depth - 1, world) * 0.5;
+                return color(0.0, 0.0, 0.0);
             }
             
             const vec3 unit_direction = unit_vector(r.direction());
