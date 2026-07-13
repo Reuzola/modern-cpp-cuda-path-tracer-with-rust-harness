@@ -11,7 +11,7 @@ int main() {
     const lambertian material_ground{ color(0.8, 0.8, 0.0) };
     const lambertian material_center{ color(0.1, 0.2, 0.5) };
 
-    const dielectric material_left{ 1.5 }; // Glass
+    const dielectric material_left{ 1.00 / 1.33 }; // Glass
 
     const metal material_right{ color(0.8, 0.6, 0.2), 1.0 };
 
