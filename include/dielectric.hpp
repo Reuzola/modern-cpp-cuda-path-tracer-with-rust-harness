@@ -1,6 +1,7 @@
 #pragma once
 #include "material.hpp"
 #include "hit_record.hpp"
+#include "random.hpp"
 #include "vec3.hpp"
 #include "ray.hpp"
 #include <cmath>
@@ -17,13 +18,19 @@ class dielectric : public material {
             const auto sin_theta = std::sqrt(1 - cos_theta * cos_theta);
 
             const bool cannot_refract = ri * sin_theta > 1.0;
+            const bool should_reflect = cannot_refract || reflectance(cos_theta, ri) > random_double();
 
             vec3 direction;
-            if (cannot_refract) direction = reflect(unit_direction, rec.normal);
+            if (should_reflect) direction = reflect(unit_direction, rec.normal);
             else direction = refract(unit_direction, rec.normal, ri);
 
             return scatter_record{ .attenuation = color(1.0, 1.0, 1.0), .scattered = ray(rec.p, direction) };
         }
     private:
         double refraction_index{};
+
+        [[nodiscard]] static double reflectance(double cosine, double refraction_index) {
+            const auto r_zero = ((1 - refraction_index) / (1 + refraction_index)) * ((1 - refraction_index) / (1 + refraction_index));
+            return r_zero + (1 - r_zero) * ((1-cosine) * (1-cosine) * (1-cosine) * (1-cosine) * (1-cosine)); // (1-cosine)^5
+        }
 };
