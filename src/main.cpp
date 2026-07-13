@@ -1,6 +1,7 @@
 #include "camera.hpp"
 #include "hittable_list.hpp"
 #include "lambertian.hpp"
+#include "metal.hpp"
 #include "sphere.hpp"
 #include "vec3.hpp"
 #include <memory>
@@ -9,10 +10,16 @@ int main() {
     const lambertian material_ground{ color(0.8, 0.8, 0.0) };
     const lambertian material_center{ color(0.1, 0.2, 0.5) };
 
+    const metal material_left{ color(0.8, 0.8, 0.8)};
+    const metal material_right{ color(0.8, 0.6, 0.2)};
+
     hittable_list world;
 
-    world.add(std::make_shared<sphere>(point3(0, 0, -1), 0.5, &material_center));
-    world.add(std::make_shared<sphere>(point3(0, -100.5, -1), 100.0, &material_ground));
+    world.add(std::make_shared<sphere>(point3(0.0, 0.0, -1.2), 0.5, &material_center));
+    world.add(std::make_shared<sphere>(point3(0.0, -100.5, -1.0), 100.0, &material_ground));
+
+    world.add(std::make_shared<sphere>(point3(-1.0, 0.0, -1.0), 0.5, &material_left));
+    world.add(std::make_shared<sphere>(point3( 1.0, 0.0, -1.0), 0.5, &material_right));
 
     camera cam;
 

@@ -108,5 +108,9 @@ inline vec3 unit_vector(const vec3& v) {
     }
 }
 
+[[nodiscard]] inline vec3 reflect(const vec3& v, const vec3& n) {
+    return v - 2 * dot(v, n) * n;
+}
+
 using point3 = vec3;
 using color = vec3;
