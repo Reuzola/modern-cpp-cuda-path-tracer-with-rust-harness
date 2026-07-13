@@ -2,6 +2,7 @@
 #include "hittable_list.hpp"
 #include "lambertian.hpp"
 #include "metal.hpp"
+#include "dielectric.hpp"
 #include "sphere.hpp"
 #include "vec3.hpp"
 #include <memory>
@@ -10,7 +11,8 @@ int main() {
     const lambertian material_ground{ color(0.8, 0.8, 0.0) };
     const lambertian material_center{ color(0.1, 0.2, 0.5) };
 
-    const metal material_left{ color(0.8, 0.8, 0.8), 0.3 };
+    const dielectric material_left{ 1.5 }; // Glass
+
     const metal material_right{ color(0.8, 0.6, 0.2), 1.0 };
 
     hittable_list world;
