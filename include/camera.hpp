@@ -9,6 +9,7 @@
 #include "random.hpp"
 #include "material.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 class camera {
@@ -17,6 +18,7 @@ class camera {
         int image_width{100};
         int samples_per_pixel{10};
         int max_depth{10};
+        double vfov{90.0};
 
         void render(const hittable& world) {
             initialize();
@@ -54,10 +56,13 @@ class camera {
 
             pixel_samples_scale = 1.0 / samples_per_pixel;
 
-            const auto viewport_height = 2.0;
-            const auto viewport_width = viewport_height * (static_cast<double>(image_width) / image_height);
-
             const auto focal_length = 1.0;
+
+            const auto theta = degrees_to_radians(vfov);
+            const auto h = std::tan(theta / 2);
+
+            const auto viewport_height = 2 * h * focal_length;
+            const auto viewport_width = viewport_height * (static_cast<double>(image_width) / image_height);
 
             const auto viewport_u = vec3(viewport_width, 0, 0);
             const auto viewport_v = vec3(0, -viewport_height, 0);
