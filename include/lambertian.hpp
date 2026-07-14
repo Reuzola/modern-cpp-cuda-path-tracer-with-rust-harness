@@ -8,7 +8,7 @@ class lambertian : public material {
     public:
         explicit lambertian(const color& albedo) : albedo(albedo) {}
 
-        [[nodiscard]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override {
+        [[nodiscard]] [[maybe_unused]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override {
             auto scatter_direction = rec.normal + random_unit_vector();
             if (scatter_direction.near_zero()) scatter_direction = rec.normal;
 

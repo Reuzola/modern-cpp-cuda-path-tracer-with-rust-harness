@@ -2,15 +2,30 @@
     "version": 6,
     "configurePresets": [
         {
-            "name": "dev",
-            "displayName": "Development (clang, Debug)",
+            "name": "base",
+            "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
-                "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "dev",
+            "displayName": "Development (clang, Debug)",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release (clang, optimized)",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
             }
         }
     ],
@@ -18,6 +33,10 @@
         {
             "name": "dev",
             "configurePreset": "dev"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
         }
     ]
 }

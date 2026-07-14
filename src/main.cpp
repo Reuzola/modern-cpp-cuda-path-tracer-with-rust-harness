@@ -10,7 +10,7 @@
 
 int main() {
     hittable_list world;
-
+    
     const lambertian material_ground{ color(0.8, 0.8, 0.0) };
     const lambertian material_center{ color(0.1, 0.2, 0.5) };
     const dielectric material_left{ 1.5 };
@@ -34,8 +34,10 @@ int main() {
     cam.lookfrom = point3(-2.0, 2.0, 1.0);
     cam.lookat = point3(0.0, 0.0, -1.0);
     cam.vup = vec3(0.0, 1.0, 0.0);
+    cam.focus_dist = 3.4;
+    cam.defocus_angle = 10.0;
 
     cam.render(world);
-
+    
     return 0;
 }

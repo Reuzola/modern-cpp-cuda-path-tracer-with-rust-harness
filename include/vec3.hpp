@@ -121,5 +121,14 @@ inline vec3 unit_vector(const vec3& v) {
     return r_out_perp + r_out_parallel;
 }
 
+[[nodiscard]] inline vec3 random_in_unit_disk() {
+    while (true) {
+        auto p = vec3(random_double(-1, 1), random_double(-1, 1), 0);
+        const auto lensq = p.length_squared();
+
+        if(lensq < 1) return p;
+    }
+}
+
 using point3 = vec3;
 using color = vec3;
