@@ -1,27 +1,56 @@
 #include "camera.hpp"
 #include "hittable_list.hpp"
 #include "lambertian.hpp"
+#include "material.hpp"
 #include "metal.hpp"
 #include "dielectric.hpp"
+#include "random.hpp"
 #include "sphere.hpp"
 #include "vec3.hpp"
 #include <cmath>
 #include <memory>
+#include <vector>
 
 int main() {
     hittable_list world;
-    
-    const lambertian material_ground{ color(0.8, 0.8, 0.0) };
-    const lambertian material_center{ color(0.1, 0.2, 0.5) };
-    const dielectric material_left{ 1.5 };
-    const dielectric material_bubble{ 1.0 / 1.5};
-    const metal material_right{ color(0.8, 0.6, 0.2), 1.0 };
 
-    world.add(std::make_shared<sphere>(point3(0.0, -100.5, -1.0), 100.0, &material_ground));
-    world.add(std::make_shared<sphere>(point3(0.0, 0.0, -1.2), 0.5, &material_center));
-    world.add(std::make_shared<sphere>(point3(-1.0, 0.0, -1.0), 0.5, &material_left));
-    world.add(std::make_shared<sphere>(point3(-1.0, 0.0, -1.0), 0.4, &material_bubble));
-    world.add(std::make_shared<sphere>(point3( 1.0, 0.0, -1.0), 0.5, &material_right));
+    std::vector<std::unique_ptr<material>> materials;
+
+    materials.push_back(std::make_unique<lambertian>(color(0.5, 0.5, 0.5))); // ground
+    world.add(std::make_shared<sphere>(point3(0.0, -1000, 0.0), 1000.0, materials.back().get()));
+
+    for (int a = -11; a < 11; a++) {
+        for (int b = -11; b < 11; b++) {
+            const auto choose_mat = random_double();
+
+            const point3 center(a + 0.9 * random_double(), 0.2, b + 0.9 * random_double());
+            if ((center - point3(4.0, 0.2, 0.0)).length() > 0.9) {
+                if (choose_mat < 0.8) { // %80 diffuse
+                    const auto albedo = color::random() * color::random();
+                    materials.push_back(std::make_unique<lambertian>(albedo));
+                    const auto center2 = center + vec3(0.0, random_double(0.0, 0.5), 0.0);
+                    world.add(std::make_shared<sphere>(center, center2, 0.2, materials.back().get()));
+                } else if (choose_mat < 0.95) { // %15 metal
+                    const auto albedo = color::random(0.5, 1.0);
+                    const auto fuzz = random_double(0.0, 0.5);
+                    materials.push_back(std::make_unique<metal>(albedo, fuzz));
+                    world.add(std::make_shared<sphere>(center, 0.2, materials.back().get()));
+                } else { // %5 glass
+                    materials.push_back(std::make_unique<dielectric>(1.5));
+                    world.add(std::make_shared<sphere>(center, 0.2, materials.back().get()));
+                }
+            }
+        }
+    }
+
+    materials.push_back(std::make_unique<dielectric>(1.5));
+    world.add(std::make_shared<sphere>(point3(0.0, 1.0, 0.0), 1.0, materials.back().get()));
+
+    materials.push_back(std::make_unique<lambertian>(color(0.4, 0.2, 0.1)));
+    world.add(std::make_shared<sphere>(point3(-4.0, 1.0, 0.0), 1.0, materials.back().get()));
+
+    materials.push_back(std::make_unique<metal>(color(0.7, 0.6, 0.5), 0.0));
+    world.add(std::make_shared<sphere>(point3(4.0, 1.0, 0.0), 1.0, materials.back().get()));
     
     camera cam;
 
@@ -31,11 +60,11 @@ int main() {
     cam.max_depth = 50;
 
     cam.vfov = 20;
-    cam.lookfrom = point3(-2.0, 2.0, 1.0);
-    cam.lookat = point3(0.0, 0.0, -1.0);
+    cam.lookfrom = point3(13.0, 2.0, 3.0);
+    cam.lookat = point3(0.0, 0.0, 0.0);
     cam.vup = vec3(0.0, 1.0, 0.0);
-    cam.focus_dist = 3.4;
-    cam.defocus_angle = 10.0;
+    cam.focus_dist = 10.0;
+    cam.defocus_angle = 0.6;
 
     cam.render(world);
     
