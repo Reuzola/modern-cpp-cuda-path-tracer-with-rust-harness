@@ -1,5 +1,6 @@
 #pragma once
 #include "hittable.hpp"
+#include "ray.hpp"
 #include "vec3.hpp"
 #include "interval.hpp"
 #include <cmath>
@@ -8,10 +9,13 @@ class material;
 
 class sphere : public hittable {
     public:
-        sphere(const point3& center, double radius, const material* mat) : center(center), radius(std::fmax(0.0, radius)), mat(mat) {}
+        sphere(const point3& center1, const point3& center2, double radius, const material* mat) : center(center1, center2 - center1), radius(std::fmax(0.0, radius)), mat(mat) {}
+        sphere(const point3& static_center, double radius, const material* mat) : sphere(static_center, static_center, radius, mat) {}
 
         bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {
-            const auto oc = center - r.origin();
+            const auto current_center = center.at(r.time());
+
+            const auto oc = current_center - r.origin();
             const double a = r.direction().length_squared();
             const double h = dot(oc, r.direction());
             const double c = oc.length_squared() - (radius * radius);
@@ -30,7 +34,7 @@ class sphere : public hittable {
 
             rec.t = root;
             rec.p = r.at(root);
-            const vec3 outward_normal = (rec.p - center) / radius;
+            const vec3 outward_normal = (rec.p - current_center) / radius;
             rec.set_face_normal(r, outward_normal);
             rec.mat = mat;
 
@@ -38,7 +42,7 @@ class sphere : public hittable {
         }
 
     private:
-        point3 center;
+        ray center;
         double radius;
         const material* mat = nullptr;
 };
