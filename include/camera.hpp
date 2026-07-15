@@ -118,7 +118,8 @@ class camera {
             const point3 sample_point = pixel00_loc + (i + offset.x()) * pixel_delta_u + (j + offset.y()) * pixel_delta_v;
             const point3 origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
 
-            return ray(origin, sample_point - origin); 
+            const double ray_time = random_double();
+            return ray(origin, sample_point - origin, ray_time); 
         }
 
         [[nodiscard]] point3 defocus_disk_sample() const {
