@@ -4,7 +4,6 @@
 #include "hittable.hpp"
 #include "hittable_list.hpp"
 #include "interval.hpp"
-#include "random.hpp"
 #include <algorithm>
 #include <memory>
 #include <span>
@@ -13,7 +12,12 @@ class bvh_node : public hittable {
     public:
         bvh_node(hittable_list list) : bvh_node(std::span<std::shared_ptr<hittable>>(list.objects)) {}
         bvh_node(std::span<std::shared_ptr<hittable>> objects) {
-            int axis = random_int(0, 2);
+            bbox = aabb();
+            for (const auto& object : objects) {
+                bbox = aabb(bbox, object->bounding_box());
+            }
+
+            int axis = bbox.longest_axis();
 
             auto comparator = (axis == 0) ? box_x_compare : (axis == 1) ? box_y_compare : box_z_compare;
             const auto count = objects.size();
@@ -30,7 +34,6 @@ class bvh_node : public hittable {
                 left = std::make_shared<bvh_node>(objects.subspan(0, mid));
                 right = std::make_shared<bvh_node>(objects.subspan(mid));
             }
-            bbox = aabb(left->bounding_box(), right->bounding_box());
         }
 
         [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {

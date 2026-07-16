@@ -22,6 +22,11 @@ class aabb {
             return x;
         }
 
+        [[nodiscard]] constexpr int longest_axis() const {
+            if (x.size() > y.size()) return x.size() > z.size() ? 0 : 2;
+            return y.size() > z.size() ? 1 : 2;
+        }
+
         [[nodiscard]] bool hit(const ray& r, interval ray_t) const {
             const auto& ray_orig = r.origin();
             const auto& ray_dir = r.direction();
