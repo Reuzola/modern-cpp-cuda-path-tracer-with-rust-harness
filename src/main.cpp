@@ -7,7 +7,9 @@
 #include "random.hpp"
 #include "sphere.hpp"
 #include "vec3.hpp"
+#include <chrono>
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -66,7 +68,13 @@ int main() {
     cam.focus_dist = 10.0;
     cam.defocus_angle = 0.6;
 
+    const auto start = std::chrono::steady_clock::now();
     cam.render(world);
+    const auto end = std::chrono::steady_clock::now();
+
+    const std::chrono::duration<double> elapsed = end - start;
+
+    std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
     
     return 0;
 }
