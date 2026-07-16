@@ -8,7 +8,11 @@
 #include <vector>
 
 class hittable_list : public hittable {
+        friend class bvh_node;
     public:
+        hittable_list() = default;
+        explicit hittable_list(std::shared_ptr<hittable> object) { add(std::move(object)); }
+
         [[nodiscard]] aabb bounding_box() const override { return bbox; }
 
         [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {

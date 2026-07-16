@@ -1,3 +1,4 @@
+#include "bvh.hpp"
 #include "camera.hpp"
 #include "hittable_list.hpp"
 #include "lambertian.hpp"
@@ -54,6 +55,8 @@ int main() {
     materials.push_back(std::make_unique<metal>(color(0.7, 0.6, 0.5), 0.0));
     world.add(std::make_shared<sphere>(point3(4.0, 1.0, 0.0), 1.0, materials.back().get()));
     
+    world = hittable_list(std::make_shared<bvh_node>(world));
+
     camera cam;
 
     cam.aspect_ratio = 16.0 / 9.0;
