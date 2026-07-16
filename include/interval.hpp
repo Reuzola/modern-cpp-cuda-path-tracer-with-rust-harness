@@ -1,5 +1,6 @@
 #pragma once
 #include "constants.hpp"
+#include <algorithm>
 
 class interval {
     public:
@@ -8,6 +9,7 @@ class interval {
 
         constexpr interval() = default;
         constexpr interval(double min, double max) : min(min), max(max) {}
+        constexpr interval(const interval& a, const interval& b) : min(std::min(a.min, b.min)), max(std::max(a.max, b.max)) {}
 
         constexpr bool contains(double x) const {
             return min <= x && x <= max;
