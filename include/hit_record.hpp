@@ -4,6 +4,8 @@
 
 class material;
 
+struct uv_coords { double u{}, v{}; };
+
 struct hit_record {
     point3 p;
     vec3 normal;

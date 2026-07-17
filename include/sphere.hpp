@@ -1,4 +1,5 @@
 #pragma once
+#include "constants.hpp"
 #include "hittable.hpp"
 #include "ray.hpp"
 #include "vec3.hpp"
@@ -44,6 +45,9 @@ class sphere : public hittable {
             rec.p = r.at(root);
             const vec3 outward_normal = (rec.p - current_center) / radius;
             rec.set_face_normal(r, outward_normal);
+            const auto [u, v] = get_sphere_uv(outward_normal);
+            rec.u = u;
+            rec.v = v;
             rec.mat = mat;
 
             return true;
@@ -53,4 +57,13 @@ class sphere : public hittable {
         double radius;
         const material* mat = nullptr;
         aabb bbox;
+
+        [[nodiscard]] static uv_coords get_sphere_uv(const point3& p) {
+            const double theta = std::acos(-p.y());
+            const double phi = std::atan2(-p.z(), p.x()) + pi;
+
+            const double u = phi / (2 * pi);
+            const double v = theta / pi;
+            return {u, v};
+        }
 };
