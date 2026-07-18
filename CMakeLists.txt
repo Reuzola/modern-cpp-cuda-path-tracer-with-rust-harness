@@ -11,4 +11,4 @@ SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(pathtracer src/main.cpp)
-target_include_directories(pathtracer PRIVATE include)
+target_include_directories(pathtracer PRIVATE include external)
