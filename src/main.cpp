@@ -180,7 +180,7 @@ void perlin_spheres() {
     std::vector<std::unique_ptr<texture>> textures;
     std::vector<std::unique_ptr<material>> materials;
 
-    textures.push_back(std::make_unique<noise_texture>());
+    textures.push_back(std::make_unique<noise_texture>(4.0));
     materials.push_back(std::make_unique<lambertian>(textures.back().get()));
     world.add(std::make_shared<sphere>(point3(0.0, -1000.0, 0), 1000.0, materials.back().get()));
     world.add(std::make_shared<sphere>(point3(0.0, 2.0, 0), 2.0, materials.back().get()));
