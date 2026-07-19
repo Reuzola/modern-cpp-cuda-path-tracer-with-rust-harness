@@ -21,9 +21,13 @@ class perlin {
         }
 
         [[nodiscard]] double noise(const point3& p) const {
-            const double u = p.x() - std::floor(p.x());
-            const double v = p.y() - std::floor(p.y());
-            const double w = p.z() - std::floor(p.z());
+            double u = p.x() - std::floor(p.x());
+            double v = p.y() - std::floor(p.y());
+            double w = p.z() - std::floor(p.z());
+
+            u = u*u*(3 - 2*u); // u = 3u² − 2u³
+            v = v*v*(3 - 2*v); // v = 3v² − 2v³
+            w = w*w*(3 - 2*w); // w = 3w² − 2w³
 
             const int i = static_cast<int>(std::floor(p.x()));
             const int j = static_cast<int>(std::floor(p.y()));
