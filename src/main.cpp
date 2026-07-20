@@ -219,21 +219,37 @@ void quads() {
     std::vector<std::unique_ptr<texture>> textures;
     std::vector<std::unique_ptr<material>> materials;
 
+    textures.push_back(std::make_unique<solid_color>(color(1.0, 0.2, 0.2)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    world.add(std::make_shared<quad>(point3(-3.0, -2.0, 5.0), vec3(0.0, 0.0, -4.0), vec3(0.0, 4.0, 0.0), materials.back().get()));
+
+    textures.push_back(std::make_unique<solid_color>(color(0.2, 1.0, 0.2)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    world.add(std::make_shared<quad>(point3(-2.0, -2.0, 0.0), vec3(4.0, 0.0, 0.0), vec3(0.0, 4.0, 0.0), materials.back().get()));
+
+    textures.push_back(std::make_unique<solid_color>(color(0.2, 0.2, 1.0)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    world.add(std::make_shared<quad>(point3(3.0, -2.0, 1.0), vec3(0.0, 0.0, 4.0), vec3(0.0, 4.0, 0.0), materials.back().get()));
+
+    textures.push_back(std::make_unique<solid_color>(color(1.0, 0.5, 0.0)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    world.add(std::make_shared<quad>(point3(-2.0, 3.0, 1.0), vec3(4.0, 0.0, 0.0), vec3(0.0, 0.0, 4.0), materials.back().get()));
+
     textures.push_back(std::make_unique<solid_color>(color(0.2, 0.8, 0.8)));
     materials.push_back(std::make_unique<lambertian>(textures.back().get()));
-    world.add(std::make_shared<quad>(point3(-5.0, 0.0, -5.0), vec3(10.0, 0.0, 0.0), vec3(0.0, 0.0, 10.0), materials.back().get()));
+    world.add(std::make_shared<quad>(point3(-2.0, -3.0, 5.0), vec3(4.0, 0.0, 0.0), vec3(0.0, 0.0, -4.0), materials.back().get()));
 
     world = hittable_list(std::make_shared<bvh_node>(world));
 
     camera cam;
 
-    cam.aspect_ratio = 16.0 / 9.0;
+    cam.aspect_ratio = 1.0;
     cam.image_width = 400;
     cam.samples_per_pixel = 100;
     cam.max_depth = 50;
 
     cam.vfov = 80;
-    cam.lookfrom = point3(0.0, 2.0, 9.0);
+    cam.lookfrom = point3(0.0, 0.0, 9.0);
     cam.lookat = point3(0.0, 0.0, 0.0);
     cam.vup = vec3(0.0, 1.0, 0.0);
     cam.defocus_angle = 0.0;
