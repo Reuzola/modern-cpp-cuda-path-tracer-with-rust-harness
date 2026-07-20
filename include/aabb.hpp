@@ -8,11 +8,12 @@ class aabb {
         interval x, y, z;
 
         constexpr aabb() = default;
-        constexpr aabb(const interval& x, const interval& y, const interval& z) : x(x), y(y), z(z) {}
+        constexpr aabb(const interval& x, const interval& y, const interval& z) : x(x), y(y), z(z) { pad_to_minimums(); }
         aabb(const point3& a, const point3& b) {
             x = (a[0] <= b[0]) ? interval(a[0], b[0]) : interval(b[0], a[0]);
             y = (a[1] <= b[1]) ? interval(a[1], b[1]) : interval(b[1], a[1]);
             z = (a[2] <= b[2]) ? interval(a[2], b[2]) : interval(b[2], a[2]);
+            pad_to_minimums();
         }
         constexpr aabb(const aabb& box0, const aabb& box1) : x(box0.x, box1.x), y(box0.y, box1.y) ,z(box0.z, box1.z) {}
 
@@ -48,5 +49,13 @@ class aabb {
                 if (ray_t.max <= ray_t.min) return false;
             }
             return true;
+        }
+    private:
+        constexpr void pad_to_minimums() {
+            constexpr double delta = 0.0001;
+
+            if(x.size() < delta) x = x.expand(delta);
+            if(y.size() < delta) y = y.expand(delta);
+            if(z.size() < delta) z = z.expand(delta);
         }
 };

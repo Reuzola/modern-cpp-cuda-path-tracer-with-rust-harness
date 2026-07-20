@@ -28,4 +28,9 @@ class interval {
         constexpr double size() const {
             return max - min;
         }
+
+        [[nodiscard]] constexpr interval expand(double delta) const {
+            const double padding = delta / 2;
+            return interval(min - padding, max + padding);
+        }
 };
