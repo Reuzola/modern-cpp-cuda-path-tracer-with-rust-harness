@@ -9,6 +9,7 @@
 #include "metal.hpp"
 #include "dielectric.hpp"
 #include "quad.hpp"
+#include "diffuse_light.hpp"
 #include "random.hpp"
 #include "solid_color.hpp"
 #include "sphere.hpp"
@@ -25,14 +26,18 @@ void checkered_spheres();
 void earth();
 void perlin_spheres();
 void quads();
+void simple_light();
+void cornell_box();
 
 int main() {
-    switch (5) {
+    switch (7) {
         case 1: bouncing_spheres(); break;
         case 2: checkered_spheres(); break;
         case 3: earth(); break;
         case 4: perlin_spheres(); break;
         case 5: quads(); break;
+        case 6: simple_light(); break;
+        case 7: cornell_box(); break;
     }
 }
 
@@ -256,6 +261,103 @@ void quads() {
     cam.vfov = 80;
     cam.lookfrom = point3(0.0, 0.0, 9.0);
     cam.lookat = point3(0.0, 0.0, 0.0);
+    cam.vup = vec3(0.0, 1.0, 0.0);
+    cam.defocus_angle = 0.0;
+    cam.focus_dist = 10.0;
+
+    const auto start = std::chrono::steady_clock::now();
+    cam.render(world);
+    const auto end = std::chrono::steady_clock::now();
+
+    const std::chrono::duration<double> elapsed = end - start;
+
+    std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
+}
+
+void simple_light() {
+    hittable_list world;
+
+    std::vector<std::unique_ptr<texture>> textures;
+    std::vector<std::unique_ptr<material>> materials;
+
+    textures.push_back(std::make_unique<noise_texture>(4.0));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    world.add(std::make_shared<sphere>(point3(0.0, -1000.0, 0.0), 1000.0, materials.back().get()));
+    world.add(std::make_shared<sphere>(point3(0.0, 2.0, 0.0), 2.0, materials.back().get()));
+
+    textures.push_back(std::make_unique<solid_color>(color(4.0, 4.0, 4.0)));
+    materials.push_back(std::make_unique<diffuse_light>(textures.back().get()));
+    world.add(std::make_shared<quad>(point3(3.0, 1.0, -2.0), vec3(2.0, 0.0, 0.0), vec3(0.0, 2.0, 0.0), materials.back().get()));
+    world.add(std::make_shared<sphere>(point3(0.0, 7.0, 0.0), 2, materials.back().get()));
+
+    world = hittable_list(std::make_shared<bvh_node>(world));
+
+    camera cam;
+
+    cam.aspect_ratio = 16.0 / 9.0;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 100;
+    cam.max_depth = 50;
+    cam.background = color(0.0, 0.0, 0.0);
+
+    cam.vfov = 20;
+    cam.lookfrom = point3(26.0, 3.0, 6.0);
+    cam.lookat = point3(0.0, 2.0, 0.0);
+    cam.vup = vec3(0.0, 1.0, 0.0);
+    cam.defocus_angle = 0.0;
+    cam.focus_dist = 10.0;
+
+    const auto start = std::chrono::steady_clock::now();
+    cam.render(world);
+    const auto end = std::chrono::steady_clock::now();
+
+    const std::chrono::duration<double> elapsed = end - start;
+
+    std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
+}
+
+void cornell_box() {
+    hittable_list world;
+
+    std::vector<std::unique_ptr<texture>> textures;
+    std::vector<std::unique_ptr<material>> materials;
+
+    textures.push_back(std::make_unique<solid_color>(color(0.65, 0.05, 0.05)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    const material* red = materials.back().get();
+
+    textures.push_back(std::make_unique<solid_color>(color(0.73, 0.73, 0.73)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    const material* white = materials.back().get();
+
+    textures.push_back(std::make_unique<solid_color>(color(0.12, 0.45, 0.15)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    const material* green = materials.back().get();
+
+    textures.push_back(std::make_unique<solid_color>(color(15.0, 15.0, 15.0)));
+    materials.push_back(std::make_unique<diffuse_light>(textures.back().get()));
+    const material* light = materials.back().get();
+
+    world.add(std::make_shared<quad>(point3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), green));
+    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), red));
+    world.add(std::make_shared<quad>(point3(343.0,554.0,332.0), vec3(-130.0,0.0,0.0), vec3(0.0,0.0,-105.0), light));
+    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(555.0,0.0,0.0), vec3(0.0,0.0,555.0), white));
+    world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
+    world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
+
+    world = hittable_list(std::make_shared<bvh_node>(world));
+
+    camera cam;
+
+    cam.aspect_ratio = 1.0;
+    cam.image_width = 600;
+    cam.samples_per_pixel = 200;
+    cam.max_depth = 50;
+    cam.background = color(0.0, 0.0, 0.0);
+
+    cam.vfov = 40;
+    cam.lookfrom = point3(278.0, 278.0, -800.0);
+    cam.lookat = point3(278.0, 278.0, 0.0);
     cam.vup = vec3(0.0, 1.0, 0.0);
     cam.defocus_angle = 0.0;
     cam.focus_dist = 10.0;
