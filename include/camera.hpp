@@ -24,6 +24,7 @@ class camera {
         vec3 vup{0, 1 ,0};
         double defocus_angle{0};
         double focus_dist{10};
+        color background{};
 
         void render(const hittable& world) {
             initialize();
@@ -95,17 +96,14 @@ class camera {
 
             hit_record rec;
 
-            if (world.hit(r, interval(0.001, infinity), rec)) {
-                if (auto sr = rec.mat->scatter(r, rec)) {
-                    return sr->attenuation * ray_color(sr->scattered, depth - 1, world);
-                }
+            if (!world.hit(r, interval(0.001, infinity), rec)) return background;
 
-                return color(0.0, 0.0, 0.0);
+            const color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
+
+            if (auto sr = rec.mat->scatter(r, rec)) {
+                return color_from_emission + sr->attenuation * ray_color(sr->scattered, depth - 1, world);
             }
-            
-            const vec3 unit_direction = unit_vector(r.direction());
-            const auto a = 0.5 * (unit_direction.y() + 1.0);
-            return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
+            return color_from_emission;
         }
 
         [[nodiscard]] vec3 sample_square() const {
