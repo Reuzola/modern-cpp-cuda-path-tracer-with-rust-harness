@@ -2,6 +2,7 @@
 #include "bvh.hpp"
 #include "camera.hpp"
 #include "checker_texture.hpp"
+#include "hittable.hpp"
 #include "hittable_list.hpp"
 #include "image_texture.hpp"
 #include "noise_texture.hpp"
@@ -12,9 +13,11 @@
 #include "quad.hpp"
 #include "diffuse_light.hpp"
 #include "random.hpp"
+#include "rotate_y.hpp"
 #include "solid_color.hpp"
 #include "sphere.hpp"
 #include "texture.hpp"
+#include "translate.hpp"
 #include "vec3.hpp"
 #include <chrono>
 #include <cmath>
@@ -346,8 +349,15 @@ void cornell_box() {
     world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
     world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
 
-    world.add(box(point3(130.0, 0.0, 65.0), point3(296.0, 165.0, 230.0), white));
-    world.add(box(point3(265.0, 0.0, 295.0), point3(430.0, 330.0, 460.0), white));
+    std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), white);
+    box1 = std::make_shared<rotate_y>(box1, 15.0);
+    box1 = std::make_shared<translate>(box1, vec3(265.0, 0.0, 295.0));
+    world.add(box1);
+
+    std::shared_ptr<hittable> box2 = box(point3(0.0, 0.0, 0.0), point3(165.0, 165.0, 165.0), white);
+    box2 = std::make_shared<rotate_y>(box2, -18.0);
+    box2 = std::make_shared<translate>(box2, vec3(130.0, 0.0, 65.0));
+    world.add(box2);
 
     world = hittable_list(std::make_shared<bvh_node>(world));
 
