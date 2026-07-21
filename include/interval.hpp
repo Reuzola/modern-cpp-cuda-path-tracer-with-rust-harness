@@ -33,7 +33,13 @@ class interval {
             const double padding = delta / 2;
             return interval(min - padding, max + padding);
         }
+
+        static const interval empty;
+        static const interval universe;
 };
+
+inline const interval interval::empty{+infinity, -infinity};
+inline const interval interval::universe{-infinity, +infinity};
 
 [[nodiscard]] constexpr inline interval operator+(const interval& i, double displacement) {
     return interval(i.min + displacement, i.max + displacement);
@@ -42,3 +48,4 @@ class interval {
 [[nodiscard]] constexpr inline interval operator+(double displacement, const interval& i) {
     return i + displacement;
 }
+
