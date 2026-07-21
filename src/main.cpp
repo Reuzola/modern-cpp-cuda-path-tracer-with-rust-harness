@@ -2,9 +2,11 @@
 #include "bvh.hpp"
 #include "camera.hpp"
 #include "checker_texture.hpp"
+#include "constant_medium.hpp"
 #include "hittable.hpp"
 #include "hittable_list.hpp"
 #include "image_texture.hpp"
+#include "isotropic.hpp"
 #include "noise_texture.hpp"
 #include "lambertian.hpp"
 #include "material.hpp"
@@ -32,9 +34,10 @@ void perlin_spheres();
 void quads();
 void simple_light();
 void cornell_box();
+void cornell_smoke();
 
 int main() {
-    switch (7) {
+    switch (8) {
         case 1: bouncing_spheres(); break;
         case 2: checkered_spheres(); break;
         case 3: earth(); break;
@@ -42,6 +45,7 @@ int main() {
         case 5: quads(); break;
         case 6: simple_light(); break;
         case 7: cornell_box(); break;
+        case 8: cornell_smoke(); break;
     }
 }
 
@@ -364,8 +368,81 @@ void cornell_box() {
     camera cam;
 
     cam.aspect_ratio = 1.0;
-    cam.image_width = 400;
-    cam.samples_per_pixel = 100;
+    cam.image_width = 600;
+    cam.samples_per_pixel = 200;
+    cam.max_depth = 50;
+    cam.background = color(0.0, 0.0, 0.0);
+
+    cam.vfov = 40;
+    cam.lookfrom = point3(278.0, 278.0, -800.0);
+    cam.lookat = point3(278.0, 278.0, 0.0);
+    cam.vup = vec3(0.0, 1.0, 0.0);
+    cam.defocus_angle = 0.0;
+    cam.focus_dist = 10.0;
+
+    const auto start = std::chrono::steady_clock::now();
+    cam.render(world);
+    const auto end = std::chrono::steady_clock::now();
+
+    const std::chrono::duration<double> elapsed = end - start;
+
+    std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
+}
+
+void cornell_smoke() {
+    hittable_list world;
+
+    std::vector<std::unique_ptr<texture>> textures;
+    std::vector<std::unique_ptr<material>> materials;
+
+    textures.push_back(std::make_unique<solid_color>(color(0.65, 0.05, 0.05)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    const material* red = materials.back().get();
+
+    textures.push_back(std::make_unique<solid_color>(color(0.73, 0.73, 0.73)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    const material* white = materials.back().get();
+
+    textures.push_back(std::make_unique<solid_color>(color(0.12, 0.45, 0.15)));
+    materials.push_back(std::make_unique<lambertian>(textures.back().get()));
+    const material* green = materials.back().get();
+
+    textures.push_back(std::make_unique<solid_color>(color(7.0, 7.0, 7.0)));
+    materials.push_back(std::make_unique<diffuse_light>(textures.back().get()));
+    const material* light = materials.back().get();
+
+    world.add(std::make_shared<quad>(point3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), green));
+    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), red));
+    world.add(std::make_shared<quad>(point3(113.0,554.0,127.0), vec3(330.0,0.0,0.0), vec3(0.0,0.0,305.0), light));
+    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(555.0,0.0,0.0), vec3(0.0,0.0,555.0), white));
+    world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
+    world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
+
+    std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), white);
+    box1 = std::make_shared<rotate_y>(box1, 15.0);
+    box1 = std::make_shared<translate>(box1, vec3(265.0, 0.0, 295.0));
+
+    std::shared_ptr<hittable> box2 = box(point3(0.0, 0.0, 0.0), point3(165.0, 165.0, 165.0), white);
+    box2 = std::make_shared<rotate_y>(box2, -18.0);
+    box2 = std::make_shared<translate>(box2, vec3(130.0, 0.0, 65.0));
+
+    textures.push_back(std::make_unique<solid_color>(color(0.0, 0.0, 0.0)));
+    materials.push_back(std::make_unique<isotropic>(textures.back().get()));
+    const material* smoke = materials.back().get();
+    world.add(std::make_shared<constant_medium>(box1, 0.01, smoke));
+
+    textures.push_back(std::make_unique<solid_color>(color(1.0, 1.0, 1.0)));
+    materials.push_back(std::make_unique<isotropic>(textures.back().get()));
+    const material* fog = materials.back().get();
+    world.add(std::make_shared<constant_medium>(box2, 0.01, fog));
+
+    world = hittable_list(std::make_shared<bvh_node>(world));
+
+    camera cam;
+
+    cam.aspect_ratio = 1.0;
+    cam.image_width = 600;
+    cam.samples_per_pixel = 200;
     cam.max_depth = 50;
     cam.background = color(0.0, 0.0, 0.0);
 
