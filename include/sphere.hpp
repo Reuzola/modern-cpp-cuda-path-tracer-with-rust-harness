@@ -21,7 +21,7 @@ class sphere : public hittable {
 
         [[nodiscard]] aabb bounding_box() const override { return bbox; }
 
-        bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {
+        [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {
             const auto current_center = center.at(r.time());
 
             const auto oc = current_center - r.origin();

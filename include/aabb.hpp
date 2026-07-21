@@ -59,3 +59,11 @@ class aabb {
             if(z.size() < delta) z = z.expand(delta);
         }
 };
+
+[[nodiscard]] constexpr inline aabb operator+(const aabb& box, const vec3& offset) {
+    return aabb(box.x + offset.x(), box.y + offset.y(), box.z + offset.z());
+}
+
+[[nodiscard]] constexpr inline aabb operator+(const vec3& offset, const aabb& box) {
+    return box + offset;
+}

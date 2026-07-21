@@ -34,3 +34,11 @@ class interval {
             return interval(min - padding, max + padding);
         }
 };
+
+[[nodiscard]] constexpr inline interval operator+(const interval& i, double displacement) {
+    return interval(i.min + displacement, i.max + displacement);
+}
+
+[[nodiscard]] constexpr inline interval operator+(double displacement, const interval& i) {
+    return i + displacement;
+}

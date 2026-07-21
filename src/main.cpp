@@ -1,3 +1,4 @@
+#include "box.hpp"
 #include "bvh.hpp"
 #include "camera.hpp"
 #include "checker_texture.hpp"
@@ -345,13 +346,16 @@ void cornell_box() {
     world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
     world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
 
+    world.add(box(point3(130.0, 0.0, 65.0), point3(296.0, 165.0, 230.0), white));
+    world.add(box(point3(265.0, 0.0, 295.0), point3(430.0, 330.0, 460.0), white));
+
     world = hittable_list(std::make_shared<bvh_node>(world));
 
     camera cam;
 
     cam.aspect_ratio = 1.0;
-    cam.image_width = 600;
-    cam.samples_per_pixel = 200;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 100;
     cam.max_depth = 50;
     cam.background = color(0.0, 0.0, 0.0);
 
