@@ -108,7 +108,11 @@ class camera {
             const color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
 
             if (auto sr = rec.mat->scatter(r, rec)) {
-                return color_from_emission + sr->attenuation * ray_color(sr->scattered, depth - 1, world);
+                const double scattering_pdf = rec.mat->scattering_pdf(r, rec, sr->scattered); 
+                const double pdf_value = scattering_pdf;
+
+                const color color_from_scatter = (sr->attenuation * scattering_pdf * ray_color(sr->scattered, depth - 1, world)) / pdf_value;
+                return color_from_emission + color_from_scatter;
             }
             return color_from_emission;
         }

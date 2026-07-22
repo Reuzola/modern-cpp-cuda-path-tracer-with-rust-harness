@@ -1,4 +1,5 @@
 #pragma once
+#include "constants.hpp"
 #include "material.hpp"
 #include "hit_record.hpp"
 #include "texture.hpp"
@@ -14,6 +15,11 @@ class lambertian : public material {
             if (scatter_direction.near_zero()) scatter_direction = rec.normal;
 
             return scatter_record{ .attenuation = tex->value(rec.u, rec.v, rec.p), .scattered = ray(rec.p, scatter_direction, r_in.time()) };
+        }
+
+        [[nodiscard]] double scattering_pdf(const ray&, const hit_record& rec, const ray& scattered) const override {
+            const double cos_theta = dot(rec.normal, unit_vector(scattered.direction()));
+            return std::max(0.0, cos_theta) / pi;
         }
     private:
         const texture* tex;

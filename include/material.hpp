@@ -19,4 +19,8 @@ class material {
         [[nodiscard]] virtual color emitted(double u, double v, const point3& p) const {
             return color(0.0, 0.0, 0.0);
         }
+
+        [[nodiscard]] virtual double scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const {
+            return 0.0;
+        }
 };
