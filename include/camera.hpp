@@ -37,8 +37,10 @@ class camera {
                 for (int i = 0; i < image_width; i++) {
                     color pixel_color(0, 0, 0);
 
-                    for(int s = 0; s < samples_per_pixel; s++) {
-                        pixel_color += ray_color(get_ray(i, j), max_depth, world);
+                    for (int s_j = 0; s_j < sqrt_spp; s_j++) {
+                        for (int s_i = 0; s_i < sqrt_spp; s_i++) {
+                            pixel_color += ray_color(get_ray(i, j, s_i, s_j), max_depth, world);
+                        }
                     }
 
                     write_color(std::cout, pixel_samples_scale * pixel_color);
@@ -55,6 +57,8 @@ class camera {
         vec3 pixel_delta_u;
         vec3 pixel_delta_v;
         double pixel_samples_scale{};
+        int sqrt_spp{};
+        double recip_sqrt_spp{};
         vec3 u, v, w;
         vec3 defocus_disk_u;
         vec3 defocus_disk_v;
@@ -63,7 +67,10 @@ class camera {
             image_height = std::max(static_cast<int>(image_width / aspect_ratio), 1);
             center = lookfrom;
 
-            pixel_samples_scale = 1.0 / samples_per_pixel;
+            sqrt_spp = static_cast<int>(std::sqrt(samples_per_pixel));
+            recip_sqrt_spp = 1.0 / sqrt_spp;
+
+            pixel_samples_scale = 1.0 / (sqrt_spp * sqrt_spp);
 
             w = unit_vector(lookfrom - lookat);
             u = unit_vector(cross(vup, w));
@@ -106,12 +113,14 @@ class camera {
             return color_from_emission;
         }
 
-        [[nodiscard]] vec3 sample_square() const {
-            return vec3(random_double() - 0.5, random_double() - 0.5, 0.0);
+        [[nodiscard]] vec3 sample_square_stratified(int s_i, int s_j) const {
+            const double px = ((s_i + random_double()) * recip_sqrt_spp) - 0.5;
+            const double py = ((s_j + random_double()) * recip_sqrt_spp) - 0.5;
+            return vec3(px, py, 0.0);
         }
 
-        [[nodiscard]] ray get_ray(int i, int j) const {
-            const vec3 offset = sample_square();
+        [[nodiscard]] ray get_ray(int i, int j, int s_i, int s_j) const {
+            const vec3 offset = sample_square_stratified(s_i, s_j);
 
             const point3 sample_point = pixel00_loc + (i + offset.x()) * pixel_delta_u + (j + offset.y()) * pixel_delta_v;
             const point3 origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
