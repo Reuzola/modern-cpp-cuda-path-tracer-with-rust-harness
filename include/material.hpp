@@ -1,13 +1,19 @@
 #pragma once
+#include "pdf_variant.hpp"
 #include "vec3.hpp"
 #include "ray.hpp"
 #include <optional>
+#include <variant>
 
 struct hit_record;
 
+struct specular_bounce { ray scattered; };
+
+struct diffuse_bounce { pdf_variant sampling_pdf; };
+
 struct scatter_record {
     color attenuation;
-    ray scattered;
+    std::variant<specular_bounce, diffuse_bounce> bounce;
 };
 
 class material {

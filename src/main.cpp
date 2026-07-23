@@ -355,7 +355,10 @@ void cornell_box() {
     world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
     world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
 
-    std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), white);
+    materials.push_back(std::make_unique<metal>(color(0.8, 0.85, 0.88), 0.0));
+    const material* aluminum = materials.back().get();
+    
+    std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), aluminum);
     box1 = std::make_shared<rotate_y>(box1, 15.0);
     box1 = std::make_shared<translate>(box1, vec3(265.0, 0.0, 295.0));
     world.add(box1);

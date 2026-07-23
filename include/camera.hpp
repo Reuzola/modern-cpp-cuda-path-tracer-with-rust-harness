@@ -1,12 +1,13 @@
 #pragma once
-#include "cosine_pdf.hpp"
 #include "hit_record.hpp"
 #include "hittable.hpp"
 #include "hittable_pdf.hpp"
 #include "interval.hpp"
 #include "constants.hpp"
 #include "mixture_pdf.hpp"
+#include "overloaded.hpp"
 #include "pdf.hpp"
+#include "pdf_variant.hpp"
 #include "ray.hpp"
 #include "vec3.hpp"
 #include "color.hpp"
@@ -15,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <variant>
 
 class camera {
     public:
@@ -122,15 +124,20 @@ class camera {
                     return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
                 };
 
-                if (lights == nullptr) {
-                    const cosine_pdf surface_pdf(rec.normal);
-                    return color_from_emission + shade(surface_pdf);
-                }
+                return color_from_emission + std::visit(overloaded{
+                    [&](const specular_bounce& sb) -> color {
+                        return sr->attenuation * ray_color(sb.scattered, depth - 1, world, lights);
+                    },
+                    [&](const diffuse_bounce& db) -> color {
+                        const auto& surface_pdf = as_pdf(db.sampling_pdf);
 
-                const cosine_pdf surface_pdf(rec.normal);
-                const hittable_pdf light_pdf(*lights, rec.p);
-                const mixture_pdf mixed_pdf(surface_pdf, light_pdf);
-                return color_from_emission + shade(mixed_pdf);
+                        if (lights == nullptr) return shade(surface_pdf);
+
+                        const hittable_pdf light_pdf(*lights, rec.p);
+                        const mixture_pdf mixed_pdf(surface_pdf, light_pdf);
+                        return shade(mixed_pdf);
+                    }
+                }, sr->bounce);
             }
             return color_from_emission;
         }

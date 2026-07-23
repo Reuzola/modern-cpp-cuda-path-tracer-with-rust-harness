@@ -6,7 +6,7 @@
 #include "ray.hpp"
 #include <cmath>
 
-class dielectric : public material {
+class dielectric final : public material {
     public:
         explicit dielectric(double refraction_index) : refraction_index(refraction_index) {}
 
@@ -24,7 +24,7 @@ class dielectric : public material {
             if (should_reflect) direction = reflect(unit_direction, rec.normal);
             else direction = refract(unit_direction, rec.normal, ri);
 
-            return scatter_record{ .attenuation = color(1.0, 1.0, 1.0), .scattered = ray(rec.p, direction, r_in.time()) };
+            return scatter_record{.attenuation = color(1.0, 1.0, 1.0), .bounce = specular_bounce{.scattered = ray(rec.p, direction, r_in.time())}};
         }
     private:
         double refraction_index{};
