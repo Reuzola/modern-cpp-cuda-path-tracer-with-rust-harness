@@ -1,4 +1,5 @@
 #pragma once
+#include "hit_record.hpp"
 #include "material.hpp"
 #include "texture.hpp"
 #include "vec3.hpp"
@@ -12,8 +13,9 @@ class diffuse_light : public material {
             return std::nullopt;
         }
 
-        [[nodiscard]] color emitted(double u, double v, const point3& p) const override {
-            return tex->value(u, v, p);
+        [[nodiscard]] color emitted(const ray&, const hit_record& rec) const override {
+            if (!rec.front_face) return color(0.0, 0.0,0.0);
+            return tex->value(rec.u, rec.v, rec.p);
         }
     private:
         const texture* tex;

@@ -105,13 +105,22 @@ class camera {
 
             if (!world.hit(r, interval(0.001, infinity), rec)) return background;
 
-            const color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
+            const color color_from_emission = rec.mat->emitted(r, rec);
 
             if (auto sr = rec.mat->scatter(r, rec)) {
-                const double scattering_pdf = rec.mat->scattering_pdf(r, rec, sr->scattered); 
-                const double pdf_value = scattering_pdf;
+                const point3 on_light(random_double(213, 343), 554, random_double(227, 332));
+                vec3 to_light = on_light - rec.p;
+                const double distance_squared = to_light.length_squared();
+                to_light = unit_vector(to_light);
+                if (dot(to_light, rec.normal) < 0) return color_from_emission;
+                constexpr double light_area = (343 - 213) * (332 - 227);
+                const double light_cosine = std::fabs(to_light.y());
+                if (light_cosine < 0.000001) return color_from_emission;
+                const double pdf_value = distance_squared / (light_cosine * light_area);
+                const ray scattered(rec.p, to_light, r.time());
+                const double scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
+                const color color_from_scatter = (sr->attenuation * scattering_pdf * ray_color(scattered, depth - 1, world)) / pdf_value;
 
-                const color color_from_scatter = (sr->attenuation * scattering_pdf * ray_color(sr->scattered, depth - 1, world)) / pdf_value;
                 return color_from_emission + color_from_scatter;
             }
             return color_from_emission;

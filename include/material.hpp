@@ -16,7 +16,7 @@ class material {
 
         [[nodiscard]] virtual std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const = 0;
 
-        [[nodiscard]] virtual color emitted(double u, double v, const point3& p) const {
+        [[nodiscard]] virtual color emitted(const ray& r_in, const hit_record& rec) const {
             return color(0.0, 0.0, 0.0);
         }
 
