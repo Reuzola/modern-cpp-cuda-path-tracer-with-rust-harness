@@ -1,4 +1,5 @@
 #pragma once
+#include "constants.hpp"
 #include "random.hpp"
 #include <cmath>
 
@@ -128,6 +129,19 @@ inline vec3 unit_vector(const vec3& v) {
 
         if(lensq < 1) return p;
     }
+}
+
+[[nodiscard]] inline vec3 random_cosine_direction() {
+    const double r1 = random_double();
+    const double r2 = random_double();
+    const double sqrt_r2 = std::sqrt(r2);
+
+    const double phi = 2.0 * pi * r1;
+    const double x = std::cos(phi) * sqrt_r2;
+    const double y = std::sin(phi) * sqrt_r2;
+    const double z = std::sqrt(1.0 - r2);
+
+    return vec3(x, y, z);
 }
 
 using point3 = vec3;
