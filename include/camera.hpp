@@ -2,8 +2,11 @@
 #include "cosine_pdf.hpp"
 #include "hit_record.hpp"
 #include "hittable.hpp"
+#include "hittable_pdf.hpp"
 #include "interval.hpp"
 #include "constants.hpp"
+#include "mixture_pdf.hpp"
+#include "pdf.hpp"
 #include "ray.hpp"
 #include "vec3.hpp"
 #include "color.hpp"
@@ -27,7 +30,7 @@ class camera {
         double focus_dist{10};
         color background{};
 
-        void render(const hittable& world) {
+        void render(const hittable& world, const hittable* lights = nullptr) {
             initialize();
 
             std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
@@ -40,7 +43,7 @@ class camera {
 
                     for (int s_j = 0; s_j < sqrt_spp; s_j++) {
                         for (int s_i = 0; s_i < sqrt_spp; s_i++) {
-                            pixel_color += ray_color(get_ray(i, j, s_i, s_j), max_depth, world);
+                            pixel_color += ray_color(get_ray(i, j, s_i, s_j), max_depth, world, lights);
                         }
                     }
 
@@ -99,7 +102,7 @@ class camera {
             defocus_disk_v = v * defocus_radius;
         }
 
-        [[nodiscard]] color ray_color(const ray& r, int depth, const hittable& world) const {
+        [[nodiscard]] color ray_color(const ray& r, int depth, const hittable& world, const hittable* lights) const {
             if (depth <= 0) return color(0, 0, 0);
 
             hit_record rec;
@@ -109,15 +112,25 @@ class camera {
             const color color_from_emission = rec.mat->emitted(r, rec);
 
             if (const auto sr = rec.mat->scatter(r, rec)) {
+                const auto shade = [&](const pdf& p) -> color {
+                    const ray scattered(rec.p, p.generate(), r.time());
+                    const double pdf_value = p.value(scattered.direction());
+                    
+                    const double scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
+                    const color sample_color = ray_color(scattered, depth - 1, world, lights);
+
+                    return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
+                };
+
+                if (lights == nullptr) {
+                    const cosine_pdf surface_pdf(rec.normal);
+                    return color_from_emission + shade(surface_pdf);
+                }
+
                 const cosine_pdf surface_pdf(rec.normal);
-                const ray scattered(rec.p, surface_pdf.generate(), r.time());
-
-                const double pdf_value = surface_pdf.value(scattered.direction());
-                const double scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
-
-                const color color_from_scatter = (sr->attenuation * scattering_pdf * ray_color(scattered, depth - 1, world)) / pdf_value;
-
-                return color_from_emission + color_from_scatter;
+                const hittable_pdf light_pdf(*lights, rec.p);
+                const mixture_pdf mixed_pdf(surface_pdf, light_pdf);
+                return color_from_emission + shade(mixed_pdf);
             }
             return color_from_emission;
         }

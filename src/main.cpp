@@ -367,6 +367,8 @@ void cornell_box() {
 
     world = hittable_list(std::make_shared<bvh_node>(world));
 
+    const quad lights(point3(343.0, 554.0, 332.0), vec3(-130.0, 0.0, 0.0), vec3(0.0, 0.0, -105.0), nullptr);
+
     camera cam;
 
     cam.aspect_ratio = 1.0;
@@ -383,7 +385,7 @@ void cornell_box() {
     cam.focus_dist = 10.0;
 
     const auto start = std::chrono::steady_clock::now();
-    cam.render(world);
+    cam.render(world, &lights);
     const auto end = std::chrono::steady_clock::now();
 
     const std::chrono::duration<double> elapsed = end - start;
