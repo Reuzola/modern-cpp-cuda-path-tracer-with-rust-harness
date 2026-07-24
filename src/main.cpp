@@ -348,29 +348,28 @@ void cornell_box() {
     materials.push_back(std::make_unique<diffuse_light>(textures.back().get()));
     const material* light = materials.back().get();
 
+    materials.push_back(std::make_unique<dielectric>(1.5));
+    const material* glass = materials.back().get();
+
     world.add(std::make_shared<quad>(point3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), green));
     world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), red));
     world.add(std::make_shared<quad>(point3(343.0,554.0,332.0), vec3(-130.0,0.0,0.0), vec3(0.0,0.0,-105.0), light));
     world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(555.0,0.0,0.0), vec3(0.0,0.0,555.0), white));
     world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
     world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
-
-    materials.push_back(std::make_unique<metal>(color(0.8, 0.85, 0.88), 0.0));
-    const material* aluminum = materials.back().get();
     
-    std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), aluminum);
+    std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), white);
     box1 = std::make_shared<rotate_y>(box1, 15.0);
     box1 = std::make_shared<translate>(box1, vec3(265.0, 0.0, 295.0));
     world.add(box1);
 
-    std::shared_ptr<hittable> box2 = box(point3(0.0, 0.0, 0.0), point3(165.0, 165.0, 165.0), white);
-    box2 = std::make_shared<rotate_y>(box2, -18.0);
-    box2 = std::make_shared<translate>(box2, vec3(130.0, 0.0, 65.0));
-    world.add(box2);
+    world.add(std::make_shared<sphere>(point3(190.0, 90.0, 190.0), 90.0, glass));
 
     world = hittable_list(std::make_shared<bvh_node>(world));
 
-    const quad lights(point3(343.0, 554.0, 332.0), vec3(-130.0, 0.0, 0.0), vec3(0.0, 0.0, -105.0), nullptr);
+    hittable_list lights;
+    lights.add(std::make_shared<quad>(point3(343.0, 554.0, 332.0), vec3(-130.0, 0.0, 0.0), vec3(0.0, 0.0, -105.0), nullptr));
+    lights.add(std::make_shared<sphere>(point3(190.0, 90.0, 190.0), 90.0, nullptr));
 
     camera cam;
 
