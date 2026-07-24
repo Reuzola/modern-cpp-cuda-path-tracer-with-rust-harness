@@ -69,6 +69,8 @@ class sphere final : public hittable {
             if (!this->hit(ray(origin, direction), interval(0.001, infinity), rec)) return 0.0;
 
             const double distance_squared = (center.at(0) - origin).length_squared();
+            if (distance_squared <= radius * radius) return 0.0;
+
             const double cos_theta_max = std::sqrt(1.0 - radius * radius / distance_squared);
             const double solid_angle = 2.0 * pi * (1.0 - cos_theta_max);
 

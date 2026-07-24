@@ -9,10 +9,16 @@
     return 0.0;
 }
 
+[[nodiscard]] inline double remove_nan(double x) { return std::isnan(x) ? 0.0 : x; }
+
 inline void write_color(std::ostream& out, const color& pixel_color) {
-    const double r = pixel_color.x();
-    const double g = pixel_color.y();
-    const double b = pixel_color.z();
+    double r = pixel_color.x();
+    double g = pixel_color.y();
+    double b = pixel_color.z();
+
+    r = remove_nan(r);
+    g = remove_nan(g);
+    b = remove_nan(b);
 
     const double r_gamma = linear_to_gamma(r);
     const double g_gamma = linear_to_gamma(g);
