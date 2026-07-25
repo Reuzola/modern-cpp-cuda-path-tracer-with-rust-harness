@@ -1,0 +1,17 @@
+# Path tracer — C++ formatting rules.
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+ColumnLimit: 0
+
+IndentWidth: 4
+InsertNewlineAtEOF: true
+LineEnding: LF
+
+AccessModifierOffset: -4
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Pointer
+AllowShortIfStatementsOnASingleLine: WithoutElse

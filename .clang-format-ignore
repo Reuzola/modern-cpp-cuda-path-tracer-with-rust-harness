@@ -1,0 +1,4 @@
+# Vendored third-party code: never reformat.
+# Reformatting breaks upstream diffability and contradicts THIRD_PARTY_NOTICES.md,
+# which states this file is unmodified.
+external/*
