@@ -1,3 +1,45 @@
+# Build
 build/
-*.ppm
+build-*/
+cmake-build-*/
 .cache/
+/compile_commands.json
+
+# vcpkg (manifest mode)
+vcpkg_installed/
+/vcpkg/
+
+# Rust
+target/
+# Cargo.lock is intentionally tracked (binary crate) -- see CONTRIBUTING.md
+
+# Render output
+# Ignored by location, never by extension: tests/golden/*.png and doc images
+# must stay tracked. Never add *.png / *.jpg / *.exr here.
+out/
+renders/
+*.ppm
+
+# Profiling and crash artifacts
+perf.data
+perf.data.old
+callgrind.out.*
+massif.out.*
+gmon.out
+core
+core.*
+vgcore.*
+
+# Editors
+# "/*" not "/": Git cannot re-include a file whose parent directory is excluded
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

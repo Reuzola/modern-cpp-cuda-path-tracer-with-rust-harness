@@ -1,0 +1,21 @@
+* text=auto eol=lf
+
+# Binary assets
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.exr  binary
+*.hdr  binary
+*.ppm  binary
+
+# Third-party: keep out of language stats and diffs
+external/** linguist-vendored
+
+# Enclosing function name in @@ hunk headers
+*.cpp diff=cpp
+*.hpp diff=cpp
+*.h   diff=cpp
+*.cu  diff=cpp
+*.cuh diff=cpp
+*.rs  diff=rust
+*.md  diff=markdown
