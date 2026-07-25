@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(PathTracer
-   	VERSION 0.1.0
-   	DESCRIPTION "Physically-based path tracer"
-   	LANGUAGES CXX
+  VERSION 0.1.0
+  DESCRIPTION "Physically-based path tracer"
+  LANGUAGES CXX
 )
 
 SET(CMAKE_CXX_STANDARD 20)
