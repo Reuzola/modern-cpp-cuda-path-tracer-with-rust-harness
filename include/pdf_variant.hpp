@@ -1,6 +1,6 @@
 #pragma once
-#include "pdf.hpp"
 #include "cosine_pdf.hpp"
+#include "pdf.hpp"
 #include "sphere_pdf.hpp"
 #include <variant>
 

@@ -3,17 +3,17 @@
 #include "camera.hpp"
 #include "checker_texture.hpp"
 #include "constant_medium.hpp"
+#include "dielectric.hpp"
+#include "diffuse_light.hpp"
 #include "hittable.hpp"
 #include "hittable_list.hpp"
 #include "image_texture.hpp"
 #include "isotropic.hpp"
-#include "noise_texture.hpp"
 #include "lambertian.hpp"
 #include "material.hpp"
 #include "metal.hpp"
-#include "dielectric.hpp"
+#include "noise_texture.hpp"
 #include "quad.hpp"
-#include "diffuse_light.hpp"
 #include "random.hpp"
 #include "rotate_y.hpp"
 #include "solid_color.hpp"
@@ -39,15 +39,33 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth);
 
 int main() {
     switch (7) {
-        case 1: bouncing_spheres(); break;
-        case 2: checkered_spheres(); break;
-        case 3: earth(); break;
-        case 4: perlin_spheres(); break;
-        case 5: quads(); break;
-        case 6: simple_light(); break;
-        case 7: cornell_box(); break;
-        case 8: cornell_smoke(); break;
-        case 9: final_scene(400, 250, 4); break;
+    case 1:
+        bouncing_spheres();
+        break;
+    case 2:
+        checkered_spheres();
+        break;
+    case 3:
+        earth();
+        break;
+    case 4:
+        perlin_spheres();
+        break;
+    case 5:
+        quads();
+        break;
+    case 6:
+        simple_light();
+        break;
+    case 7:
+        cornell_box();
+        break;
+    case 8:
+        cornell_smoke();
+        break;
+    case 9:
+        final_scene(400, 250, 4);
+        break;
     }
 }
 
@@ -95,7 +113,7 @@ void bouncing_spheres() {
 
     materials.push_back(std::make_unique<metal>(color(0.7, 0.6, 0.5), 0.0));
     world.add(std::make_shared<sphere>(point3(4.0, 1.0, 0.0), 1.0, materials.back().get()));
-    
+
     world = hittable_list(std::make_shared<bvh_node>(world));
 
     camera cam;
@@ -351,13 +369,13 @@ void cornell_box() {
     materials.push_back(std::make_unique<dielectric>(1.5));
     const material* glass = materials.back().get();
 
-    world.add(std::make_shared<quad>(point3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), green));
-    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), red));
-    world.add(std::make_shared<quad>(point3(343.0,554.0,332.0), vec3(-130.0,0.0,0.0), vec3(0.0,0.0,-105.0), light));
-    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(555.0,0.0,0.0), vec3(0.0,0.0,555.0), white));
-    world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
-    world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
-    
+    world.add(std::make_shared<quad>(point3(555.0, 0.0, 0.0), vec3(0.0, 555.0, 0.0), vec3(0.0, 0.0, 555.0), green));
+    world.add(std::make_shared<quad>(point3(0.0, 0.0, 0.0), vec3(0.0, 555.0, 0.0), vec3(0.0, 0.0, 555.0), red));
+    world.add(std::make_shared<quad>(point3(343.0, 554.0, 332.0), vec3(-130.0, 0.0, 0.0), vec3(0.0, 0.0, -105.0), light));
+    world.add(std::make_shared<quad>(point3(0.0, 0.0, 0.0), vec3(555.0, 0.0, 0.0), vec3(0.0, 0.0, 555.0), white));
+    world.add(std::make_shared<quad>(point3(555.0, 555.0, 555.0), vec3(-555.0, 0.0, 0.0), vec3(0.0, 0.0, -555.0), white));
+    world.add(std::make_shared<quad>(point3(0.0, 0.0, 555.0), vec3(555.0, 0.0, 0.0), vec3(0.0, 555.0, 0.0), white));
+
     std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), white);
     box1 = std::make_shared<rotate_y>(box1, 15.0);
     box1 = std::make_shared<translate>(box1, vec3(265.0, 0.0, 295.0));
@@ -417,12 +435,12 @@ void cornell_smoke() {
     materials.push_back(std::make_unique<diffuse_light>(textures.back().get()));
     const material* light = materials.back().get();
 
-    world.add(std::make_shared<quad>(point3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), green));
-    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(0.0,555.0,0.0), vec3(0.0,0.0,555.0), red));
-    world.add(std::make_shared<quad>(point3(113.0,554.0,127.0), vec3(330.0,0.0,0.0), vec3(0.0,0.0,305.0), light));
-    world.add(std::make_shared<quad>(point3(0.0,0.0,0.0), vec3(555.0,0.0,0.0), vec3(0.0,0.0,555.0), white));
-    world.add(std::make_shared<quad>(point3(555.0,555.0,555.0), vec3(-555.0,0.0,0.0), vec3(0.0,0.0,-555.0), white));
-    world.add(std::make_shared<quad>(point3(0.0,0.0,555.0), vec3(555.0,0.0,0.0), vec3(0.0,555.0,0.0), white));
+    world.add(std::make_shared<quad>(point3(555.0, 0.0, 0.0), vec3(0.0, 555.0, 0.0), vec3(0.0, 0.0, 555.0), green));
+    world.add(std::make_shared<quad>(point3(0.0, 0.0, 0.0), vec3(0.0, 555.0, 0.0), vec3(0.0, 0.0, 555.0), red));
+    world.add(std::make_shared<quad>(point3(113.0, 554.0, 127.0), vec3(330.0, 0.0, 0.0), vec3(0.0, 0.0, 305.0), light));
+    world.add(std::make_shared<quad>(point3(0.0, 0.0, 0.0), vec3(555.0, 0.0, 0.0), vec3(0.0, 0.0, 555.0), white));
+    world.add(std::make_shared<quad>(point3(555.0, 555.0, 555.0), vec3(-555.0, 0.0, 0.0), vec3(0.0, 0.0, -555.0), white));
+    world.add(std::make_shared<quad>(point3(0.0, 0.0, 555.0), vec3(555.0, 0.0, 0.0), vec3(0.0, 555.0, 0.0), white));
 
     std::shared_ptr<hittable> box1 = box(point3(0.0, 0.0, 0.0), point3(165.0, 330.0, 165.0), white);
     box1 = std::make_shared<rotate_y>(box1, 15.0);

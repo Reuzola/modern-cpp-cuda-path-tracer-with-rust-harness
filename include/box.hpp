@@ -43,7 +43,7 @@ class material;
     u = dz;
     v = dx;
     sides->add(std::make_shared<quad>(Q, u, v, mat));
-    
+
     Q = point3(min_corner.x(), min_corner.y(), min_corner.z()); // bottom face
     u = dx;
     v = dz;
