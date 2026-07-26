@@ -1,6 +1,8 @@
 #pragma once
 #include <random>
 
+namespace pt {
+
 [[nodiscard]] inline std::mt19937& rng() {
     thread_local static std::mt19937 generator{std::random_device{}()};
     return generator;
@@ -18,3 +20,5 @@
 [[nodiscard]] inline int random_int(int min, int max) {
     return static_cast<int>(random_double(min, max + 1));
 }
+
+} // namespace pt

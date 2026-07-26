@@ -6,6 +6,8 @@
 #include <cmath>
 #include <numeric>
 
+namespace pt {
+
 class perlin {
 public:
     perlin() {
@@ -89,3 +91,5 @@ private:
         return accum;
     }
 };
+
+} // namespace pt

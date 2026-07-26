@@ -6,6 +6,8 @@
 #include "pt/math/vec3.hpp"
 #include <cmath>
 
+namespace pt {
+
 class dielectric final : public material {
 public:
     explicit dielectric(double refraction_index) : refraction_index(refraction_index) {}
@@ -37,3 +39,5 @@ private:
         return r_zero + (1 - r_zero) * ((1 - cosine) * (1 - cosine) * (1 - cosine) * (1 - cosine) * (1 - cosine)); // (1-cosine)^5
     }
 };
+
+} // namespace pt

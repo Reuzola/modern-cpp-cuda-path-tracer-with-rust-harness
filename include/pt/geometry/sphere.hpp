@@ -10,6 +10,8 @@
 #include "pt/math/vec3.hpp"
 #include <cmath>
 
+namespace pt {
+
 class material;
 
 class sphere final : public hittable {
@@ -103,3 +105,5 @@ private:
         return vec3(std::cos(phi) * sin_theta, std::sin(phi) * sin_theta, z);
     }
 };
+
+} // namespace pt

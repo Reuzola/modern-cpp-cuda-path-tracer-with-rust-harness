@@ -6,6 +6,8 @@
 #include "pt/sampling/sphere_pdf.hpp"
 #include "pt/textures/texture.hpp"
 
+namespace pt {
+
 class isotropic final : public material {
 public:
     explicit isotropic(const texture* tex) : tex(tex) {}
@@ -21,3 +23,5 @@ public:
 private:
     const texture* tex;
 };
+
+} // namespace pt

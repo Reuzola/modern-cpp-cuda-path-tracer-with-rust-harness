@@ -4,6 +4,8 @@
 #include "pt/textures/texture.hpp"
 #include <cmath>
 
+namespace pt {
+
 class noise_texture : public texture {
 public:
     explicit noise_texture(double scale) : scale(scale) {}
@@ -16,3 +18,5 @@ private:
     perlin noise;
     double scale{};
 };
+
+} // namespace pt

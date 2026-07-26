@@ -3,6 +3,8 @@
 #include <array>
 #include <cmath>
 
+namespace pt {
+
 class onb {
 public:
     explicit onb(const vec3& n) {
@@ -23,3 +25,5 @@ public:
 private:
     std::array<vec3, 3> axis; // axis[2] -> normal
 };
+
+} // namespace pt

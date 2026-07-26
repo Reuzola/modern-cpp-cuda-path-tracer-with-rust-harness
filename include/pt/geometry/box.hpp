@@ -5,6 +5,8 @@
 #include <cmath>
 #include <memory>
 
+namespace pt {
+
 class material;
 
 [[nodiscard]] inline std::shared_ptr<hittable_list> box(const point3& a, const point3& b, const material* mat) {
@@ -51,3 +53,5 @@ class material;
 
     return sides;
 }
+
+} // namespace pt

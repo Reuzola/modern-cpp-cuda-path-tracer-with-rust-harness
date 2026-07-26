@@ -5,6 +5,8 @@
 #include "pt/math/vec3.hpp"
 #include <algorithm>
 
+namespace pt {
+
 class metal final : public material {
 public:
     explicit metal(const color& albedo, double fuzz) : albedo(albedo), fuzz(std::clamp(fuzz, 0.0, 1.0)) {}
@@ -23,3 +25,5 @@ private:
     color albedo;
     double fuzz{};
 };
+
+} // namespace pt

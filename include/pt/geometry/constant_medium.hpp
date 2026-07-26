@@ -10,6 +10,8 @@
 #include <cmath>
 #include <memory>
 
+namespace pt {
+
 class constant_medium : public hittable {
 public:
     constant_medium(std::shared_ptr<hittable> boundary, double density, const material* phase_function)
@@ -47,3 +49,5 @@ private:
     double neg_inv_density{};
     const material* phase_function;
 };
+
+} // namespace pt

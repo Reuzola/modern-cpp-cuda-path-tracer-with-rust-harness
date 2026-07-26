@@ -5,6 +5,8 @@
 #include "pt/sampling/pdf.hpp"
 #include <algorithm>
 
+namespace pt {
+
 class cosine_pdf final : public pdf {
 public:
     explicit cosine_pdf(const vec3& normal) : uvw(normal) {}
@@ -23,3 +25,5 @@ public:
 private:
     onb uvw;
 };
+
+} // namespace pt

@@ -5,6 +5,8 @@
 #include <cmath>
 #include <memory>
 
+namespace pt {
+
 class checker_texture : public texture {
 public:
     checker_texture(double scale, std::unique_ptr<texture> t1, std::unique_ptr<texture> t2)
@@ -27,3 +29,5 @@ private:
     std::unique_ptr<texture> even;
     std::unique_ptr<texture> odd;
 };
+
+} // namespace pt

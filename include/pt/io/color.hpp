@@ -4,6 +4,8 @@
 #include <cmath>
 #include <iostream>
 
+namespace pt {
+
 [[nodiscard]] inline double linear_to_gamma(double linear_component) {
     if (linear_component > 0) return std::sqrt(linear_component);
     return 0.0;
@@ -32,3 +34,5 @@ inline void write_color(std::ostream& out, const color& pixel_color) {
 
     out << r_byte << ' ' << g_byte << ' ' << b_byte << '\n';
 }
+
+} // namespace pt

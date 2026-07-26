@@ -8,6 +8,8 @@
 #include "pt/textures/texture.hpp"
 #include <algorithm>
 
+namespace pt {
+
 class lambertian final : public material {
 public:
     explicit lambertian(const texture* tex) : tex(tex) {}
@@ -24,3 +26,5 @@ public:
 private:
     const texture* tex;
 };
+
+} // namespace pt

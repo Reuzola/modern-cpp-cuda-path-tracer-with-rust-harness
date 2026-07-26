@@ -9,6 +9,8 @@
 #include <memory>
 #include <vector>
 
+namespace pt {
+
 class hittable_list final : public hittable {
     friend class bvh_node;
 
@@ -66,3 +68,5 @@ private:
     std::vector<std::shared_ptr<hittable>> objects;
     aabb bbox;
 };
+
+} // namespace pt

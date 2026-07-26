@@ -8,6 +8,8 @@
 #include <cmath>
 #include <memory>
 
+namespace pt {
+
 class rotate_y : public hittable {
 public:
     rotate_y(std::shared_ptr<hittable> object, double angle) : object(std::move(object)) {
@@ -74,3 +76,5 @@ private:
     double cos_theta{};
     aabb bbox;
 };
+
+} // namespace pt

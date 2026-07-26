@@ -6,6 +6,8 @@
 #include "pt/math/vec3.hpp"
 #include <memory>
 
+namespace pt {
+
 class translate : public hittable {
 public:
     translate(std::shared_ptr<hittable> object, const vec3& offset) : object(std::move(object)), offset(offset) {
@@ -28,3 +30,5 @@ private:
     vec3 offset;
     aabb bbox;
 };
+
+} // namespace pt

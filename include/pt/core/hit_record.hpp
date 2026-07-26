@@ -2,6 +2,8 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
 
+namespace pt {
+
 class material;
 
 struct uv_coords {
@@ -22,3 +24,5 @@ struct hit_record {
         normal = front_face ? outward_normal : -outward_normal;
     }
 };
+
+} // namespace pt

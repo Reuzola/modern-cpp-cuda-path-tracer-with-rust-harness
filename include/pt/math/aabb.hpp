@@ -3,6 +3,8 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
 
+namespace pt {
+
 class aabb {
 public:
     interval x, y, z;
@@ -68,3 +70,5 @@ private:
 [[nodiscard]] constexpr inline aabb operator+(const vec3& offset, const aabb& box) {
     return box + offset;
 }
+
+} // namespace pt

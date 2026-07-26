@@ -9,6 +9,8 @@
 #include "pt/math/vec3.hpp"
 #include <cmath>
 
+namespace pt {
+
 class material;
 
 class quad final : public hittable {
@@ -87,3 +89,5 @@ private:
         return true;
     }
 };
+
+} // namespace pt

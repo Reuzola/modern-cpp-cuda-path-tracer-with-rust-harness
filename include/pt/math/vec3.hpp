@@ -3,6 +3,8 @@
 #include "pt/math/random.hpp"
 #include <cmath>
 
+namespace pt {
+
 class vec3 {
 public:
     vec3() : e{0, 0, 0} {}
@@ -145,3 +147,5 @@ inline vec3 unit_vector(const vec3& v) {
 
 using point3 = vec3;
 using color = vec3;
+
+} // namespace pt

@@ -8,6 +8,8 @@
 #include <memory>
 #include <span>
 
+namespace pt {
+
 class bvh_node : public hittable {
 public:
     bvh_node(hittable_list list) : bvh_node(std::span<std::shared_ptr<hittable>>(list.objects)) {}
@@ -63,3 +65,5 @@ private:
     static bool box_y_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b) { return box_compare(a, b, 1); }
     static bool box_z_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b) { return box_compare(a, b, 2); }
 };
+
+} // namespace pt

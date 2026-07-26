@@ -5,6 +5,8 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
 
+namespace pt {
+
 class hittable {
 public:
     [[nodiscard]] virtual bool hit(const ray& r, const interval& ray_t, hit_record& rec) const = 0;
@@ -17,3 +19,5 @@ public:
 
     virtual ~hittable() = default;
 };
+
+} // namespace pt

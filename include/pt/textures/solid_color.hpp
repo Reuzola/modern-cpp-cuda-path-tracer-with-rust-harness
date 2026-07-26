@@ -2,6 +2,8 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/texture.hpp"
 
+namespace pt {
+
 class solid_color : public texture {
 public:
     explicit solid_color(const color& albedo) : albedo(albedo) {}
@@ -12,3 +14,5 @@ public:
 private:
     color albedo;
 };
+
+} // namespace pt

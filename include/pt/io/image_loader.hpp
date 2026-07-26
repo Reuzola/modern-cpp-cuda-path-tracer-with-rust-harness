@@ -7,6 +7,8 @@
 #include "pt/math/vec3.hpp"
 #include "stb_image.h"
 
+namespace pt {
+
 struct stbi_deleter {
     void operator()(float* ptr) const { stbi_image_free(ptr); }
 };
@@ -53,3 +55,5 @@ private:
         return true;
     }
 };
+
+} // namespace pt

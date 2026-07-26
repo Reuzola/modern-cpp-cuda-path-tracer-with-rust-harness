@@ -18,6 +18,8 @@
 #include <iostream>
 #include <variant>
 
+namespace pt {
+
 class camera {
 public:
     double aspect_ratio{1.0};
@@ -166,3 +168,5 @@ private:
         return center + p.x() * defocus_disk_u + p.y() * defocus_disk_v;
     }
 };
+
+} // namespace pt

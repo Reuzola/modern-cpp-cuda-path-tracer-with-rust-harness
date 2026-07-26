@@ -5,6 +5,8 @@
 #include "pt/textures/texture.hpp"
 #include <string>
 
+namespace pt {
+
 class image_texture : public texture {
 public:
     explicit image_texture(const std::string& filename) : image(filename) {}
@@ -24,3 +26,5 @@ public:
 private:
     image_loader image;
 };
+
+} // namespace pt

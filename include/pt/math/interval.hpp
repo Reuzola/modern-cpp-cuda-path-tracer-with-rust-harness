@@ -2,6 +2,8 @@
 #include "pt/math/constants.hpp"
 #include <algorithm>
 
+namespace pt {
+
 class interval {
 public:
     double min{+infinity};
@@ -48,3 +50,5 @@ inline const interval interval::universe{-infinity, +infinity};
 [[nodiscard]] constexpr inline interval operator+(double displacement, const interval& i) {
     return i + displacement;
 }
+
+} // namespace pt

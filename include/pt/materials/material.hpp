@@ -5,6 +5,8 @@
 #include <optional>
 #include <variant>
 
+namespace pt {
+
 struct hit_record;
 
 struct specular_bounce {
@@ -34,3 +36,5 @@ public:
         return 0.0;
     }
 };
+
+} // namespace pt

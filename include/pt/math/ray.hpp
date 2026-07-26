@@ -1,6 +1,8 @@
 #pragma once
 #include "pt/math/vec3.hpp"
 
+namespace pt {
+
 class ray {
 public:
     ray() = default;
@@ -20,3 +22,5 @@ private:
     vec3 dir;
     double tm{};
 };
+
+} // namespace pt

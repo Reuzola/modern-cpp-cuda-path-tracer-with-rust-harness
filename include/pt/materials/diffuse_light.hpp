@@ -5,6 +5,8 @@
 #include "pt/textures/texture.hpp"
 #include <optional>
 
+namespace pt {
+
 class diffuse_light : public material {
 public:
     explicit diffuse_light(const texture* tex) : tex(tex) {}
@@ -21,3 +23,5 @@ public:
 private:
     const texture* tex;
 };
+
+} // namespace pt
