@@ -33,9 +33,9 @@ public:
         y = std::clamp(y, 0, image_height - 1);
 
         const int index = (y * image_width + x) * 3;
-        const float r = fdata.get()[index];
-        const float g = fdata.get()[index + 1];
-        const float b = fdata.get()[index + 2];
+        const double r = static_cast<double>(fdata.get()[index]);
+        const double g = static_cast<double>(fdata.get()[index + 1]);
+        const double b = static_cast<double>(fdata.get()[index + 2]);
 
         return color(r, g, b);
     }
