@@ -13,6 +13,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # defines are expanded at configure time, below.
 include(GNUInstallDirs)
 
+# CTest is enabled here so test presets have something to run; the actual
+# test target arrives with Catch2.
+enable_testing()
+
 # Warnings are errors in Debug only: Debug is the development loop, where the
 # feedback should be strictest.
 #
@@ -22,6 +26,16 @@ include(GNUInstallDirs)
 # one uses whatever Clang the distro ships, so it needs an escape hatch:
 #   cmake --preset dev -DPT_WARNINGS_AS_ERRORS=OFF
 option(PT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in Debug builds" ON)
+
+option(PT_ENABLE_IPO "Enable interprocedural optimization (LTO) in Release builds" ON)
+
+if(PT_ENABLE_IPO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT pt_ipo_supported OUTPUT pt_ipo_error)
+  if(NOT pt_ipo_supported)
+    message(WARNING "IPO requested but unsupported by this toolchain: ${pt_ipo_error}")
+  endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # pt_warnings - the project's warning policy
@@ -118,6 +132,10 @@ target_compile_features(pathtracer_core INTERFACE cxx_std_20)
 # pathtracer - the driver executable
 # Deliberately thin: it owns main() and nothing else.
 add_executable(pathtracer src/main.cpp)
+
+if(PT_ENABLE_IPO AND pt_ipo_supported)
+  set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
 
 # pt::warnings is PRIVATE and intentionally not attached to pathtracer_core.
 # A warning policy is a build-time developer concern, never a usage

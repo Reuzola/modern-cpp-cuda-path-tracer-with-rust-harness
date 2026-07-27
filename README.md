@@ -42,16 +42,26 @@ Developed on WSL2 (Ubuntu).
 ## Building
 
 ```bash
-cmake --preset dev          # or: release
+cmake --preset dev            # Debug, warnings as errors
 cmake --build --preset dev
 ```
+
+Available presets:
+
+| Preset | Purpose |
+|---|---|
+| `dev` | Debug build, warnings as errors |
+| `asan-ubsan` | AddressSanitizer + UndefinedBehaviorSanitizer |
+| `relwithdebinfo` | Optimized with debug info and frame pointers, for profiling |
+| `release` | Optimized with ThinLTO, portable across x86-64 machines |
+| `release-native` | Release tuned to the host CPU — not portable, not for reference renders |
 
 ## Running
 
 Run from the repository root — image textures are resolved by relative path.
 
 ```bash
-./build/pathtracer > render.ppm
+./build/release/pathtracer > render.ppm
 ```
 
 The scene is chosen by the `switch` value in `main()`. Resolution, samples

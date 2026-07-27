@@ -5,27 +5,52 @@
       "name": "base",
       "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
       "name": "dev",
-      "displayName": "Development (clang, Debug)",
+      "displayName": "Development (Debug, warnings as errors)",
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
+      "name": "asan-ubsan",
+      "displayName": "Sanitizers (ASan + UBSan)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-O1 -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all"
+      }
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "Profiling (optimized + debug info)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer"
+      }
+    },
+    {
       "name": "release",
-      "displayName": "Release (clang, optimized)",
+      "displayName": "Release (optimized, portable)",
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "release-native",
+      "displayName": "Release (native arch, this machine only)",
+      "inherits": "release",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-march=native"
       }
     }
   ],
@@ -35,8 +60,83 @@
       "configurePreset": "dev"
     },
     {
+      "name": "asan-ubsan",
+      "configurePreset": "asan-ubsan"
+    },
+    {
+      "name": "relwithdebinfo",
+      "configurePreset": "relwithdebinfo"
+    },
+    {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "release-native",
+      "configurePreset": "release-native"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-base",
+      "hidden": true,
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "dev",
+      "inherits": "test-base",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "asan-ubsan",
+      "inherits": "test-base",
+      "configurePreset": "asan-ubsan"
+    },
+    {
+      "name": "release",
+      "inherits": "test-base",
+      "configurePreset": "release"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "dev",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev"
+        },
+        {
+          "type": "build",
+          "name": "dev"
+        },
+        {
+          "type": "test",
+          "name": "dev"
+        }
+      ]
+    },
+    {
+      "name": "asan-ubsan",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "asan-ubsan"
+        },
+        {
+          "type": "build",
+          "name": "asan-ubsan"
+        },
+        {
+          "type": "test",
+          "name": "asan-ubsan"
+        }
+      ]
     }
   ]
 }
