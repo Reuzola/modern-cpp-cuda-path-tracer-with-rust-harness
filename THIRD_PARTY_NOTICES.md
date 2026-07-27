@@ -53,8 +53,11 @@ SOFTWARE.
 
 ## Build-time dependencies
 
-This project has no build-time third-party dependencies yet. As dependencies
-are introduced through the package manager, each is recorded here.
+As dependencies are introduced through the package manager, each is recorded here
+
+| Component | Version | Author | License | Role |
+|---|---|---|---|---|
+| [Catch2](https://github.com/catchorg/Catch2) | 3.15.2 | Martin Hořeňovský, Phil Nash and contributors | BSL-1.0 (Boost Software License 1.0) | Test framework - linked into the test binary only |
 
 ---
 

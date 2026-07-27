@@ -145,6 +145,14 @@ endif()
 # would force them on every consumer, with no way to say PRIVATE.
 target_link_libraries(pathtracer PRIVATE pt::core pt::warnings)
 
+# Tests live in their own directory scope so that the dependency they need
+# (Catch2) and the CMAKE_MODULE_PATH it drags in stay contained there.
+#
+# Ordering is a real constraint, not style: enable_testing() above must run
+# before this line. add_test() calls in a subdirectory whose parent never
+# enabled testing register nothing at all - silently, with no diagnostic.
+add_subdirectory(tests)
+
 # Installation
 # Deliberately minimal: the executable and the public headers, nothing else.
 # pathtracer_core is not installed: an INTERFACE library has no artifact.
