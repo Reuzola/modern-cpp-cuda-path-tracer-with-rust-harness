@@ -1,0 +1,94 @@
+name: CI
+
+# Trunk-based repo, no pull requests (CONTRIBUTING.md) -> push + manual only.
+# workflow_dispatch gives an "Run workflow" button in the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GITHUB_TOKEN defaults to broad scopes. This workflow only reads the repo.
+permissions:
+  contents: read
+
+# Two pushes in a row: cancel the older run instead of paying for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # MUST stay identical to "builtin-baseline" in vcpkg.json.
+  VCPKG_BASELINE: 6d9d7df564a1ccdaa994e4ad39ccd4a32360867b
+
+jobs:
+  build-and-test:
+    name: linux-clang (${{ matrix.preset }})
+
+    # Pinned, not ubuntu-latest: that label moves between Ubuntu releases and
+    # would change the Clang version with no commit of ours. This image ships
+    # Clang 18.1.3, CMake 3.31 and Ninja 1.13 - the same compiler used locally,
+    # which is what makes -Werror in Debug a safe thing to run here.
+    runs-on: ubuntu-24.04
+
+    strategy:
+      # A failing dev job must not cancel the release job: both answers are wanted.
+      fail-fast: false
+      matrix:
+        # dev  -> Debug, -Werror, the strictest diagnostics.
+        # release -> the optimizer and ThinLTO path, which dev never exercises.
+        preset: [dev, release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Why not the vcpkg preinstalled on the runner: the presets look for
+      # $env{VCPKG_ROOT}, but the image exports VCPKG_INSTALLATION_ROOT instead,
+      # and its checkout sits at whatever commit that image was built from -
+      # which may not contain our pinned baseline, in which case vcpkg cannot
+      # resolve it. Checking out the baseline commit itself makes CI resolve the
+      # exact same port versions as this machine, today and in two years.
+      - name: Checkout vcpkg at the pinned baseline
+        uses: actions/checkout@v7
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ env.VCPKG_BASELINE }}
+          path: vcpkg
+
+      - name: Bootstrap vcpkg
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      # $GITHUB_ENV is the only way to hand a variable to *later* steps: every
+      # step is a fresh shell, so a plain `export` would die with its own process.
+      - name: Export VCPKG_ROOT
+        run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
+
+      # The base preset pins VCPKG_INSTALLED_DIR to the source root, so this one
+      # directory is the whole dependency tree. Keyed on the manifest and the
+      # baseline: change either one and the cache correctly misses.
+      - name: Cache vcpkg packages
+        uses: actions/cache@v6
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_BASELINE }}
+
+      # Recorded deliberately: when a warning appears out of nowhere six months
+      # from now, the first question is always "which compiler produced it".
+      - name: Toolchain versions
+        run: |
+          clang++ --version
+          cmake --version
+          ninja --version
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      # Note: catch_discover_tests runs the test binary at build time to enumerate
+      # cases, so a crash during discovery fails THIS step, not the one below.
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      # The test presets set noTestsAction=error, so a run that discovers zero
+      # tests fails loudly instead of passing green and empty.
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}

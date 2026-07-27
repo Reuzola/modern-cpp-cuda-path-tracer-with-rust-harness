@@ -2,6 +2,7 @@
 
 A physically-based path tracer written from scratch in modern C++.
 
+[![CI](https://github.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/actions/workflows/ci.yml)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 
