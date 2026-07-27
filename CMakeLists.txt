@@ -133,12 +133,22 @@ target_include_directories(pt_stb SYSTEM INTERFACE
 )
 
 # pathtracer_core - the engine
-# STATIC as of this stop: src/io/stb_impl.cpp is the engine's first translation
-# unit, so there is finally object code to archive. This was an INTERFACE
-# target only because CMake rejects a STATIC target with no sources - a
-# workaround for being header-only, never a design choice.
+#
+# Sources are the engine's own translation units, grouped by layer. Until this
+# stop the only entry was stb_impl.cpp - third-party C with no engine code in
+# it - so the library archived nothing of ours. The math layer is the first
+# engine code to land here, and Stops 13-15 will extend this list downward.
+#
+# Listed directly in add_library() rather than appended with target_sources():
+# there is one list, in one place, and it is trivially greppable. target_sources()
+# earns its keep when sources are added from a subdirectory scope or behind a
+# condition - which is what a later optional target (a viewer, say) would need,
+# and what this list does not.
 add_library(pathtracer_core STATIC
   src/io/stb_impl.cpp
+
+  src/math/random.cpp
+  src/math/vec3.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
@@ -179,14 +189,23 @@ target_link_libraries(pathtracer_core
 # Deliberately thin: it owns main() and nothing else.
 add_executable(pathtracer src/main.cpp)
 
-# Deliberately still only on pathtracer, not extended to pathtracer_core. LTO
-# buys cross-TU inlining, which needs -flto on both sides of the boundary; this
-# library's only translation unit today is third-party C with nothing in it for
-# the engine to inline, so extending it now would be preparation for a state
-# that does not exist yet. Revisit when the engine's own .cpp files arrive
-# (Stop 12 onwards) - from that point this line quietly stops delivering what
-# PT_ENABLE_IPO advertises.
+# Interprocedural optimization, Release only.
+#
+# Set on both targets, and that pairing is the whole point: LTO removes the
+# translation-unit boundary at link time, but only where both sides of that
+# boundary were compiled with it. The engine's math bodies now live in
+# pathtracer_core while every call site still lives in main.cpp, so enabling
+# this on the executable alone would optimize across a boundary that no longer
+# has anything on the other side of it.
+#
+# The _RELEASE suffix restricts this to the Release configuration. Without it,
+# LTO would apply to Debug too - which costs link time, folds functions together,
+# and produces exactly the kind of debug info that makes a stack trace lie.
+#
+# Deliberately not set on pathtracer_tests: nobody profiles a test binary, and
+# LTO would tax every CI run with a slower link for no measurable return.
 if(PT_ENABLE_IPO AND pt_ipo_supported)
+  set_property(TARGET pathtracer_core PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
   set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 

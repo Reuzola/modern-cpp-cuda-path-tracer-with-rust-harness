@@ -1,6 +1,4 @@
 #pragma once
-#include "pt/math/constants.hpp"
-#include "pt/math/random.hpp"
 #include <cmath>
 
 namespace pt {
@@ -45,13 +43,9 @@ public:
         return std::sqrt(length_squared());
     }
 
-    static vec3 random() {
-        return vec3(random_double(), random_double(), random_double());
-    }
+    static vec3 random();
 
-    static vec3 random(double min, double max) {
-        return vec3(random_double(min, max), random_double(min, max), random_double(min, max));
-    }
+    static vec3 random(double min, double max);
 
     [[nodiscard]] bool near_zero() const {
         constexpr auto s = 1e-8;
@@ -101,14 +95,7 @@ inline vec3 unit_vector(const vec3& v) {
     return v / v.length();
 }
 
-[[nodiscard]] inline vec3 random_unit_vector() {
-    while (true) {
-        auto p = vec3::random(-1, 1);
-        auto lensq = p.length_squared();
-
-        if (lensq <= 1 && lensq > 1e-160) return p / std::sqrt(lensq);
-    }
-}
+[[nodiscard]] vec3 random_unit_vector();
 
 [[nodiscard]] inline vec3 reflect(const vec3& v, const vec3& n) {
     return v - 2 * dot(v, n) * n;
@@ -123,27 +110,9 @@ inline vec3 unit_vector(const vec3& v) {
     return r_out_perp + r_out_parallel;
 }
 
-[[nodiscard]] inline vec3 random_in_unit_disk() {
-    while (true) {
-        auto p = vec3(random_double(-1, 1), random_double(-1, 1), 0);
-        const auto lensq = p.length_squared();
+[[nodiscard]] vec3 random_in_unit_disk();
 
-        if (lensq < 1) return p;
-    }
-}
-
-[[nodiscard]] inline vec3 random_cosine_direction() {
-    const double r1 = random_double();
-    const double r2 = random_double();
-    const double sqrt_r2 = std::sqrt(r2);
-
-    const double phi = 2.0 * pi * r1;
-    const double x = std::cos(phi) * sqrt_r2;
-    const double y = std::sin(phi) * sqrt_r2;
-    const double z = std::sqrt(1.0 - r2);
-
-    return vec3(x, y, z);
-}
+[[nodiscard]] vec3 random_cosine_direction();
 
 using point3 = vec3;
 using color = vec3;
