@@ -1,11 +1,10 @@
 #pragma once
+#include "pt/math/vec3.hpp"
+#include "stb_image.h"
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
-#define STB_IMAGE_IMPLEMENTATION
-#include "pt/math/vec3.hpp"
-#include "stb_image.h"
 
 namespace pt {
 

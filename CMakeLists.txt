@@ -105,44 +105,93 @@ target_compile_options(pt_warnings INTERFACE
   $<$<AND:$<BOOL:${PT_WARNINGS_AS_ERRORS}>,$<CONFIG:Debug>,$<COMPILE_LANG_AND_ID:CXX,MSVC>>:/WX>
 )
 
+# pt_stb - vendored third-party headers
+#
+# Third-party code gets a target of its own rather than an include directory
+# attached to pathtracer_core. Two reasons:
+#
+#   1. It names the dependency. "pt::core links pt::stb" is a statement about
+#      the build graph; an include directory buried inside pathtracer_core's
+#      own call is invisible to anyone reading the target list.
+#   2. It makes the isolation structural. SYSTEM applies per
+#      target_include_directories() call, so external/ was already forced into
+#      a separate call - promoting that call to a target turns an accident of
+#      syntax into a boundary, and lets any other target depend on stb without
+#      dragging in the entire engine.
+#
+# SYSTEM is the load-bearing keyword: it emits -isystem instead of -I, and the
+# compiler does not diagnose code reached through -isystem. That is the only
+# thing keeping ~7000 lines of 2000s-era C out from under pt::warnings, and in
+# Debug out from under -Werror. The suppression is tied to the search path, not
+# to the file: a relative "../../external/stb_image.h" finds the same header
+# with the protection gone.
+add_library(pt_stb INTERFACE)
+add_library(pt::stb ALIAS pt_stb)
+
+target_include_directories(pt_stb SYSTEM INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external>
+)
+
 # pathtracer_core - the engine
-# INTERFACE, not STATIC: the codebase is still header-only, so there is no
-# object code to archive. This becomes STATIC once the engine gains its first
-# translation unit (src/io/stb_impl.cpp)
-add_library(pathtracer_core INTERFACE)
+# STATIC as of this stop: src/io/stb_impl.cpp is the engine's first translation
+# unit, so there is finally object code to archive. This was an INTERFACE
+# target only because CMake rejects a STATIC target with no sources - a
+# workaround for being header-only, never a design choice.
+add_library(pathtracer_core STATIC
+  src/io/stb_impl.cpp
+)
 add_library(pt::core ALIAS pathtracer_core)
 
-# Our own headers: not SYSTEM, so pt::warnings applies to every one of them.
-target_include_directories(pathtracer_core INTERFACE
+# PUBLIC, not INTERFACE. The keyword now carries information it could not carry
+# before: INTERFACE means "consumers only", which was the only answer available
+# to a target with no sources of its own. PUBLIC means "this target's sources
+# and its consumers", which is what the engine's own include root actually is.
+target_include_directories(pathtracer_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# Vendored third-party headers, marked SYSTEM so the compiler stops diagnosing
-# code we do not own. SYSTEM applies to the whole call, not to individual
-# directories, which is why this is a separate call from the one above:
-# folding external/ into it would silence our own headers too.
-target_include_directories(pathtracer_core SYSTEM INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external>
-)
+# PUBLIC for the same reason: the library itself is compiled as C++20, and so
+# is everything that links it.
+target_compile_features(pathtracer_core PUBLIC cxx_std_20)
 
-# Anything linking pathtracer_core is compiled as C++20 or later.
-target_compile_features(pathtracer_core INTERFACE cxx_std_20)
+# pt::stb is PUBLIC, and that is forced rather than chosen: image_loader.hpp is
+# a public header and it includes stb_image.h, so stb's include directory is a
+# usage requirement of this library, not an implementation detail. A consumer
+# handed our headers without it fails to compile. PRIVATE becomes correct only
+# once stb stops appearing in any public header.
+#
+# pt::warnings is PRIVATE: a warning policy is a build-time developer concern,
+# never something to impose on a consumer. CMake does still propagate a static
+# library's PRIVATE link dependencies to consumers, but wrapped in
+# $<LINK_ONLY:>, so only the link edge travels and none of the usage
+# requirements do - and pt_warnings, having no artifact, contributes nothing.
+#
+# This line is the one the Stop 6 journal entry flagged: from Stop 12 onwards
+# the engine's own .cpp files land in this target, and omitting it would drop
+# engine code out of the warning policy without a single diagnostic.
+target_link_libraries(pathtracer_core
+  PUBLIC pt::stb
+  PRIVATE pt::warnings
+)
 
 # pathtracer - the driver executable
 # Deliberately thin: it owns main() and nothing else.
 add_executable(pathtracer src/main.cpp)
 
+# Deliberately still only on pathtracer, not extended to pathtracer_core. LTO
+# buys cross-TU inlining, which needs -flto on both sides of the boundary; this
+# library's only translation unit today is third-party C with nothing in it for
+# the engine to inline, so extending it now would be preparation for a state
+# that does not exist yet. Revisit when the engine's own .cpp files arrive
+# (Stop 12 onwards) - from that point this line quietly stops delivering what
+# PT_ENABLE_IPO advertises.
 if(PT_ENABLE_IPO AND pt_ipo_supported)
   set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
-# pt::warnings is PRIVATE and intentionally not attached to pathtracer_core.
-# A warning policy is a build-time developer concern, never a usage
-# requirement: consumers of a library choose their own. pathtracer_core is
-# currently an INTERFACE target, and target_link_libraries on an INTERFACE
-# target accepts only the INTERFACE keyword - so linking the warnings there
-# would force them on every consumer, with no way to say PRIVATE.
+# pt::core brings the engine and, transitively, stb's include path.
+# pt::warnings is this target's own opt-in - see pathtracer_core above.
 target_link_libraries(pathtracer PRIVATE pt::core pt::warnings)
 
 # Tests live in their own directory scope so that the dependency they need
@@ -155,7 +204,10 @@ add_subdirectory(tests)
 
 # Installation
 # Deliberately minimal: the executable and the public headers, nothing else.
-# pathtracer_core is not installed: an INTERFACE library has no artifact.
+# pathtracer_core now produces an artifact but is still not installed - it is an
+# implementation detail of the binary, and installing it usefully would mean an
+# export set, a package config file, and an answer for how a consumer obtains
+# stb. None of that is needed to ship a renderer.
 install(TARGETS pathtracer
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
