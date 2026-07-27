@@ -36,6 +36,8 @@ blur, stratified sampling, anti-aliasing.
 - Clang with C++20 support
 - CMake 3.25 or newer
 - Ninja
+- [vcpkg](https://github.com/microsoft/vcpkg), with `VCPKG_ROOT` pointing at the
+  installation — the presets read it to locate the toolchain file
 
 Developed on WSL2 (Ubuntu).
 

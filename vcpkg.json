@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "pathtracer",
+  "version": "0.1.0",
+  "description": "Physically-based path tracer",
+  "license": "MIT",
+  "dependencies": [],
+  "builtin-baseline": "6d9d7df564a1ccdaa994e4ad39ccd4a32360867b"
+}

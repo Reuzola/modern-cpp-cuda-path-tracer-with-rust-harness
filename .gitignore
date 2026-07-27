@@ -43,3 +43,6 @@ vgcore.*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Personal preset overrides (a local VCPKG_ROOT, a different compiler path)
+CMakeUserPresets.json
