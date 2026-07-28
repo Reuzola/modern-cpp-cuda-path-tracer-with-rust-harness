@@ -8,6 +8,7 @@
 #include "pt/math/vec3.hpp"
 #include <cstddef>
 #include <memory>
+#include <utility>
 
 namespace pt {
 

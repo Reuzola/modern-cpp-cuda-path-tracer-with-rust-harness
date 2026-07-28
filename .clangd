@@ -1,2 +1,12 @@
 CompileFlags:
   CompilationDatabase: build/dev
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+
+Hover:
+  ShowAKA: Yes
+
+Index:
+  StandardLibrary: Yes

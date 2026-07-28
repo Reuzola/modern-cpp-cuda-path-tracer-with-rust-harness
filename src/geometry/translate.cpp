@@ -5,6 +5,7 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
 #include <memory>
+#include <utility>
 
 namespace pt {
 

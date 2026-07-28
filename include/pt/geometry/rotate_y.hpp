@@ -8,6 +8,8 @@
 
 namespace pt {
 
+class interval;
+
 class rotate_y : public hittable {
 public:
     rotate_y(std::shared_ptr<hittable> object, double angle);

@@ -1,5 +1,6 @@
 #include "pt/materials/isotropic.hpp"
 #include "pt/core/hit_record.hpp"
+#include "pt/materials/material.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/sampling/sphere_pdf.hpp"

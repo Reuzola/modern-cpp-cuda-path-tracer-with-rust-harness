@@ -23,6 +23,7 @@
 #include "pt/textures/texture.hpp"
 #include <chrono>
 #include <cmath>
+#include <format>
 #include <iostream>
 #include <memory>
 #include <vector>

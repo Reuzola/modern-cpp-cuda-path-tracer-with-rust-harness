@@ -1,4 +1,5 @@
 #include "pt/textures/checker_texture.hpp"
+#include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
 #include <cmath>
 #include <memory>

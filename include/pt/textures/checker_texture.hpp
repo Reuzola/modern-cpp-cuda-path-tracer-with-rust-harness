@@ -2,6 +2,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/texture.hpp"
 #include <memory>
+#include <utility>
 
 namespace pt {
 

@@ -1,5 +1,6 @@
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/core/hit_record.hpp"
+#include "pt/materials/material.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/texture.hpp"

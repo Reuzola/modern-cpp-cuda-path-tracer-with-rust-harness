@@ -9,6 +9,8 @@
 
 namespace pt {
 
+class ray;
+
 class constant_medium : public hittable {
 public:
     constant_medium(std::shared_ptr<hittable> boundary, double density, const material* phase_function);

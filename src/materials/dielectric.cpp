@@ -1,5 +1,6 @@
 #include "pt/materials/dielectric.hpp"
 #include "pt/core/hit_record.hpp"
+#include "pt/materials/material.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
