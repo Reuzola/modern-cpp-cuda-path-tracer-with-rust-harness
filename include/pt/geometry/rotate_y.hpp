@@ -3,7 +3,6 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
-#include <cmath>
 #include <memory>
 
 namespace pt {

@@ -2,7 +2,7 @@
 #include "pt/math/interval.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
-#include <iostream>
+#include <ostream>
 
 namespace pt {
 

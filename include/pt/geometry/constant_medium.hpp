@@ -1,13 +1,13 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/materials/material.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
-#include <cmath>
 #include <memory>
 
 namespace pt {
+
+class material;
 
 class ray;
 

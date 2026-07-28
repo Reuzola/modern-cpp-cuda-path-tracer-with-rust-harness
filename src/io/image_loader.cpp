@@ -3,7 +3,6 @@
 #include "stb_image.h"
 #include <algorithm>
 #include <iostream>
-#include <memory>
 #include <string>
 
 namespace pt {
