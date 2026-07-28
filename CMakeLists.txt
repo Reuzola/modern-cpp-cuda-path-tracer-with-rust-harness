@@ -137,7 +137,7 @@ target_include_directories(pt_stb SYSTEM INTERFACE
 # Sources are the engine's own translation units, grouped by layer. Until this
 # stop the only entry was stb_impl.cpp - third-party C with no engine code in
 # it - so the library archived nothing of ours. The math layer is the first
-# engine code to land here, and Stops 13-15 will extend this list downward.
+# engine code to land here.
 #
 # Listed directly in add_library() rather than appended with target_sources():
 # there is one list, in one place, and it is trivially greppable. target_sources()
@@ -145,6 +145,7 @@ target_include_directories(pt_stb SYSTEM INTERFACE
 # condition - which is what a later optional target (a viewer, say) would need,
 # and what this list does not.
 add_library(pathtracer_core STATIC
+  src/io/image_loader.cpp
   src/io/stb_impl.cpp
 
   src/math/random.cpp
@@ -174,6 +175,11 @@ add_library(pathtracer_core STATIC
   src/materials/lambertian.cpp
   src/materials/material.cpp
   src/materials/metal.cpp
+
+  src/sampling/cosine_pdf.cpp
+  src/sampling/hittable_pdf.cpp
+  src/sampling/mixture_pdf.cpp
+  src/sampling/sphere_pdf.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
@@ -190,24 +196,25 @@ target_include_directories(pathtracer_core PUBLIC
 # is everything that links it.
 target_compile_features(pathtracer_core PUBLIC cxx_std_20)
 
-# pt::stb is PUBLIC, and that is forced rather than chosen: image_loader.hpp is
-# a public header and it includes stb_image.h, so stb's include directory is a
-# usage requirement of this library, not an implementation detail. A consumer
-# handed our headers without it fails to compile. PRIVATE becomes correct only
-# once stb stops appearing in any public header.
+# pt::stb is PRIVATE, It was PUBLIC for one reason: image_loader.hpp
+# was a public header and it included stb_image.h, which made stb's include
+# directory part of this library's interface - a consumer handed our headers
+# without it would fail to compile. Moving stbi_deleter::operator()'s body into
+# image_loader.cpp removed the last mention of stb_image.h from include/, so the
+# dependency is now an implementation detail and travels no further than this
+# target's own sources.
 #
-# pt::warnings is PRIVATE: a warning policy is a build-time developer concern,
+# This also repairs the install rules: install(DIRECTORY include/) has been
+# shipping headers, and until now those headers named a third-party
+# file that is not installed with them.
+#
+# pt::warnings stays PRIVATE: a warning policy is a build-time developer concern,
 # never something to impose on a consumer. CMake does still propagate a static
 # library's PRIVATE link dependencies to consumers, but wrapped in
 # $<LINK_ONLY:>, so only the link edge travels and none of the usage
-# requirements do - and pt_warnings, having no artifact, contributes nothing.
-#
-# This line is the one the Stop 6 journal entry flagged: from Stop 12 onwards
-# the engine's own .cpp files land in this target, and omitting it would drop
-# engine code out of the warning policy without a single diagnostic.
+# requirements do - and neither of these targets has an artifact to link.
 target_link_libraries(pathtracer_core
-  PUBLIC pt::stb
-  PRIVATE pt::warnings
+  PRIVATE pt::stb pt::warnings
 )
 
 # pathtracer - the driver executable

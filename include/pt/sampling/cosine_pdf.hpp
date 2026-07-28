@@ -1,9 +1,7 @@
 #pragma once
-#include "pt/math/constants.hpp"
 #include "pt/math/onb.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/sampling/pdf.hpp"
-#include <algorithm>
 
 namespace pt {
 
@@ -11,16 +9,9 @@ class cosine_pdf final : public pdf {
 public:
     explicit cosine_pdf(const vec3& normal) : uvw(normal) {}
 
-    [[nodiscard]] double value(const vec3& direction) const override {
-        const vec3 unit_direction = unit_vector(direction);
-        const double cosine_theta = dot(uvw.w(), unit_direction);
+    [[nodiscard]] double value(const vec3& direction) const override;
 
-        return std::max(0.0, cosine_theta) / pi;
-    }
-
-    [[nodiscard]] vec3 generate() const override {
-        return uvw.transform(random_cosine_direction());
-    }
+    [[nodiscard]] vec3 generate() const override;
 
 private:
     onb uvw;
