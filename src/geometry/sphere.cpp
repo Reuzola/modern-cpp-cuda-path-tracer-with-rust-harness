@@ -75,7 +75,7 @@ double sphere::pdf_value(const point3& origin, const vec3& direction) const {
     return 1.0 / solid_angle;
 }
 
-uv_coords sphere::get_sphere_uv(const point3& p) {
+auto sphere::get_sphere_uv(const point3& p) -> uv_coords {
     const double theta = std::acos(-p.y());
     const double phi = std::atan2(-p.z(), p.x()) + pi;
 

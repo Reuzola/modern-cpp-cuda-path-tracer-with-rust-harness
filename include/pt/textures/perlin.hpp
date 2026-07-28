@@ -17,8 +17,6 @@ private:
     std::array<vec3, point_count> randvec;
     std::array<int, point_count> perm_x, perm_y, perm_z;
 
-    [[nodiscard]] static double trilinear_interp(const double c[2][2][2], double u, double v, double w);
-
     [[nodiscard]] static double perlin_interp(const vec3 c[2][2][2], double u, double v, double w);
 };
 

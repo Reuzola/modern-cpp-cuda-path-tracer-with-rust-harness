@@ -36,11 +36,9 @@ public:
         return interval(min - padding, max + padding);
     }
 
-    static const interval empty;
     static const interval universe;
 };
 
-inline const interval interval::empty{+infinity, -infinity};
 inline const interval interval::universe{-infinity, +infinity};
 
 [[nodiscard]] constexpr inline interval operator+(const interval& i, double displacement) {

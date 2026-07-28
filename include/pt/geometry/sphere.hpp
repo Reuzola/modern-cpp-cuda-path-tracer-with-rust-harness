@@ -30,6 +30,10 @@ private:
     const material* mat = nullptr;
     aabb bbox;
 
+    struct uv_coords {
+        double u{}, v{};
+    };
+
     [[nodiscard]] static uv_coords get_sphere_uv(const point3& p);
 
     [[nodiscard]] static vec3 random_to_sphere(double radius, double distance_squared);
