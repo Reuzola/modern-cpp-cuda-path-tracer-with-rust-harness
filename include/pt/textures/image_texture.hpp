@@ -6,7 +6,7 @@
 
 namespace pt {
 
-class image_texture : public texture {
+class image_texture final : public texture {
 public:
     explicit image_texture(const std::string& filename) : image(filename) {}
 

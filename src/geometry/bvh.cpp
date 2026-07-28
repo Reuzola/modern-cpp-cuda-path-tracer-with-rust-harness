@@ -38,7 +38,7 @@ bvh_node::bvh_node(std::span<std::shared_ptr<hittable>> objects) {
     }
 }
 
-[[nodiscard]] bool bvh_node::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
+bool bvh_node::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
     if (!bbox.hit(r, ray_t)) return false;
 
     bool hit_left = left->hit(r, ray_t, rec);
@@ -47,7 +47,7 @@ bvh_node::bvh_node(std::span<std::shared_ptr<hittable>> objects) {
     return hit_left || hit_right;
 }
 
-[[nodiscard]] aabb bvh_node::bounding_box() const { return bbox; }
+aabb bvh_node::bounding_box() const { return bbox; }
 
 bool bvh_node::box_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b, int axis_index) {
     const auto a_axis_interval = a->bounding_box().axis_interval(axis_index);

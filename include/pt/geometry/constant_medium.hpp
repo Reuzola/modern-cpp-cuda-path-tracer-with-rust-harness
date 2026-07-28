@@ -11,7 +11,7 @@ class material;
 
 class ray;
 
-class constant_medium : public hittable {
+class constant_medium final : public hittable {
 public:
     constant_medium(std::shared_ptr<hittable> boundary, double density, const material* phase_function);
 

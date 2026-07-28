@@ -5,7 +5,7 @@
 
 namespace pt {
 
-class noise_texture : public texture {
+class noise_texture final : public texture {
 public:
     explicit noise_texture(double scale) : scale(scale) {}
 

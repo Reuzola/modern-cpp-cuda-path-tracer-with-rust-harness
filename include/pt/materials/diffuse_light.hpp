@@ -9,7 +9,7 @@ namespace pt {
 
 class texture;
 
-class diffuse_light : public material {
+class diffuse_light final : public material {
 public:
     explicit diffuse_light(const texture* tex) : tex(tex) {}
 

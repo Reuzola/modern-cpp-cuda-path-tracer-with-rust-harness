@@ -10,7 +10,7 @@ namespace pt {
 
 class interval;
 
-class translate : public hittable {
+class translate final : public hittable {
 public:
     translate(std::shared_ptr<hittable> object, const vec3& offset);
 

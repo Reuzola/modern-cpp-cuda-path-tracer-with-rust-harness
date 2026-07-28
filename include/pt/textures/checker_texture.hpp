@@ -6,7 +6,7 @@
 
 namespace pt {
 
-class checker_texture : public texture {
+class checker_texture final : public texture {
 public:
     checker_texture(double scale, std::unique_ptr<texture> t1, std::unique_ptr<texture> t2)
         : inv_scale(1.0 / scale), even(std::move(t1)), odd(std::move(t2)) {}

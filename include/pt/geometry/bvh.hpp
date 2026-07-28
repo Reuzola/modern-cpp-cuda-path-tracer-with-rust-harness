@@ -11,7 +11,7 @@ namespace pt {
 
 class ray;
 
-class bvh_node : public hittable {
+class bvh_node final : public hittable {
 public:
     bvh_node(hittable_list list);
 
