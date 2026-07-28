@@ -2,7 +2,6 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/perlin.hpp"
 #include "pt/textures/texture.hpp"
-#include <cmath>
 
 namespace pt {
 
@@ -10,9 +9,7 @@ class noise_texture : public texture {
 public:
     explicit noise_texture(double scale) : scale(scale) {}
 
-    [[nodiscard]] color value(double, double, const point3& p) const override {
-        return color(1.0, 1.0, 1.0) * (0.5 * (1.0 + std::sin(scale * p.z() + 10.0 * noise.turb(p, 7))));
-    }
+    [[nodiscard]] color value(double u, double v, const point3& p) const override;
 
 private:
     perlin noise;

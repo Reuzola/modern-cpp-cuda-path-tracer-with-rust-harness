@@ -9,7 +9,7 @@ public:
     explicit solid_color(const color& albedo) : albedo(albedo) {}
     solid_color(double r, double g, double b) : solid_color(color(r, g, b)) {}
 
-    [[nodiscard]] color value(double, double, const point3&) const override { return albedo; }
+    [[nodiscard]] color value(double u, double v, const point3& p) const override;
 
 private:
     color albedo;

@@ -5,7 +5,7 @@ namespace pt {
 
 class texture {
 public:
-    virtual ~texture() = default;
+    virtual ~texture();
 
     [[nodiscard]] virtual color value(double u, double v, const point3& p) const = 0;
 };

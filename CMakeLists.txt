@@ -160,6 +160,12 @@ add_library(pathtracer_core STATIC
   src/geometry/rotate_y.cpp
   src/geometry/sphere.cpp
   src/geometry/translate.cpp
+
+  src/textures/checker_texture.cpp
+  src/textures/noise_texture.cpp
+  src/textures/perlin.cpp
+  src/textures/solid_color.cpp
+  src/textures/texture.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
