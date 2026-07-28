@@ -149,6 +149,17 @@ add_library(pathtracer_core STATIC
 
   src/math/random.cpp
   src/math/vec3.cpp
+
+  src/core/hittable.cpp
+  src/core/hittable_list.cpp
+
+  src/geometry/box.cpp
+  src/geometry/bvh.cpp
+  src/geometry/constant_medium.cpp
+  src/geometry/quad.cpp
+  src/geometry/rotate_y.cpp
+  src/geometry/sphere.cpp
+  src/geometry/translate.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 

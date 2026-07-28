@@ -10,20 +10,11 @@ namespace pt {
 
 class translate : public hittable {
 public:
-    translate(std::shared_ptr<hittable> object, const vec3& offset) : object(std::move(object)), offset(offset) {
-        bbox = this->object->bounding_box() + offset;
-    }
+    translate(std::shared_ptr<hittable> object, const vec3& offset);
 
-    [[nodiscard]] aabb bounding_box() const override { return bbox; }
+    [[nodiscard]] aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {
-        const ray offset_r(r.origin() - offset, r.direction(), r.time());
-
-        if (!object->hit(offset_r, ray_t, rec)) return false;
-
-        rec.p += offset;
-        return true;
-    }
+    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
 
 private:
     std::shared_ptr<hittable> object;
