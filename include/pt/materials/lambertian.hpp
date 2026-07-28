@@ -1,27 +1,20 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
 #include "pt/materials/material.hpp"
-#include "pt/math/constants.hpp"
 #include "pt/math/ray.hpp"
-#include "pt/math/vec3.hpp"
-#include "pt/sampling/cosine_pdf.hpp"
-#include "pt/textures/texture.hpp"
-#include <algorithm>
+#include <optional>
 
 namespace pt {
+
+class texture;
 
 class lambertian final : public material {
 public:
     explicit lambertian(const texture* tex) : tex(tex) {}
 
-    [[nodiscard]] std::optional<scatter_record> scatter(const ray&, const hit_record& rec) const override {
-        return scatter_record{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = diffuse_bounce{.sampling_pdf = cosine_pdf(rec.normal)}};
-    }
+    [[nodiscard]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override;
 
-    [[nodiscard]] double scattering_pdf(const ray&, const hit_record& rec, const ray& scattered) const override {
-        const double cos_theta = dot(rec.normal, unit_vector(scattered.direction()));
-        return std::max(0.0, cos_theta) / pi;
-    }
+    [[nodiscard]] double scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const override;
 
 private:
     const texture* tex;

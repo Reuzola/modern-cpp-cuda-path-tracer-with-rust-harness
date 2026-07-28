@@ -162,10 +162,18 @@ add_library(pathtracer_core STATIC
   src/geometry/translate.cpp
 
   src/textures/checker_texture.cpp
+  src/textures/image_texture.cpp
   src/textures/noise_texture.cpp
   src/textures/perlin.cpp
   src/textures/solid_color.cpp
   src/textures/texture.cpp
+
+  src/materials/dielectric.cpp
+  src/materials/diffuse_light.cpp
+  src/materials/isotropic.cpp
+  src/materials/lambertian.cpp
+  src/materials/material.cpp
+  src/materials/metal.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
