@@ -30,6 +30,8 @@ public:
 
     void add(std::shared_ptr<Hittable> obj);
 
+    [[nodiscard]] bool empty() const noexcept { return objects_.empty(); }
+
 private:
     std::vector<std::shared_ptr<Hittable>> objects_;
     Aabb bbox_;

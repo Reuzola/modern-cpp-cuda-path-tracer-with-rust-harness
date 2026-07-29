@@ -193,6 +193,8 @@ add_library(pathtracer_core STATIC
   src/sampling/hittable_pdf.cpp
   src/sampling/mixture_pdf.cpp
   src/sampling/sphere_pdf.cpp
+
+  src/scene/scene.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
