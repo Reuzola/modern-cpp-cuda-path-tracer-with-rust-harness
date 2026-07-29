@@ -65,10 +65,6 @@ inline vec3 operator-(const vec3& u, const vec3& v) {
     return vec3(u.x() - v.x(), u.y() - v.y(), u.z() - v.z());
 }
 
-inline vec3 operator*(const vec3& u, const vec3& v) {
-    return vec3(u.x() * v.x(), u.y() * v.y(), u.z() * v.z());
-}
-
 inline vec3 operator*(Float t, const vec3& v) {
     return vec3(t * v.x(), t * v.y(), t * v.z());
 }
@@ -116,6 +112,5 @@ inline vec3 unit_vector(const vec3& v) {
 [[nodiscard]] vec3 random_cosine_direction();
 
 using point3 = vec3;
-using color = vec3;
 
 } // namespace pt

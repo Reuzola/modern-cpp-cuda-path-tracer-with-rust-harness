@@ -13,6 +13,7 @@
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/materials/metal.hpp"
+#include "pt/math/color.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"

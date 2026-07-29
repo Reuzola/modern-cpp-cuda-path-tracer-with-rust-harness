@@ -1,7 +1,7 @@
 #pragma once
+#include "pt/math/color.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
-#include "pt/math/vec3.hpp"
 #include "pt/sampling/pdf_variant.hpp"
 #include <optional>
 #include <variant>

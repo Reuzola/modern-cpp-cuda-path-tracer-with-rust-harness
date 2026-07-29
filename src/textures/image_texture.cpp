@@ -1,5 +1,6 @@
 #include "pt/textures/image_texture.hpp"
 #include "pt/io/image_loader.hpp"
+#include "pt/math/color.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"

@@ -3,6 +3,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/io/color.hpp"
 #include "pt/materials/material.hpp"
+#include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/random.hpp"

@@ -1,4 +1,5 @@
 #pragma once
+#include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 

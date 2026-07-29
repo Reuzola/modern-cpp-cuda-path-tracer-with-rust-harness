@@ -1,7 +1,7 @@
 #pragma once
+#include "pt/math/color.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/scalar.hpp"
-#include "pt/math/vec3.hpp"
 #include <cmath>
 #include <ostream>
 
@@ -15,9 +15,9 @@ namespace pt {
 [[nodiscard]] inline Float remove_nan(Float x) { return std::isnan(x) ? 0.0_f : x; }
 
 inline void write_color(std::ostream& out, const color& pixel_color) {
-    Float r = pixel_color.x();
-    Float g = pixel_color.y();
-    Float b = pixel_color.z();
+    Float r = pixel_color.r();
+    Float g = pixel_color.g();
+    Float b = pixel_color.b();
 
     r = remove_nan(r);
     g = remove_nan(g);
