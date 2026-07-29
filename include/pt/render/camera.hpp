@@ -78,9 +78,9 @@ private:
         center = lookfrom;
 
         sqrt_spp = static_cast<int>(std::sqrt(static_cast<Float>(samples_per_pixel)));
-        recip_sqrt_spp = 1.0_f / sqrt_spp;
+        recip_sqrt_spp = 1.0_f / static_cast<Float>(sqrt_spp);
 
-        pixel_samples_scale = 1.0_f / (sqrt_spp * sqrt_spp);
+        pixel_samples_scale = 1.0_f / static_cast<Float>(sqrt_spp * sqrt_spp);
 
         w = unit_vector(lookfrom - lookat);
         u = unit_vector(cross(vup, w));

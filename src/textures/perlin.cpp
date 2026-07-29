@@ -68,7 +68,7 @@ Float perlin::perlin_interp(const vec3 c[2][2][2], Float u, Float v, Float w) {
                 const Float fi = static_cast<Float>(i);
                 const Float fj = static_cast<Float>(j);
                 const Float fk = static_cast<Float>(k);
-                const vec3 weight_v(u - i, v - j, w - k);
+                const vec3 weight_v(u - fi, v - fj, w - fk);
 
                 accum += (fi * uu + (1 - fi) * (1 - uu)) * (fj * vv + (1 - fj) * (1 - vv)) * (fk * ww + (1 - fk) * (1 - ww)) * dot(c[i][j][k], weight_v);
             }
