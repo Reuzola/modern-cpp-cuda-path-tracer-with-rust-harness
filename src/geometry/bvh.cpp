@@ -11,43 +11,43 @@
 
 namespace pt {
 
-BvhNode::BvhNode(HittableList list) : BvhNode(std::span<std::shared_ptr<Hittable>>(list.objects)) {}
+BvhNode::BvhNode(HittableList list) : BvhNode(std::span<std::shared_ptr<Hittable>>(list.objects_)) {}
 BvhNode::BvhNode(std::span<std::shared_ptr<Hittable>> objects) {
-    bbox = Aabb();
+    bbox_ = Aabb();
     for (const auto& object : objects) {
-        bbox = Aabb(bbox, object->bounding_box());
+        bbox_ = Aabb(bbox_, object->bounding_box());
     }
 
-    int axis = bbox.longest_axis();
+    int axis = bbox_.longest_axis();
 
     auto comparator = (axis == 0) ? box_x_compare : (axis == 1) ? box_y_compare
                                                                 : box_z_compare;
     const auto count = objects.size();
 
     if (count == 1) {
-        left = right = objects[0];
+        left_ = right_ = objects[0];
     } else if (count == 2) {
-        left = objects[0];
-        right = objects[1];
+        left_ = objects[0];
+        right_ = objects[1];
     } else {
         std::sort(objects.begin(), objects.end(), comparator);
         const auto mid = count / 2;
 
-        left = std::make_shared<BvhNode>(objects.subspan(0, mid));
-        right = std::make_shared<BvhNode>(objects.subspan(mid));
+        left_ = std::make_shared<BvhNode>(objects.subspan(0, mid));
+        right_ = std::make_shared<BvhNode>(objects.subspan(mid));
     }
 }
 
 bool BvhNode::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    if (!bbox.hit(r, ray_t)) return false;
+    if (!bbox_.hit(r, ray_t)) return false;
 
-    bool hit_left = left->hit(r, ray_t, rec);
-    bool hit_right = right->hit(r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec);
+    bool hit_left = left_->hit(r, ray_t, rec);
+    bool hit_right = right_->hit(r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec);
 
     return hit_left || hit_right;
 }
 
-Aabb BvhNode::bounding_box() const { return bbox; }
+Aabb BvhNode::bounding_box() const { return bbox_; }
 
 bool BvhNode::box_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b, int axis_index) {
     const auto a_axis_interval = a->bounding_box().axis_interval(axis_index);

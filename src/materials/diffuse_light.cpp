@@ -15,7 +15,7 @@ std::optional<ScatterRecord> DiffuseLight::scatter(const Ray&, const HitRecord&)
 
 Color DiffuseLight::emitted(const Ray&, const HitRecord& rec) const {
     if (!rec.front_face) return Color(0.0_f, 0.0_f, 0.0_f);
-    return tex->value(rec.u, rec.v, rec.p);
+    return tex_->value(rec.u, rec.v, rec.p);
 }
 
 } // namespace pt

@@ -15,8 +15,8 @@ public:
     [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
 private:
-    Color albedo;
-    Float fuzz{};
+    Color albedo_;
+    Float fuzz_{};
 };
 
 } // namespace pt

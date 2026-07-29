@@ -15,14 +15,14 @@ namespace pt {
 
 HittableList::HittableList(std::shared_ptr<Hittable> object) { add(std::move(object)); }
 
-Aabb HittableList::bounding_box() const { return bbox; }
+Aabb HittableList::bounding_box() const { return bbox_; }
 
 bool HittableList::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     Float closest_so_far = ray_t.max;
     HitRecord temp_rec;
 
     bool is_hit = false;
-    for (const auto& obj : objects) {
+    for (const auto& obj : objects_) {
         if (obj->hit(r, Interval(ray_t.min, closest_so_far), temp_rec)) {
             closest_so_far = temp_rec.t;
             rec = temp_rec;
@@ -33,32 +33,32 @@ bool HittableList::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) cons
 }
 
 Float HittableList::pdf_value(const Point3& origin, const Vec3& direction) const {
-    if (objects.empty()) return 0.0_f;
+    if (objects_.empty()) return 0.0_f;
 
-    const Float weight = 1.0_f / static_cast<Float>(objects.size());
+    const Float weight = 1.0_f / static_cast<Float>(objects_.size());
     Float sum{0.0_f};
 
-    for (const auto& object : objects) {
+    for (const auto& object : objects_) {
         sum += weight * object->pdf_value(origin, direction);
     }
     return sum;
 }
 
 Vec3 HittableList::random(const Point3& origin) const {
-    if (objects.empty()) return Vec3(0, 0, 0);
+    if (objects_.empty()) return Vec3(0, 0, 0);
 
-    const int count = static_cast<int>(objects.size());
-    return objects[static_cast<std::size_t>(random_int(0, count - 1))]->random(origin);
+    const int count = static_cast<int>(objects_.size());
+    return objects_[static_cast<std::size_t>(random_int(0, count - 1))]->random(origin);
 }
 
 void HittableList::clear() {
-    objects.clear();
-    bbox = Aabb();
+    objects_.clear();
+    bbox_ = Aabb();
 }
 
 void HittableList::add(std::shared_ptr<Hittable> obj) {
-    bbox = Aabb(bbox, obj->bounding_box());
-    objects.push_back(std::move(obj));
+    bbox_ = Aabb(bbox_, obj->bounding_box());
+    objects_.push_back(std::move(obj));
 }
 
 } // namespace pt

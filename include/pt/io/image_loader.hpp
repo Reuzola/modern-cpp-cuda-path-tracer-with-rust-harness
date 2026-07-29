@@ -14,19 +14,19 @@ public:
     explicit ImageLoader(const std::string& filename);
 
     [[nodiscard]] int width() const {
-        return fdata ? image_width : 0;
+        return fdata_ ? image_width_ : 0;
     }
 
     [[nodiscard]] int height() const {
-        return fdata ? image_height : 0;
+        return fdata_ ? image_height_ : 0;
     }
 
     [[nodiscard]] Color pixel_data(int x, int y) const;
 
 private:
-    std::unique_ptr<float, StbiDeleter> fdata;
-    int image_width{};
-    int image_height{};
+    std::unique_ptr<float, StbiDeleter> fdata_;
+    int image_width_{};
+    int image_height_{};
 
     bool load(const std::string& filename);
 };

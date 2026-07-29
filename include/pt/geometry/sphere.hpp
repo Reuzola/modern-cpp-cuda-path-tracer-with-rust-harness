@@ -26,10 +26,10 @@ public:
     [[nodiscard]] Float pdf_value(const Point3& origin, const Vec3& direction) const override;
 
 private:
-    Ray center;
-    Float radius;
-    const Material* mat = nullptr;
-    Aabb bbox;
+    Ray center_;
+    Float radius_;
+    const Material* mat_ = nullptr;
+    Aabb bbox_;
 
     struct UvCoords {
         Float u{}, v{};

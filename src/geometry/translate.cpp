@@ -9,18 +9,18 @@
 
 namespace pt {
 
-Translate::Translate(std::shared_ptr<Hittable> object, const Vec3& offset) : object(std::move(object)), offset(offset) {
-    bbox = this->object->bounding_box() + offset;
+Translate::Translate(std::shared_ptr<Hittable> object, const Vec3& offset) : object_(std::move(object)), offset_(offset) {
+    bbox_ = object_->bounding_box() + offset;
 }
 
-Aabb Translate::bounding_box() const { return bbox; }
+Aabb Translate::bounding_box() const { return bbox_; }
 
 bool Translate::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    const Ray offset_r(r.origin() - offset, r.direction(), r.time());
+    const Ray offset_r(r.origin() - offset_, r.direction(), r.time());
 
-    if (!object->hit(offset_r, ray_t, rec)) return false;
+    if (!object_->hit(offset_r, ray_t, rec)) return false;
 
-    rec.p += offset;
+    rec.p += offset_;
     return true;
 }
 

@@ -19,10 +19,10 @@ public:
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<Hittable> object;
-    Float sin_theta{};
-    Float cos_theta{};
-    Aabb bbox;
+    std::shared_ptr<Hittable> object_;
+    Float sin_theta_{};
+    Float cos_theta_{};
+    Aabb bbox_;
 };
 
 } // namespace pt

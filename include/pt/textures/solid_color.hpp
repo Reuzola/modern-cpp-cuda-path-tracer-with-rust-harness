@@ -8,13 +8,13 @@ namespace pt {
 
 class SolidColor final : public Texture {
 public:
-    explicit SolidColor(const Color& albedo) : albedo(albedo) {}
+    explicit SolidColor(const Color& albedo) : albedo_(albedo) {}
     SolidColor(Float r, Float g, Float b) : SolidColor(Color(r, g, b)) {}
 
     [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 
 private:
-    Color albedo;
+    Color albedo_;
 };
 
 } // namespace pt

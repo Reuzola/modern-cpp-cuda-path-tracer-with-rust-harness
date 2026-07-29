@@ -5,6 +5,6 @@
 
 namespace pt {
 
-Color SolidColor::value(Float, Float, const Point3&) const { return albedo; }
+Color SolidColor::value(Float, Float, const Point3&) const { return albedo_; }
 
 } // namespace pt

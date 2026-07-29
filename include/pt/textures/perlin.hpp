@@ -15,8 +15,8 @@ public:
 
 private:
     static constexpr int point_count{256};
-    std::array<Vec3, point_count> randvec;
-    std::array<int, point_count> perm_x, perm_y, perm_z;
+    std::array<Vec3, point_count> randvec_;
+    std::array<int, point_count> perm_x_, perm_y_, perm_z_;
 
     [[nodiscard]] static Float perlin_interp(const Vec3 c[2][2][2], Float u, Float v, Float w);
 };

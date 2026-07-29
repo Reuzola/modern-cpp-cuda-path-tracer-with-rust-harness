@@ -9,13 +9,13 @@ namespace pt {
 
 class NoiseTexture final : public Texture {
 public:
-    explicit NoiseTexture(Float scale) : scale(scale) {}
+    explicit NoiseTexture(Float scale) : scale_(scale) {}
 
     [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 
 private:
-    Perlin noise;
-    Float scale{};
+    Perlin noise_;
+    Float scale_{};
 };
 
 } // namespace pt

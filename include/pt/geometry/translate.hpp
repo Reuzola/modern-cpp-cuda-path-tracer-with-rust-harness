@@ -19,9 +19,9 @@ public:
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<Hittable> object;
-    Vec3 offset;
-    Aabb bbox;
+    std::shared_ptr<Hittable> object_;
+    Vec3 offset_;
+    Aabb bbox_;
 };
 
 } // namespace pt

@@ -13,7 +13,7 @@
 namespace pt {
 
 std::optional<ScatterRecord> Lambertian::scatter(const Ray&, const HitRecord& rec) const {
-    return ScatterRecord{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = CosinePdf(rec.normal)}};
+    return ScatterRecord{.attenuation = tex_->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = CosinePdf(rec.normal)}};
 }
 
 Float Lambertian::scattering_pdf(const Ray&, const HitRecord& rec, const Ray& scattered) const {

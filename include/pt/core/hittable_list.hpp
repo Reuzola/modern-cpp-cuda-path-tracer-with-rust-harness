@@ -31,8 +31,8 @@ public:
     void add(std::shared_ptr<Hittable> obj);
 
 private:
-    std::vector<std::shared_ptr<Hittable>> objects;
-    Aabb bbox;
+    std::vector<std::shared_ptr<Hittable>> objects_;
+    Aabb bbox_;
 };
 
 } // namespace pt

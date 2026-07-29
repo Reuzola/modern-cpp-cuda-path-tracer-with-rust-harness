@@ -21,9 +21,9 @@ public:
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<Hittable> boundary;
-    Float neg_inv_density{};
-    const Material* phase_function;
+    std::shared_ptr<Hittable> boundary_;
+    Float neg_inv_density_{};
+    const Material* phase_function_;
 };
 
 } // namespace pt

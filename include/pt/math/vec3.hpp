@@ -6,29 +6,29 @@ namespace pt {
 
 class Vec3 {
 public:
-    Vec3() : e{0, 0, 0} {}
-    Vec3(Float a, Float b, Float c) : e{a, b, c} {}
+    Vec3() : e_{0, 0, 0} {}
+    Vec3(Float a, Float b, Float c) : e_{a, b, c} {}
 
-    Float x() const { return e[0]; }
-    Float y() const { return e[1]; }
-    Float z() const { return e[2]; }
+    Float x() const { return e_[0]; }
+    Float y() const { return e_[1]; }
+    Float z() const { return e_[2]; }
 
-    Vec3 operator-() const { return Vec3(-e[0], -e[1], -e[2]); }
+    Vec3 operator-() const { return Vec3(-e_[0], -e_[1], -e_[2]); }
 
-    Float operator[](int i) const { return e[i]; }
-    Float& operator[](int i) { return e[i]; }
+    Float operator[](int i) const { return e_[i]; }
+    Float& operator[](int i) { return e_[i]; }
 
     Vec3& operator+=(const Vec3& v) {
-        e[0] += v.e[0];
-        e[1] += v.e[1];
-        e[2] += v.e[2];
+        e_[0] += v.e_[0];
+        e_[1] += v.e_[1];
+        e_[2] += v.e_[2];
         return *this;
     }
 
     Vec3& operator*=(Float t) {
-        e[0] *= t;
-        e[1] *= t;
-        e[2] *= t;
+        e_[0] *= t;
+        e_[1] *= t;
+        e_[2] *= t;
         return *this;
     }
 
@@ -37,7 +37,7 @@ public:
     }
 
     Float length_squared() const {
-        return e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+        return e_[0] * e_[0] + e_[1] * e_[1] + e_[2] * e_[2];
     }
 
     Float length() const {
@@ -50,11 +50,11 @@ public:
 
     [[nodiscard]] bool near_zero() const {
         constexpr Float s = 1e-8_f;
-        return std::fabs(e[0]) < s && std::fabs(e[1]) < s && std::fabs(e[2]) < s;
+        return std::fabs(e_[0]) < s && std::fabs(e_[1]) < s && std::fabs(e_[2]) < s;
     }
 
 private:
-    Float e[3];
+    Float e_[3];
 };
 
 inline Vec3 operator+(const Vec3& u, const Vec3& v) {

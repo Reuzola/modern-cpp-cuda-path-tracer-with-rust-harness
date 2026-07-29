@@ -9,15 +9,15 @@ class Hittable;
 
 class HittablePdf final : public Pdf {
 public:
-    HittablePdf(const Hittable& objects, const Point3& origin) : objects(objects), origin(origin) {}
+    HittablePdf(const Hittable& objects, const Point3& origin) : objects_(objects), origin_(origin) {}
 
     [[nodiscard]] Float value(const Vec3& direction) const override;
 
     [[nodiscard]] Vec3 generate() const override;
 
 private:
-    const Hittable& objects;
-    Point3 origin;
+    const Hittable& objects_;
+    Point3 origin_;
 };
 
 } // namespace pt

@@ -11,14 +11,14 @@ class Texture;
 
 class Lambertian final : public Material {
 public:
-    explicit Lambertian(const Texture* tex) : tex(tex) {}
+    explicit Lambertian(const Texture* tex) : tex_(tex) {}
 
     [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
     [[nodiscard]] Float scattering_pdf(const Ray& r_in, const HitRecord& rec, const Ray& scattered) const override;
 
 private:
-    const Texture* tex;
+    const Texture* tex_;
 };
 
 } // namespace pt

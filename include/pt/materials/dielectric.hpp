@@ -9,12 +9,12 @@ namespace pt {
 
 class Dielectric final : public Material {
 public:
-    explicit Dielectric(Float refraction_index) : refraction_index(refraction_index) {}
+    explicit Dielectric(Float refraction_index) : refraction_index_(refraction_index) {}
 
     [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
 private:
-    Float refraction_index{};
+    Float refraction_index_{};
 
     [[nodiscard]] static Float reflectance(Float cosine, Float refraction_index);
 };

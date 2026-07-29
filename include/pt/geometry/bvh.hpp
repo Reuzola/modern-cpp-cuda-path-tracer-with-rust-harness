@@ -22,9 +22,9 @@ public:
     [[nodiscard]] Aabb bounding_box() const override;
 
 private:
-    std::shared_ptr<Hittable> left;
-    std::shared_ptr<Hittable> right;
-    Aabb bbox;
+    std::shared_ptr<Hittable> left_;
+    std::shared_ptr<Hittable> right_;
+    Aabb bbox_;
 
     static bool box_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b, int axis_index);
 

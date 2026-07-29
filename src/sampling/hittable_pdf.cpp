@@ -6,11 +6,11 @@
 namespace pt {
 
 Float HittablePdf::value(const Vec3& direction) const {
-    return objects.pdf_value(origin, direction);
+    return objects_.pdf_value(origin_, direction);
 }
 
 Vec3 HittablePdf::generate() const {
-    return objects.random(origin);
+    return objects_.random(origin_);
 }
 
 } // namespace pt

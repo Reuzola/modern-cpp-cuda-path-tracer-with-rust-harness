@@ -12,7 +12,7 @@
 namespace pt {
 
 std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecord& rec) const {
-    const Float ri = rec.front_face ? (1.0_f / refraction_index) : refraction_index; // ri means refraction index ratio
+    const Float ri = rec.front_face ? (1.0_f / refraction_index_) : refraction_index_; // ri means refraction index ratio
     const auto unit_direction = unit_vector(r_in.direction());
 
     const Float cos_theta = std::fmin(dot(-unit_direction, rec.normal), 1.0_f);

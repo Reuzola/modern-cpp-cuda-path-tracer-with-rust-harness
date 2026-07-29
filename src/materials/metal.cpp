@@ -10,14 +10,14 @@
 
 namespace pt {
 
-Metal::Metal(const Color& albedo, Float fuzz) : albedo(albedo), fuzz(std::clamp(fuzz, 0.0_f, 1.0_f)) {}
+Metal::Metal(const Color& albedo, Float fuzz) : albedo_(albedo), fuzz_(std::clamp(fuzz, 0.0_f, 1.0_f)) {}
 
 std::optional<ScatterRecord> Metal::scatter(const Ray& r_in, const HitRecord& rec) const {
     auto reflected = reflect(unit_vector(r_in.direction()), rec.normal);
-    auto scattered_direction = reflected + fuzz * random_unit_vector();
+    auto scattered_direction = reflected + fuzz_ * random_unit_vector();
 
     if (dot(scattered_direction, rec.normal) > 0) {
-        return ScatterRecord{.attenuation = albedo, .bounce = SpecularBounce{.scattered = Ray(rec.p, scattered_direction, r_in.time())}};
+        return ScatterRecord{.attenuation = albedo_, .bounce = SpecularBounce{.scattered = Ray(rec.p, scattered_direction, r_in.time())}};
     }
     return std::nullopt;
 }

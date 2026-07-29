@@ -9,13 +9,13 @@ namespace pt {
 
 Float CosinePdf::value(const Vec3& direction) const {
     const Vec3 unit_direction = unit_vector(direction);
-    const Float cosine_theta = dot(uvw.w(), unit_direction);
+    const Float cosine_theta = dot(uvw_.w(), unit_direction);
 
     return std::max(0.0_f, cosine_theta) / pi;
 }
 
 Vec3 CosinePdf::generate() const {
-    return uvw.transform(random_cosine_direction());
+    return uvw_.transform(random_cosine_direction());
 }
 
 } // namespace pt

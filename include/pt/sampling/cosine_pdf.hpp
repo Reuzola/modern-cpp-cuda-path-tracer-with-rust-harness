@@ -8,14 +8,14 @@ namespace pt {
 
 class CosinePdf final : public Pdf {
 public:
-    explicit CosinePdf(const Vec3& normal) : uvw(normal) {}
+    explicit CosinePdf(const Vec3& normal) : uvw_(normal) {}
 
     [[nodiscard]] Float value(const Vec3& direction) const override;
 
     [[nodiscard]] Vec3 generate() const override;
 
 private:
-    Onb uvw;
+    Onb uvw_;
 };
 
 } // namespace pt

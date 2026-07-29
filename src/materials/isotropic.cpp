@@ -11,7 +11,7 @@
 namespace pt {
 
 std::optional<ScatterRecord> Isotropic::scatter(const Ray&, const HitRecord& rec) const {
-    return ScatterRecord{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = SpherePdf()}};
+    return ScatterRecord{.attenuation = tex_->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = SpherePdf()}};
 }
 
 Float Isotropic::scattering_pdf(const Ray&, const HitRecord&, const Ray&) const {

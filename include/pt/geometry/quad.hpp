@@ -24,14 +24,14 @@ public:
     [[nodiscard]] Vec3 random(const Point3& origin) const override;
 
 private:
-    Point3 Q;
-    Vec3 u, v;
-    const Material* mat = nullptr;
-    Aabb bbox;
-    Vec3 normal;
-    Float D{};
-    Vec3 w;
-    Float area{};
+    Point3 Q_;
+    Vec3 u_, v_;
+    const Material* mat_ = nullptr;
+    Aabb bbox_;
+    Vec3 normal_;
+    Float D_{};
+    Vec3 w_;
+    Float area_{};
 
     void set_bounding_box();
 

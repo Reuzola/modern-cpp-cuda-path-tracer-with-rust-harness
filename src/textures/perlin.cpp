@@ -10,15 +10,15 @@
 namespace pt {
 
 Perlin::Perlin() {
-    std::ranges::generate(randvec, [] { return unit_vector(Vec3::random(-1, 1)); });
+    std::ranges::generate(randvec_, [] { return unit_vector(Vec3::random(-1, 1)); });
 
-    std::iota(perm_x.begin(), perm_x.end(), 0);
-    std::iota(perm_y.begin(), perm_y.end(), 0);
-    std::iota(perm_z.begin(), perm_z.end(), 0);
+    std::iota(perm_x_.begin(), perm_x_.end(), 0);
+    std::iota(perm_y_.begin(), perm_y_.end(), 0);
+    std::iota(perm_z_.begin(), perm_z_.end(), 0);
 
-    std::ranges::shuffle(perm_x, rng());
-    std::ranges::shuffle(perm_y, rng());
-    std::ranges::shuffle(perm_z, rng());
+    std::ranges::shuffle(perm_x_, rng());
+    std::ranges::shuffle(perm_y_, rng());
+    std::ranges::shuffle(perm_z_, rng());
 }
 
 Float Perlin::noise(const Point3& p) const {
@@ -35,8 +35,8 @@ Float Perlin::noise(const Point3& p) const {
     for (int di = 0; di < 2; di++) {
         for (int dj = 0; dj < 2; dj++) {
             for (int dk = 0; dk < 2; dk++) {
-                const std::size_t index = static_cast<std::size_t>(perm_x[(i + di) & 255] ^ perm_y[(j + dj) & 255] ^ perm_z[(k + dk) & 255]);
-                c[di][dj][dk] = randvec[index];
+                const std::size_t index = static_cast<std::size_t>(perm_x_[(i + di) & 255] ^ perm_y_[(j + dj) & 255] ^ perm_z_[(k + dk) & 255]);
+                c[di][dj][dk] = randvec_[index];
             }
         }
     }
