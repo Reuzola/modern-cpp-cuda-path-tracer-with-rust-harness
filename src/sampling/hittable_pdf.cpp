@@ -5,11 +5,11 @@
 
 namespace pt {
 
-Float hittable_pdf::value(const vec3& direction) const {
+Float HittablePdf::value(const Vec3& direction) const {
     return objects.pdf_value(origin, direction);
 }
 
-vec3 hittable_pdf::generate() const {
+Vec3 HittablePdf::generate() const {
     return objects.random(origin);
 }
 

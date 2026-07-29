@@ -7,11 +7,11 @@
 
 namespace pt {
 
-color image_texture::value(Float u, Float v, const point3&) const {
-    if (image.width() <= 0 || image.height() <= 0) return color(0.0_f, 1.0_f, 1.0_f);
+Color ImageTexture::value(Float u, Float v, const Point3&) const {
+    if (image.width() <= 0 || image.height() <= 0) return Color(0.0_f, 1.0_f, 1.0_f);
 
-    u = interval(0, 1).clamp(u);
-    v = interval(0, 1).clamp(v);
+    u = Interval(0, 1).clamp(u);
+    v = Interval(0, 1).clamp(v);
     v = 1.0_f - v;
 
     const int x = static_cast<int>(u * static_cast<Float>(image.width()));

@@ -22,21 +22,21 @@
 
 namespace pt {
 
-class camera {
+class Camera {
 public:
     Float aspect_ratio{1.0_f};
     int image_width{100};
     int samples_per_pixel{10};
     int max_depth{10};
     Float vfov{90.0_f};
-    point3 lookfrom{0, 0, 0};
-    point3 lookat{0, 0, -1};
-    vec3 vup{0, 1, 0};
+    Point3 lookfrom{0, 0, 0};
+    Point3 lookat{0, 0, -1};
+    Vec3 vup{0, 1, 0};
     Float defocus_angle{0};
     Float focus_dist{10.0_f};
-    color background{};
+    Color background{};
 
-    void render(const hittable& world, const hittable* lights = nullptr) {
+    void render(const Hittable& world, const Hittable* lights = nullptr) {
         initialize();
 
         std::cout << "P3\n"
@@ -46,7 +46,7 @@ public:
             std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
 
             for (int i = 0; i < image_width; i++) {
-                color pixel_color(0, 0, 0);
+                Color pixel_color(0, 0, 0);
 
                 for (int s_j = 0; s_j < sqrt_spp; s_j++) {
                     for (int s_i = 0; s_i < sqrt_spp; s_i++) {
@@ -63,16 +63,16 @@ public:
 
 private:
     int image_height{};
-    point3 center;
-    point3 pixel00_loc;
-    vec3 pixel_delta_u;
-    vec3 pixel_delta_v;
+    Point3 center;
+    Point3 pixel00_loc;
+    Vec3 pixel_delta_u;
+    Vec3 pixel_delta_v;
     Float pixel_samples_scale{};
     int sqrt_spp{};
     Float recip_sqrt_spp{};
-    vec3 u, v, w;
-    vec3 defocus_disk_u;
-    vec3 defocus_disk_v;
+    Vec3 u, v, w;
+    Vec3 defocus_disk_u;
+    Vec3 defocus_disk_v;
 
     void initialize() {
         image_height = std::max(static_cast<int>(static_cast<Float>(image_width) / aspect_ratio), 1);
@@ -93,13 +93,13 @@ private:
         const Float viewport_height = 2.0_f * h * focus_dist;
         const Float viewport_width = viewport_height * (static_cast<Float>(image_width) / static_cast<Float>(image_height));
 
-        const vec3 viewport_u = viewport_width * u;
-        const vec3 viewport_v = viewport_height * (-v);
+        const Vec3 viewport_u = viewport_width * u;
+        const Vec3 viewport_v = viewport_height * (-v);
 
         pixel_delta_u = viewport_u / static_cast<Float>(image_width);
         pixel_delta_v = viewport_v / static_cast<Float>(image_height);
 
-        const vec3 viewport_upper_left = center - (focus_dist * w) - viewport_u / 2.0_f - viewport_v / 2.0_f;
+        const Vec3 viewport_upper_left = center - (focus_dist * w) - viewport_u / 2.0_f - viewport_v / 2.0_f;
 
         pixel00_loc = viewport_upper_left + 0.5_f * (pixel_delta_u + pixel_delta_v);
 
@@ -109,38 +109,38 @@ private:
         defocus_disk_v = v * defocus_radius;
     }
 
-    [[nodiscard]] color ray_color(const ray& r, int depth, const hittable& world, const hittable* lights) const {
-        if (depth <= 0) return color(0, 0, 0);
+    [[nodiscard]] Color ray_color(const Ray& r, int depth, const Hittable& world, const Hittable* lights) const {
+        if (depth <= 0) return Color(0, 0, 0);
 
-        hit_record rec;
+        HitRecord rec;
 
-        if (!world.hit(r, interval(0.001_f, infinity), rec)) return background;
+        if (!world.hit(r, Interval(0.001_f, infinity), rec)) return background;
 
-        const color color_from_emission = rec.mat->emitted(r, rec);
+        const Color color_from_emission = rec.mat->emitted(r, rec);
 
         if (const auto sr = rec.mat->scatter(r, rec)) {
-            const auto shade = [&](const pdf& p) -> color {
-                const ray scattered(rec.p, p.generate(), r.time());
+            const auto shade = [&](const Pdf& p) -> Color {
+                const Ray scattered(rec.p, p.generate(), r.time());
                 const Float pdf_value = p.value(scattered.direction());
 
                 const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
-                const color sample_color = ray_color(scattered, depth - 1, world, lights);
+                const Color sample_color = ray_color(scattered, depth - 1, world, lights);
 
                 return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
             };
 
             // clang-format off
-            return color_from_emission + std::visit(overloaded{
-                [&](const specular_bounce& sb) -> color {
+            return color_from_emission + std::visit(Overloaded{
+                [&](const SpecularBounce& sb) -> Color {
                     return sr->attenuation * ray_color(sb.scattered, depth - 1, world, lights);
                 },
-                [&](const diffuse_bounce& db) -> color {
+                [&](const DiffuseBounce& db) -> Color {
                     const auto& surface_pdf = as_pdf(db.sampling_pdf);
 
                     if (lights == nullptr) return shade(surface_pdf);
 
-                    const hittable_pdf light_pdf(*lights, rec.p);
-                    const mixture_pdf mixed_pdf(surface_pdf, light_pdf);
+                    const HittablePdf light_pdf(*lights, rec.p);
+                    const MixturePdf mixed_pdf(surface_pdf, light_pdf);
                     return shade(mixed_pdf);
                 }
             }, sr->bounce);
@@ -149,23 +149,23 @@ private:
         return color_from_emission;
     }
 
-    [[nodiscard]] vec3 sample_square_stratified(int s_i, int s_j) const {
+    [[nodiscard]] Vec3 sample_square_stratified(int s_i, int s_j) const {
         const Float px = ((static_cast<Float>(s_i) + random_scalar()) * recip_sqrt_spp) - 0.5_f;
         const Float py = ((static_cast<Float>(s_j) + random_scalar()) * recip_sqrt_spp) - 0.5_f;
-        return vec3(px, py, 0.0_f);
+        return Vec3(px, py, 0.0_f);
     }
 
-    [[nodiscard]] ray get_ray(int i, int j, int s_i, int s_j) const {
-        const vec3 offset = sample_square_stratified(s_i, s_j);
+    [[nodiscard]] Ray get_ray(int i, int j, int s_i, int s_j) const {
+        const Vec3 offset = sample_square_stratified(s_i, s_j);
 
-        const point3 sample_point = pixel00_loc + (static_cast<Float>(i) + offset.x()) * pixel_delta_u + (static_cast<Float>(j) + offset.y()) * pixel_delta_v;
-        const point3 origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
+        const Point3 sample_point = pixel00_loc + (static_cast<Float>(i) + offset.x()) * pixel_delta_u + (static_cast<Float>(j) + offset.y()) * pixel_delta_v;
+        const Point3 origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
 
         const Float ray_time = random_scalar();
-        return ray(origin, sample_point - origin, ray_time);
+        return Ray(origin, sample_point - origin, ray_time);
     }
 
-    [[nodiscard]] point3 defocus_disk_sample() const {
+    [[nodiscard]] Point3 defocus_disk_sample() const {
         const auto p = random_in_unit_disk();
         return center + p.x() * defocus_disk_u + p.y() * defocus_disk_v;
     }

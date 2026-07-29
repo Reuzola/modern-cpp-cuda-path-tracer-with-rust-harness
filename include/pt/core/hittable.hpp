@@ -8,17 +8,17 @@
 
 namespace pt {
 
-class hittable {
+class Hittable {
 public:
-    [[nodiscard]] virtual bool hit(const ray& r, const interval& ray_t, hit_record& rec) const = 0;
+    [[nodiscard]] virtual bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const = 0;
 
-    [[nodiscard]] virtual aabb bounding_box() const = 0;
+    [[nodiscard]] virtual Aabb bounding_box() const = 0;
 
-    [[nodiscard]] virtual Float pdf_value(const point3& origin, const vec3& direction) const;
+    [[nodiscard]] virtual Float pdf_value(const Point3& origin, const Vec3& direction) const;
 
-    [[nodiscard]] virtual vec3 random(const point3& origin) const;
+    [[nodiscard]] virtual Vec3 random(const Point3& origin) const;
 
-    virtual ~hittable();
+    virtual ~Hittable();
 };
 
 } // namespace pt

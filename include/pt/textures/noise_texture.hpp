@@ -7,14 +7,14 @@
 
 namespace pt {
 
-class noise_texture final : public texture {
+class NoiseTexture final : public Texture {
 public:
-    explicit noise_texture(Float scale) : scale(scale) {}
+    explicit NoiseTexture(Float scale) : scale(scale) {}
 
-    [[nodiscard]] color value(Float u, Float v, const point3& p) const override;
+    [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 
 private:
-    perlin noise;
+    Perlin noise;
     Float scale{};
 };
 

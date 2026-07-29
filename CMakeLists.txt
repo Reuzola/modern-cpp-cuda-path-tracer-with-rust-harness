@@ -215,7 +215,7 @@ target_compile_features(pathtracer_core PUBLIC cxx_std_20)
 # pt/math/scalar.hpp reads this macro to decide what Float is, and that header
 # is public: it is compiled once into this library's sources, and again into
 # main.cpp, and again into every test TU. If those compilations disagree, the
-# layout of every type containing a Float (hit_record, interval, aabb, ray)
+# layout of every type containing a Float (HitRecord, Interval, Aabb, Ray)
 # differs across the boundary, and every inline function in include/ has two
 # different bodies under one name - an ODR violation the compiler never
 # diagnoses. PRIVATE here would not be a smaller scope, it would be a bug.

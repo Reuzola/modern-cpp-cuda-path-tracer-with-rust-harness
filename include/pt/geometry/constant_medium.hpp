@@ -8,22 +8,22 @@
 
 namespace pt {
 
-class material;
+class Material;
 
-class ray;
+class Ray;
 
-class constant_medium final : public hittable {
+class ConstantMedium final : public Hittable {
 public:
-    constant_medium(std::shared_ptr<hittable> boundary, Float density, const material* phase_function);
+    ConstantMedium(std::shared_ptr<Hittable> boundary, Float density, const Material* phase_function);
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<hittable> boundary;
+    std::shared_ptr<Hittable> boundary;
     Float neg_inv_density{};
-    const material* phase_function;
+    const Material* phase_function;
 };
 
 } // namespace pt

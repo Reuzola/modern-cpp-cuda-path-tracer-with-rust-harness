@@ -6,13 +6,13 @@
 
 namespace pt {
 
-material::~material() = default;
+Material::~Material() = default;
 
-color material::emitted(const ray&, const hit_record&) const {
-    return color(0.0_f, 0.0_f, 0.0_f);
+Color Material::emitted(const Ray&, const HitRecord&) const {
+    return Color(0.0_f, 0.0_f, 0.0_f);
 }
 
-Float material::scattering_pdf(const ray&, const hit_record&, const ray&) const {
+Float Material::scattering_pdf(const Ray&, const HitRecord&, const Ray&) const {
     return 0.0_f;
 }
 

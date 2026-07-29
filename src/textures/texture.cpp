@@ -2,6 +2,6 @@
 
 namespace pt {
 
-texture::~texture() = default;
+Texture::~Texture() = default;
 
 } // namespace pt

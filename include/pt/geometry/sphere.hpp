@@ -9,35 +9,35 @@
 
 namespace pt {
 
-class material;
+class Material;
 
-class sphere final : public hittable {
+class Sphere final : public Hittable {
 public:
-    sphere(const point3& center1, const point3& center2, Float radius, const material* mat);
+    Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat);
 
-    sphere(const point3& static_center, Float radius, const material* mat);
+    Sphere(const Point3& static_center, Float radius, const Material* mat);
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
-    [[nodiscard]] vec3 random(const point3& origin) const override;
+    [[nodiscard]] Vec3 random(const Point3& origin) const override;
 
-    [[nodiscard]] Float pdf_value(const point3& origin, const vec3& direction) const override;
+    [[nodiscard]] Float pdf_value(const Point3& origin, const Vec3& direction) const override;
 
 private:
-    ray center;
+    Ray center;
     Float radius;
-    const material* mat = nullptr;
-    aabb bbox;
+    const Material* mat = nullptr;
+    Aabb bbox;
 
-    struct uv_coords {
+    struct UvCoords {
         Float u{}, v{};
     };
 
-    [[nodiscard]] static uv_coords get_sphere_uv(const point3& p);
+    [[nodiscard]] static UvCoords get_sphere_uv(const Point3& p);
 
-    [[nodiscard]] static vec3 random_to_sphere(Float radius, Float distance_squared);
+    [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared);
 };
 
 } // namespace pt

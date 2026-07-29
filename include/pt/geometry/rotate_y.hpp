@@ -8,21 +8,21 @@
 
 namespace pt {
 
-class interval;
+class Interval;
 
-class rotate_y final : public hittable {
+class RotateY final : public Hittable {
 public:
-    rotate_y(std::shared_ptr<hittable> object, Float angle);
+    RotateY(std::shared_ptr<Hittable> object, Float angle);
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<hittable> object;
+    std::shared_ptr<Hittable> object;
     Float sin_theta{};
     Float cos_theta{};
-    aabb bbox;
+    Aabb bbox;
 };
 
 } // namespace pt

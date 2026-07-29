@@ -6,21 +6,21 @@
 
 namespace pt {
 
-class aabb {
+class Aabb {
 public:
-    interval x, y, z;
+    Interval x, y, z;
 
-    constexpr aabb() = default;
-    constexpr aabb(const interval& x, const interval& y, const interval& z) : x(x), y(y), z(z) { pad_to_minimums(); }
-    aabb(const point3& a, const point3& b) {
-        x = (a[0] <= b[0]) ? interval(a[0], b[0]) : interval(b[0], a[0]);
-        y = (a[1] <= b[1]) ? interval(a[1], b[1]) : interval(b[1], a[1]);
-        z = (a[2] <= b[2]) ? interval(a[2], b[2]) : interval(b[2], a[2]);
+    constexpr Aabb() = default;
+    constexpr Aabb(const Interval& x, const Interval& y, const Interval& z) : x(x), y(y), z(z) { pad_to_minimums(); }
+    Aabb(const Point3& a, const Point3& b) {
+        x = (a[0] <= b[0]) ? Interval(a[0], b[0]) : Interval(b[0], a[0]);
+        y = (a[1] <= b[1]) ? Interval(a[1], b[1]) : Interval(b[1], a[1]);
+        z = (a[2] <= b[2]) ? Interval(a[2], b[2]) : Interval(b[2], a[2]);
         pad_to_minimums();
     }
-    constexpr aabb(const aabb& box0, const aabb& box1) : x(box0.x, box1.x), y(box0.y, box1.y), z(box0.z, box1.z) {}
+    constexpr Aabb(const Aabb& box0, const Aabb& box1) : x(box0.x, box1.x), y(box0.y, box1.y), z(box0.z, box1.z) {}
 
-    [[nodiscard]] constexpr const interval& axis_interval(int n) const {
+    [[nodiscard]] constexpr const Interval& axis_interval(int n) const {
         if (n == 1) return y;
         if (n == 2) return z;
         return x;
@@ -31,12 +31,12 @@ public:
         return y.size() > z.size() ? 1 : 2;
     }
 
-    [[nodiscard]] bool hit(const ray& r, interval ray_t) const {
+    [[nodiscard]] bool hit(const Ray& r, Interval ray_t) const {
         const auto& ray_orig = r.origin();
         const auto& ray_dir = r.direction();
 
         for (int axis = 0; axis < 3; axis++) {
-            const interval& ax = axis_interval(axis);
+            const Interval& ax = axis_interval(axis);
             const Float adinv = 1.0_f / ray_dir[axis];
 
             Float t0 = (ax.min - ray_orig[axis]) * adinv;
@@ -64,11 +64,11 @@ private:
     }
 };
 
-[[nodiscard]] constexpr inline aabb operator+(const aabb& box, const vec3& offset) {
-    return aabb(box.x + offset.x(), box.y + offset.y(), box.z + offset.z());
+[[nodiscard]] constexpr inline Aabb operator+(const Aabb& box, const Vec3& offset) {
+    return Aabb(box.x + offset.x(), box.y + offset.y(), box.z + offset.z());
 }
 
-[[nodiscard]] constexpr inline aabb operator+(const vec3& offset, const aabb& box) {
+[[nodiscard]] constexpr inline Aabb operator+(const Vec3& offset, const Aabb& box) {
     return box + offset;
 }
 

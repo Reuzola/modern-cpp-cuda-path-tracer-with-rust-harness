@@ -4,10 +4,10 @@
 
 namespace pt {
 
-Float hittable::pdf_value(const point3& /*origin*/, const vec3& /*direction*/) const { return 0.0_f; }
+Float Hittable::pdf_value(const Point3& /*origin*/, const Vec3& /*direction*/) const { return 0.0_f; }
 
-vec3 hittable::random(const point3& /*origin*/) const { return vec3(1, 0, 0); }
+Vec3 Hittable::random(const Point3& /*origin*/) const { return Vec3(1, 0, 0); }
 
-hittable::~hittable() = default;
+Hittable::~Hittable() = default;
 
 } // namespace pt

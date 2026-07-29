@@ -8,30 +8,30 @@
 
 namespace pt {
 
-struct hit_record;
+struct HitRecord;
 
-struct specular_bounce {
-    ray scattered;
+struct SpecularBounce {
+    Ray scattered;
 };
 
-struct diffuse_bounce {
-    pdf_variant sampling_pdf;
+struct DiffuseBounce {
+    PdfVariant sampling_pdf;
 };
 
-struct scatter_record {
-    color attenuation;
-    std::variant<specular_bounce, diffuse_bounce> bounce;
+struct ScatterRecord {
+    Color attenuation;
+    std::variant<SpecularBounce, DiffuseBounce> bounce;
 };
 
-class material {
+class Material {
 public:
-    virtual ~material();
+    virtual ~Material();
 
-    [[nodiscard]] virtual std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const = 0;
+    [[nodiscard]] virtual std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const = 0;
 
-    [[nodiscard]] virtual color emitted(const ray& r_in, const hit_record& rec) const;
+    [[nodiscard]] virtual Color emitted(const Ray& r_in, const HitRecord& rec) const;
 
-    [[nodiscard]] virtual Float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
+    [[nodiscard]] virtual Float scattering_pdf(const Ray& r_in, const HitRecord& rec, const Ray& scattered) const;
 };
 
 } // namespace pt

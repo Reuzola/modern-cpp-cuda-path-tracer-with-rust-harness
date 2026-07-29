@@ -5,17 +5,17 @@
 
 namespace pt {
 
-class mixture_pdf final : public pdf {
+class MixturePdf final : public Pdf {
 public:
-    mixture_pdf(const pdf& p1, const pdf& p2) : p1(p1), p2(p2) {}
+    MixturePdf(const Pdf& p1, const Pdf& p2) : p1(p1), p2(p2) {}
 
-    [[nodiscard]] Float value(const vec3& direction) const override;
+    [[nodiscard]] Float value(const Vec3& direction) const override;
 
-    [[nodiscard]] vec3 generate() const override;
+    [[nodiscard]] Vec3 generate() const override;
 
 private:
-    const pdf& p1;
-    const pdf& p2;
+    const Pdf& p1;
+    const Pdf& p2;
     static constexpr Float weight = 0.5_f;
 };
 

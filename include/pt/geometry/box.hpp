@@ -5,8 +5,8 @@
 
 namespace pt {
 
-class material;
+class Material;
 
-[[nodiscard]] std::shared_ptr<hittable_list> box(const point3& a, const point3& b, const material* mat);
+[[nodiscard]] std::shared_ptr<HittableList> box(const Point3& a, const Point3& b, const Material* mat);
 
 } // namespace pt

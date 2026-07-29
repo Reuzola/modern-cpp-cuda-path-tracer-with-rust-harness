@@ -7,11 +7,11 @@
 
 namespace pt {
 
-class dielectric final : public material {
+class Dielectric final : public Material {
 public:
-    explicit dielectric(Float refraction_index) : refraction_index(refraction_index) {}
+    explicit Dielectric(Float refraction_index) : refraction_index(refraction_index) {}
 
-    [[nodiscard]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
 private:
     Float refraction_index{};

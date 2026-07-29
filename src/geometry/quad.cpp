@@ -11,8 +11,8 @@
 
 namespace pt {
 
-quad::quad(const point3& Q, const vec3& u, const vec3& v, const material* mat) : Q(Q), u(u), v(v), mat(mat) {
-    const vec3 n = cross(u, v);
+Quad::Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat) : Q(Q), u(u), v(v), mat(mat) {
+    const Vec3 n = cross(u, v);
     normal = unit_vector(n);
     D = dot(normal, Q);
     w = n / dot(n, n);
@@ -21,15 +21,15 @@ quad::quad(const point3& Q, const vec3& u, const vec3& v, const material* mat) :
     set_bounding_box();
 }
 
-bool quad::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
+bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     const Float denom = dot(normal, r.direction());
     if (std::fabs(denom) < 1e-8_f) return false;
 
     const Float t = (D - dot(normal, r.origin())) / denom;
     if (!ray_t.contains(t)) return false;
 
-    const point3 intersection = r.at(t);
-    const vec3 planar_hitpt_vector = intersection - Q;
+    const Point3 intersection = r.at(t);
+    const Vec3 planar_hitpt_vector = intersection - Q;
     const Float alpha = dot(w, cross(planar_hitpt_vector, v));
     const Float beta = dot(w, cross(u, planar_hitpt_vector));
     if (!is_interior(alpha, beta, rec)) return false;
@@ -42,11 +42,11 @@ bool quad::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
     return true;
 }
 
-aabb quad::bounding_box() const { return bbox; }
+Aabb Quad::bounding_box() const { return bbox; }
 
-Float quad::pdf_value(const point3& origin, const vec3& direction) const {
-    hit_record rec;
-    if (!this->hit(ray(origin, direction), interval(0.001_f, infinity), rec)) return 0.0_f;
+Float Quad::pdf_value(const Point3& origin, const Vec3& direction) const {
+    HitRecord rec;
+    if (!this->hit(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
 
     const Float distance_squared = rec.t * rec.t * direction.length_squared();
     const Float cosine = std::fabs(dot(direction, rec.normal)) / direction.length();
@@ -54,20 +54,20 @@ Float quad::pdf_value(const point3& origin, const vec3& direction) const {
     return distance_squared / (cosine * area);
 }
 
-vec3 quad::random(const point3& origin) const {
-    const point3 point = Q + random_scalar() * u + random_scalar() * v;
+Vec3 Quad::random(const Point3& origin) const {
+    const Point3 point = Q + random_scalar() * u + random_scalar() * v;
     return point - origin;
 }
 
-void quad::set_bounding_box() {
-    const auto bbox_diagonal1 = aabb(Q, Q + u + v);
-    const auto bbox_diagonal2 = aabb(Q + u, Q + v);
+void Quad::set_bounding_box() {
+    const auto bbox_diagonal1 = Aabb(Q, Q + u + v);
+    const auto bbox_diagonal2 = Aabb(Q + u, Q + v);
 
-    bbox = aabb(bbox_diagonal1, bbox_diagonal2);
+    bbox = Aabb(bbox_diagonal1, bbox_diagonal2);
 }
 
-bool quad::is_interior(Float a, Float b, hit_record& rec) const {
-    static constexpr interval unit_interval{0, 1};
+bool Quad::is_interior(Float a, Float b, HitRecord& rec) const {
+    static constexpr Interval unit_interval{0, 1};
     if (!unit_interval.contains(a) || !unit_interval.contains(b)) return false;
 
     rec.u = a;

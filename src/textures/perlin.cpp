@@ -9,8 +9,8 @@
 
 namespace pt {
 
-perlin::perlin() {
-    std::ranges::generate(randvec, [] { return unit_vector(vec3::random(-1, 1)); });
+Perlin::Perlin() {
+    std::ranges::generate(randvec, [] { return unit_vector(Vec3::random(-1, 1)); });
 
     std::iota(perm_x.begin(), perm_x.end(), 0);
     std::iota(perm_y.begin(), perm_y.end(), 0);
@@ -21,7 +21,7 @@ perlin::perlin() {
     std::ranges::shuffle(perm_z, rng());
 }
 
-Float perlin::noise(const point3& p) const {
+Float Perlin::noise(const Point3& p) const {
     const Float u = p.x() - std::floor(p.x());
     const Float v = p.y() - std::floor(p.y());
     const Float w = p.z() - std::floor(p.z());
@@ -30,7 +30,7 @@ Float perlin::noise(const point3& p) const {
     const int j = static_cast<int>(std::floor(p.y()));
     const int k = static_cast<int>(std::floor(p.z()));
 
-    vec3 c[2][2][2];
+    Vec3 c[2][2][2];
 
     for (int di = 0; di < 2; di++) {
         for (int dj = 0; dj < 2; dj++) {
@@ -43,9 +43,9 @@ Float perlin::noise(const point3& p) const {
     return perlin_interp(c, u, v, w);
 }
 
-Float perlin::turb(const point3& p, int depth) const {
+Float Perlin::turb(const Point3& p, int depth) const {
     Float accum{0};
-    point3 temp_p = p;
+    Point3 temp_p = p;
     Float weight{1.0_f};
 
     for (int i = 0; i < depth; i++) {
@@ -56,7 +56,7 @@ Float perlin::turb(const point3& p, int depth) const {
     return std::fabs(accum);
 }
 
-Float perlin::perlin_interp(const vec3 c[2][2][2], Float u, Float v, Float w) {
+Float Perlin::perlin_interp(const Vec3 c[2][2][2], Float u, Float v, Float w) {
     const Float uu = u * u * (3 - 2 * u); // u = 3u² − 2u³
     const Float vv = v * v * (3 - 2 * v); // v = 3v² − 2v³
     const Float ww = w * w * (3 - 2 * w); // w = 3w² − 2w³
@@ -68,7 +68,7 @@ Float perlin::perlin_interp(const vec3 c[2][2][2], Float u, Float v, Float w) {
                 const Float fi = static_cast<Float>(i);
                 const Float fj = static_cast<Float>(j);
                 const Float fk = static_cast<Float>(k);
-                const vec3 weight_v(u - fi, v - fj, w - fk);
+                const Vec3 weight_v(u - fi, v - fj, w - fk);
 
                 accum += (fi * uu + (1 - fi) * (1 - uu)) * (fj * vv + (1 - fj) * (1 - vv)) * (fk * ww + (1 - fk) * (1 - ww)) * dot(c[i][j][k], weight_v);
             }

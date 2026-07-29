@@ -11,7 +11,7 @@
 
 namespace pt {
 
-std::optional<scatter_record> dielectric::scatter(const ray& r_in, const hit_record& rec) const {
+std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecord& rec) const {
     const Float ri = rec.front_face ? (1.0_f / refraction_index) : refraction_index; // ri means refraction index ratio
     const auto unit_direction = unit_vector(r_in.direction());
 
@@ -21,16 +21,16 @@ std::optional<scatter_record> dielectric::scatter(const ray& r_in, const hit_rec
     const bool cannot_refract = ri * sin_theta > 1.0_f;
     const bool should_reflect = cannot_refract || reflectance(cos_theta, ri) > random_scalar();
 
-    vec3 direction;
+    Vec3 direction;
     if (should_reflect)
         direction = reflect(unit_direction, rec.normal);
     else
         direction = refract(unit_direction, rec.normal, ri);
 
-    return scatter_record{.attenuation = color(1.0_f, 1.0_f, 1.0_f), .bounce = specular_bounce{.scattered = ray(rec.p, direction, r_in.time())}};
+    return ScatterRecord{.attenuation = Color(1.0_f, 1.0_f, 1.0_f), .bounce = SpecularBounce{.scattered = Ray(rec.p, direction, r_in.time())}};
 }
 
-Float dielectric::reflectance(Float cosine, Float refraction_index) {
+Float Dielectric::reflectance(Float cosine, Float refraction_index) {
     const Float r_zero = ((1 - refraction_index) / (1 + refraction_index)) * ((1 - refraction_index) / (1 + refraction_index));
     return r_zero + (1 - r_zero) * ((1 - cosine) * (1 - cosine) * (1 - cosine) * (1 - cosine) * (1 - cosine)); // (1-cosine)^5
 }

@@ -5,11 +5,11 @@
 
 namespace pt {
 
-Float sphere_pdf::value(const vec3&) const {
+Float SpherePdf::value(const Vec3&) const {
     return 1.0_f / (4.0_f * pi);
 }
 
-vec3 sphere_pdf::generate() const {
+Vec3 SpherePdf::generate() const {
     return random_unit_vector();
 }
 

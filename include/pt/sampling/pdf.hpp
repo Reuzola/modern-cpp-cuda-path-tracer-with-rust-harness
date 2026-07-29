@@ -4,14 +4,14 @@
 
 namespace pt {
 
-class pdf {
+class Pdf {
 public:
-    [[nodiscard]] virtual Float value(const vec3& direction) const = 0;
+    [[nodiscard]] virtual Float value(const Vec3& direction) const = 0;
 
-    [[nodiscard]] virtual vec3 generate() const = 0;
+    [[nodiscard]] virtual Vec3 generate() const = 0;
 
 protected:
-    ~pdf() = default;
+    ~Pdf() = default;
 };
 
 } // namespace pt

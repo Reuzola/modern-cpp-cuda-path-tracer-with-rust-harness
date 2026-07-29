@@ -4,23 +4,23 @@
 
 namespace pt {
 
-class ray {
+class Ray {
 public:
-    ray() = default;
-    ray(const point3& origin, const vec3& direction) : ray(origin, direction, 0.0_f) {}
-    ray(const point3& origin, const vec3& direction, Float tm) : orig(origin), dir(direction), tm(tm) {}
+    Ray() = default;
+    Ray(const Point3& origin, const Vec3& direction) : Ray(origin, direction, 0.0_f) {}
+    Ray(const Point3& origin, const Vec3& direction, Float tm) : orig(origin), dir(direction), tm(tm) {}
 
-    [[nodiscard]] const point3& origin() const { return orig; }
-    [[nodiscard]] const vec3& direction() const { return dir; }
+    [[nodiscard]] const Point3& origin() const { return orig; }
+    [[nodiscard]] const Vec3& direction() const { return dir; }
     [[nodiscard]] Float time() const { return tm; }
 
-    point3 at(Float t) const {
+    Point3 at(Float t) const {
         return orig + t * dir;
     }
 
 private:
-    point3 orig;
-    vec3 dir;
+    Point3 orig;
+    Vec3 dir;
     Float tm{};
 };
 

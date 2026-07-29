@@ -4,12 +4,12 @@
 
 namespace pt {
 
-color color::random() {
-    return color(random_scalar(), random_scalar(), random_scalar());
+Color Color::random() {
+    return Color(random_scalar(), random_scalar(), random_scalar());
 }
 
-color color::random(Float min, Float max) {
-    return color(random_scalar(min, max), random_scalar(min, max), random_scalar(min, max));
+Color Color::random(Float min, Float max) {
+    return Color(random_scalar(min, max), random_scalar(min, max), random_scalar(min, max));
 }
 
 } // namespace pt

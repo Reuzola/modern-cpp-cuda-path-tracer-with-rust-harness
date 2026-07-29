@@ -3,7 +3,7 @@
 namespace pt {
 
 template <typename... Ts>
-struct overloaded : Ts... {
+struct Overloaded : Ts... {
     using Ts::operator()...;
 };
 

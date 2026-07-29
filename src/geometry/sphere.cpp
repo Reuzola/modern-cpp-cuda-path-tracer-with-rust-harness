@@ -12,18 +12,18 @@
 
 namespace pt {
 
-sphere::sphere(const point3& center1, const point3& center2, Float radius, const material* mat) : center(center1, center2 - center1), radius(std::fmax(0.0_f, radius)), mat(mat) {
-    const auto rvec = vec3(this->radius, this->radius, this->radius);
-    const aabb box1(center.at(0) - rvec, center.at(0) + rvec);
-    const aabb box2(center.at(1) - rvec, center.at(1) + rvec);
-    bbox = aabb(box1, box2);
+Sphere::Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat) : center(center1, center2 - center1), radius(std::fmax(0.0_f, radius)), mat(mat) {
+    const auto rvec = Vec3(this->radius, this->radius, this->radius);
+    const Aabb box1(center.at(0) - rvec, center.at(0) + rvec);
+    const Aabb box2(center.at(1) - rvec, center.at(1) + rvec);
+    bbox = Aabb(box1, box2);
 }
 
-sphere::sphere(const point3& static_center, Float radius, const material* mat) : sphere(static_center, static_center, radius, mat) {}
+Sphere::Sphere(const Point3& static_center, Float radius, const Material* mat) : Sphere(static_center, static_center, radius, mat) {}
 
-aabb sphere::bounding_box() const { return bbox; }
+Aabb Sphere::bounding_box() const { return bbox; }
 
-bool sphere::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
+bool Sphere::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     const auto current_center = center.at(r.time());
 
     const auto oc = current_center - r.origin();
@@ -45,7 +45,7 @@ bool sphere::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
 
     rec.t = root;
     rec.p = r.at(root);
-    const vec3 outward_normal = (rec.p - current_center) / radius;
+    const Vec3 outward_normal = (rec.p - current_center) / radius;
     rec.set_face_normal(r, outward_normal);
     const auto [u, v] = get_sphere_uv(outward_normal);
     rec.u = u;
@@ -55,17 +55,17 @@ bool sphere::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
     return true;
 }
 
-vec3 sphere::random(const point3& origin) const {
-    const vec3 direction = center.at(0) - origin;
+Vec3 Sphere::random(const Point3& origin) const {
+    const Vec3 direction = center.at(0) - origin;
     const Float distance_squared = direction.length_squared();
 
-    const onb uvw(direction);
+    const Onb uvw(direction);
     return uvw.transform(random_to_sphere(radius, distance_squared));
 }
 
-Float sphere::pdf_value(const point3& origin, const vec3& direction) const {
-    hit_record rec;
-    if (!this->hit(ray(origin, direction), interval(0.001_f, infinity), rec)) return 0.0_f;
+Float Sphere::pdf_value(const Point3& origin, const Vec3& direction) const {
+    HitRecord rec;
+    if (!this->hit(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
 
     const Float distance_squared = (center.at(0) - origin).length_squared();
     if (distance_squared <= radius * radius) return 0.0_f;
@@ -76,7 +76,7 @@ Float sphere::pdf_value(const point3& origin, const vec3& direction) const {
     return 1.0_f / solid_angle;
 }
 
-auto sphere::get_sphere_uv(const point3& p) -> uv_coords {
+auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
     const Float theta = std::acos(-p.y());
     const Float phi = std::atan2(-p.z(), p.x()) + pi;
 
@@ -85,7 +85,7 @@ auto sphere::get_sphere_uv(const point3& p) -> uv_coords {
     return {u, v};
 }
 
-vec3 sphere::random_to_sphere(Float radius, Float distance_squared) {
+Vec3 Sphere::random_to_sphere(Float radius, Float distance_squared) {
     const Float r1 = random_scalar();
     const Float r2 = random_scalar();
 
@@ -93,7 +93,7 @@ vec3 sphere::random_to_sphere(Float radius, Float distance_squared) {
     const Float phi = 2.0_f * pi * r1;
     const Float sin_theta = std::sqrt(1.0_f - z * z);
 
-    return vec3(std::cos(phi) * sin_theta, std::sin(phi) * sin_theta, z);
+    return Vec3(std::cos(phi) * sin_theta, std::sin(phi) * sin_theta, z);
 }
 
 } // namespace pt

@@ -8,10 +8,10 @@
 
 namespace pt {
 
-checker_texture::checker_texture(Float scale, const color& c1, const color& c2)
-    : checker_texture(scale, std::make_unique<solid_color>(c1), std::make_unique<solid_color>(c2)) {}
+CheckerTexture::CheckerTexture(Float scale, const Color& c1, const Color& c2)
+    : CheckerTexture(scale, std::make_unique<SolidColor>(c1), std::make_unique<SolidColor>(c2)) {}
 
-color checker_texture::value(Float u, Float v, const point3& p) const {
+Color CheckerTexture::value(Float u, Float v, const Point3& p) const {
     const int x_cell = static_cast<int>(std::floor(inv_scale * p.x()));
     const int y_cell = static_cast<int>(std::floor(inv_scale * p.y()));
     const int z_cell = static_cast<int>(std::floor(inv_scale * p.z()));

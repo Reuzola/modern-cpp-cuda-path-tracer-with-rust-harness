@@ -7,18 +7,18 @@
 
 namespace pt {
 
-class texture;
+class Texture;
 
-class diffuse_light final : public material {
+class DiffuseLight final : public Material {
 public:
-    explicit diffuse_light(const texture* tex) : tex(tex) {}
+    explicit DiffuseLight(const Texture* tex) : tex(tex) {}
 
-    [[nodiscard]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
-    [[nodiscard]] color emitted(const ray& r_in, const hit_record& rec) const override;
+    [[nodiscard]] Color emitted(const Ray& r_in, const HitRecord& rec) const override;
 
 private:
-    const texture* tex;
+    const Texture* tex;
 };
 
 } // namespace pt

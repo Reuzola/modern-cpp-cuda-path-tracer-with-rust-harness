@@ -5,19 +5,19 @@
 
 namespace pt {
 
-class hittable;
+class Hittable;
 
-class hittable_pdf final : public pdf {
+class HittablePdf final : public Pdf {
 public:
-    hittable_pdf(const hittable& objects, const point3& origin) : objects(objects), origin(origin) {}
+    HittablePdf(const Hittable& objects, const Point3& origin) : objects(objects), origin(origin) {}
 
-    [[nodiscard]] Float value(const vec3& direction) const override;
+    [[nodiscard]] Float value(const Vec3& direction) const override;
 
-    [[nodiscard]] vec3 generate() const override;
+    [[nodiscard]] Vec3 generate() const override;
 
 private:
-    const hittable& objects;
-    point3 origin;
+    const Hittable& objects;
+    Point3 origin;
 };
 
 } // namespace pt

@@ -9,33 +9,33 @@
 
 namespace pt {
 
-class material;
+class Material;
 
-class quad final : public hittable {
+class Quad final : public Hittable {
 public:
-    quad(const point3& Q, const vec3& u, const vec3& v, const material* mat);
+    Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat);
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] Float pdf_value(const point3& origin, const vec3& direction) const override;
+    [[nodiscard]] Float pdf_value(const Point3& origin, const Vec3& direction) const override;
 
-    [[nodiscard]] vec3 random(const point3& origin) const override;
+    [[nodiscard]] Vec3 random(const Point3& origin) const override;
 
 private:
-    point3 Q;
-    vec3 u, v;
-    const material* mat = nullptr;
-    aabb bbox;
-    vec3 normal;
+    Point3 Q;
+    Vec3 u, v;
+    const Material* mat = nullptr;
+    Aabb bbox;
+    Vec3 normal;
     Float D{};
-    vec3 w;
+    Vec3 w;
     Float area{};
 
     void set_bounding_box();
 
-    [[nodiscard]] bool is_interior(Float a, Float b, hit_record& rec) const;
+    [[nodiscard]] bool is_interior(Float a, Float b, HitRecord& rec) const;
 };
 
 } // namespace pt

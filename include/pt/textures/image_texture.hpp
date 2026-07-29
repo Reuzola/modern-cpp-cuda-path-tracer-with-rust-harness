@@ -8,14 +8,14 @@
 
 namespace pt {
 
-class image_texture final : public texture {
+class ImageTexture final : public Texture {
 public:
-    explicit image_texture(const std::string& filename) : image(filename) {}
+    explicit ImageTexture(const std::string& filename) : image(filename) {}
 
-    [[nodiscard]] color value(Float u, Float v, const point3& p) const override;
+    [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 
 private:
-    image_loader image;
+    ImageLoader image;
 };
 
 } // namespace pt

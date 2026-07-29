@@ -6,15 +6,15 @@
 
 namespace pt {
 
-class solid_color final : public texture {
+class SolidColor final : public Texture {
 public:
-    explicit solid_color(const color& albedo) : albedo(albedo) {}
-    solid_color(Float r, Float g, Float b) : solid_color(color(r, g, b)) {}
+    explicit SolidColor(const Color& albedo) : albedo(albedo) {}
+    SolidColor(Float r, Float g, Float b) : SolidColor(Color(r, g, b)) {}
 
-    [[nodiscard]] color value(Float u, Float v, const point3& p) const override;
+    [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 
 private:
-    color albedo;
+    Color albedo;
 };
 
 } // namespace pt

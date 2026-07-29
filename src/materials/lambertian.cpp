@@ -12,11 +12,11 @@
 
 namespace pt {
 
-std::optional<scatter_record> lambertian::scatter(const ray&, const hit_record& rec) const {
-    return scatter_record{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = diffuse_bounce{.sampling_pdf = cosine_pdf(rec.normal)}};
+std::optional<ScatterRecord> Lambertian::scatter(const Ray&, const HitRecord& rec) const {
+    return ScatterRecord{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = CosinePdf(rec.normal)}};
 }
 
-Float lambertian::scattering_pdf(const ray&, const hit_record& rec, const ray& scattered) const {
+Float Lambertian::scattering_pdf(const Ray&, const HitRecord& rec, const Ray& scattered) const {
     const Float cos_theta = dot(rec.normal, unit_vector(scattered.direction()));
     return std::max(0.0_f, cos_theta) / pi;
 }

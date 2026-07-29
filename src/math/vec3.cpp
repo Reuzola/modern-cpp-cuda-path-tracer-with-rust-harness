@@ -7,33 +7,33 @@
 
 namespace pt {
 
-vec3 vec3::random() {
-    return vec3(random_scalar(), random_scalar(), random_scalar());
+Vec3 Vec3::random() {
+    return Vec3(random_scalar(), random_scalar(), random_scalar());
 }
 
-vec3 vec3::random(Float min, Float max) {
-    return vec3(random_scalar(min, max), random_scalar(min, max), random_scalar(min, max));
+Vec3 Vec3::random(Float min, Float max) {
+    return Vec3(random_scalar(min, max), random_scalar(min, max), random_scalar(min, max));
 }
 
-vec3 random_unit_vector() {
+Vec3 random_unit_vector() {
     while (true) {
-        auto p = vec3::random(-1, 1);
+        auto p = Vec3::random(-1, 1);
         auto lensq = p.length_squared();
 
         if (lensq <= 1 && lensq > std::numeric_limits<Float>::min()) return p / std::sqrt(lensq);
     }
 }
 
-vec3 random_in_unit_disk() {
+Vec3 random_in_unit_disk() {
     while (true) {
-        auto p = vec3(random_scalar(-1, 1), random_scalar(-1, 1), 0);
+        auto p = Vec3(random_scalar(-1, 1), random_scalar(-1, 1), 0);
         const auto lensq = p.length_squared();
 
         if (lensq < 1) return p;
     }
 }
 
-vec3 random_cosine_direction() {
+Vec3 random_cosine_direction() {
     const Float r1 = random_scalar();
     const Float r2 = random_scalar();
     const Float sqrt_r2 = std::sqrt(r2);
@@ -43,7 +43,7 @@ vec3 random_cosine_direction() {
     const Float y = std::sin(phi) * sqrt_r2;
     const Float z = std::sqrt(1.0_f - r2);
 
-    return vec3(x, y, z);
+    return Vec3(x, y, z);
 }
 
 } // namespace pt

@@ -6,16 +6,16 @@
 
 namespace pt {
 
-class cosine_pdf final : public pdf {
+class CosinePdf final : public Pdf {
 public:
-    explicit cosine_pdf(const vec3& normal) : uvw(normal) {}
+    explicit CosinePdf(const Vec3& normal) : uvw(normal) {}
 
-    [[nodiscard]] Float value(const vec3& direction) const override;
+    [[nodiscard]] Float value(const Vec3& direction) const override;
 
-    [[nodiscard]] vec3 generate() const override;
+    [[nodiscard]] Vec3 generate() const override;
 
 private:
-    onb uvw;
+    Onb uvw;
 };
 
 } // namespace pt

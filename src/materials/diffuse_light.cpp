@@ -9,12 +9,12 @@
 
 namespace pt {
 
-std::optional<scatter_record> diffuse_light::scatter(const ray&, const hit_record&) const {
+std::optional<ScatterRecord> DiffuseLight::scatter(const Ray&, const HitRecord&) const {
     return std::nullopt;
 }
 
-color diffuse_light::emitted(const ray&, const hit_record& rec) const {
-    if (!rec.front_face) return color(0.0_f, 0.0_f, 0.0_f);
+Color DiffuseLight::emitted(const Ray&, const HitRecord& rec) const {
+    if (!rec.front_face) return Color(0.0_f, 0.0_f, 0.0_f);
     return tex->value(rec.u, rec.v, rec.p);
 }
 

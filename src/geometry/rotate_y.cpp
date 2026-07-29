@@ -13,14 +13,14 @@
 
 namespace pt {
 
-rotate_y::rotate_y(std::shared_ptr<hittable> object, Float angle) : object(std::move(object)) {
+RotateY::RotateY(std::shared_ptr<Hittable> object, Float angle) : object(std::move(object)) {
     const Float radians = degrees_to_radians(angle);
     sin_theta = std::sin(radians);
     cos_theta = std::cos(radians);
 
-    const aabb box = this->object->bounding_box();
-    point3 min_pt(infinity, infinity, infinity);
-    point3 max_pt(-infinity, -infinity, -infinity);
+    const Aabb box = this->object->bounding_box();
+    Point3 min_pt(infinity, infinity, infinity);
+    Point3 max_pt(-infinity, -infinity, -infinity);
 
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
@@ -32,7 +32,7 @@ rotate_y::rotate_y(std::shared_ptr<hittable> object, Float angle) : object(std::
                 const Float newx = cos_theta * x + sin_theta * z;
                 const Float newz = -sin_theta * x + cos_theta * z;
 
-                const vec3 tester(newx, y, newz);
+                const Vec3 tester(newx, y, newz);
                 for (int c = 0; c < 3; c++) {
                     min_pt[c] = std::fmin(min_pt[c], tester[c]);
                     max_pt[c] = std::fmax(max_pt[c], tester[c]);
@@ -41,31 +41,31 @@ rotate_y::rotate_y(std::shared_ptr<hittable> object, Float angle) : object(std::
         }
     }
 
-    bbox = aabb(min_pt, max_pt);
+    bbox = Aabb(min_pt, max_pt);
 }
 
-aabb rotate_y::bounding_box() const { return bbox; }
+Aabb RotateY::bounding_box() const { return bbox; }
 
-bool rotate_y::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
+bool RotateY::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     Float x_prime = cos_theta * r.origin().x() - sin_theta * r.origin().z();
     Float z_prime = sin_theta * r.origin().x() + cos_theta * r.origin().z();
-    const point3 origin(x_prime, r.origin().y(), z_prime);
+    const Point3 origin(x_prime, r.origin().y(), z_prime);
 
     x_prime = cos_theta * r.direction().x() - sin_theta * r.direction().z();
     z_prime = sin_theta * r.direction().x() + cos_theta * r.direction().z();
-    const vec3 direction(x_prime, r.direction().y(), z_prime);
+    const Vec3 direction(x_prime, r.direction().y(), z_prime);
 
-    const ray rotated_r(origin, direction, r.time());
+    const Ray rotated_r(origin, direction, r.time());
     if (!object->hit(rotated_r, ray_t, rec)) return false;
 
     x_prime = cos_theta * rec.p.x() + sin_theta * rec.p.z();
     z_prime = -sin_theta * rec.p.x() + cos_theta * rec.p.z();
-    const point3 new_p(x_prime, rec.p.y(), z_prime);
+    const Point3 new_p(x_prime, rec.p.y(), z_prime);
     rec.p = new_p;
 
     x_prime = cos_theta * rec.normal.x() + sin_theta * rec.normal.z();
     z_prime = -sin_theta * rec.normal.x() + cos_theta * rec.normal.z();
-    const vec3 new_n(x_prime, rec.normal.y(), z_prime);
+    const Vec3 new_n(x_prime, rec.normal.y(), z_prime);
     rec.normal = new_n;
 
     return true;

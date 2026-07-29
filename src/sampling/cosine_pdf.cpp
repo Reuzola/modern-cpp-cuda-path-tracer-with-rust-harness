@@ -7,14 +7,14 @@
 
 namespace pt {
 
-Float cosine_pdf::value(const vec3& direction) const {
-    const vec3 unit_direction = unit_vector(direction);
+Float CosinePdf::value(const Vec3& direction) const {
+    const Vec3 unit_direction = unit_vector(direction);
     const Float cosine_theta = dot(uvw.w(), unit_direction);
 
     return std::max(0.0_f, cosine_theta) / pi;
 }
 
-vec3 cosine_pdf::generate() const {
+Vec3 CosinePdf::generate() const {
     return uvw.transform(random_cosine_direction());
 }
 

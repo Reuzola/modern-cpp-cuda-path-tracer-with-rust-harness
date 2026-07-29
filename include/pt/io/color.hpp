@@ -14,7 +14,7 @@ namespace pt {
 
 [[nodiscard]] inline Float remove_nan(Float x) { return std::isnan(x) ? 0.0_f : x; }
 
-inline void write_color(std::ostream& out, const color& pixel_color) {
+inline void write_color(std::ostream& out, const Color& pixel_color) {
     Float r = pixel_color.r();
     Float g = pixel_color.g();
     Float b = pixel_color.b();
@@ -27,7 +27,7 @@ inline void write_color(std::ostream& out, const color& pixel_color) {
     const Float g_gamma = linear_to_gamma(g);
     const Float b_gamma = linear_to_gamma(b);
 
-    static constexpr interval intensity(0.000_f, 0.999_f);
+    static constexpr Interval intensity(0.000_f, 0.999_f);
 
     int r_byte = static_cast<int>(256 * intensity.clamp(r_gamma));
     int g_byte = static_cast<int>(256 * intensity.clamp(g_gamma));

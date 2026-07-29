@@ -8,20 +8,20 @@
 
 namespace pt {
 
-class interval;
+class Interval;
 
-class translate final : public hittable {
+class Translate final : public Hittable {
 public:
-    translate(std::shared_ptr<hittable> object, const vec3& offset);
+    Translate(std::shared_ptr<Hittable> object, const Vec3& offset);
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<hittable> object;
-    vec3 offset;
-    aabb bbox;
+    std::shared_ptr<Hittable> object;
+    Vec3 offset;
+    Aabb bbox;
 };
 
 } // namespace pt

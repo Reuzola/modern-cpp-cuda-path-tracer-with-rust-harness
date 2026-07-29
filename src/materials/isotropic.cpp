@@ -10,11 +10,11 @@
 
 namespace pt {
 
-std::optional<scatter_record> isotropic::scatter(const ray&, const hit_record& rec) const {
-    return scatter_record{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = diffuse_bounce{.sampling_pdf = sphere_pdf()}};
+std::optional<ScatterRecord> Isotropic::scatter(const Ray&, const HitRecord& rec) const {
+    return ScatterRecord{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = SpherePdf()}};
 }
 
-Float isotropic::scattering_pdf(const ray&, const hit_record&, const ray&) const {
+Float Isotropic::scattering_pdf(const Ray&, const HitRecord&, const Ray&) const {
     return 1.0_f / (4.0_f * pi);
 }
 

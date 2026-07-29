@@ -5,11 +5,11 @@
 
 namespace pt {
 
-class texture {
+class Texture {
 public:
-    virtual ~texture();
+    virtual ~Texture();
 
-    [[nodiscard]] virtual color value(Float u, Float v, const point3& p) const = 0;
+    [[nodiscard]] virtual Color value(Float u, Float v, const Point3& p) const = 0;
 };
 
 } // namespace pt

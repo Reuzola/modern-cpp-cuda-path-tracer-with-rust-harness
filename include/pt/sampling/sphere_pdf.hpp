@@ -5,11 +5,11 @@
 
 namespace pt {
 
-class sphere_pdf final : public pdf {
+class SpherePdf final : public Pdf {
 public:
-    [[nodiscard]] Float value(const vec3& direction) const override;
+    [[nodiscard]] Float value(const Vec3& direction) const override;
 
-    [[nodiscard]] vec3 generate() const override;
+    [[nodiscard]] Vec3 generate() const override;
 };
 
 } // namespace pt

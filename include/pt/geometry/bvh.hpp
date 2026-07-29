@@ -9,28 +9,28 @@
 
 namespace pt {
 
-class ray;
+class Ray;
 
-class bvh_node final : public hittable {
+class BvhNode final : public Hittable {
 public:
-    bvh_node(hittable_list list);
+    BvhNode(HittableList list);
 
-    bvh_node(std::span<std::shared_ptr<hittable>> objects);
+    BvhNode(std::span<std::shared_ptr<Hittable>> objects);
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
 private:
-    std::shared_ptr<hittable> left;
-    std::shared_ptr<hittable> right;
-    aabb bbox;
+    std::shared_ptr<Hittable> left;
+    std::shared_ptr<Hittable> right;
+    Aabb bbox;
 
-    static bool box_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b, int axis_index);
+    static bool box_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b, int axis_index);
 
-    static bool box_x_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b);
-    static bool box_y_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b);
-    static bool box_z_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b);
+    static bool box_x_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b);
+    static bool box_y_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b);
+    static bool box_z_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b);
 };
 
 } // namespace pt

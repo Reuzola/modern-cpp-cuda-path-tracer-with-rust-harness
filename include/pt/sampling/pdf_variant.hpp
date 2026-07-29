@@ -6,10 +6,10 @@
 
 namespace pt {
 
-using pdf_variant = std::variant<cosine_pdf, sphere_pdf>;
+using PdfVariant = std::variant<CosinePdf, SpherePdf>;
 
-[[nodiscard]] inline const pdf& as_pdf(const pdf_variant& v) {
-    return std::visit([](const pdf& p) -> const pdf& { return p; }, v);
+[[nodiscard]] inline const Pdf& as_pdf(const PdfVariant& v) {
+    return std::visit([](const Pdf& p) -> const Pdf& { return p; }, v);
 }
 
 } // namespace pt

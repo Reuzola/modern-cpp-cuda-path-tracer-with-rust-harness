@@ -11,11 +11,11 @@
 
 namespace pt {
 
-bvh_node::bvh_node(hittable_list list) : bvh_node(std::span<std::shared_ptr<hittable>>(list.objects)) {}
-bvh_node::bvh_node(std::span<std::shared_ptr<hittable>> objects) {
-    bbox = aabb();
+BvhNode::BvhNode(HittableList list) : BvhNode(std::span<std::shared_ptr<Hittable>>(list.objects)) {}
+BvhNode::BvhNode(std::span<std::shared_ptr<Hittable>> objects) {
+    bbox = Aabb();
     for (const auto& object : objects) {
-        bbox = aabb(bbox, object->bounding_box());
+        bbox = Aabb(bbox, object->bounding_box());
     }
 
     int axis = bbox.longest_axis();
@@ -33,30 +33,30 @@ bvh_node::bvh_node(std::span<std::shared_ptr<hittable>> objects) {
         std::sort(objects.begin(), objects.end(), comparator);
         const auto mid = count / 2;
 
-        left = std::make_shared<bvh_node>(objects.subspan(0, mid));
-        right = std::make_shared<bvh_node>(objects.subspan(mid));
+        left = std::make_shared<BvhNode>(objects.subspan(0, mid));
+        right = std::make_shared<BvhNode>(objects.subspan(mid));
     }
 }
 
-bool bvh_node::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
+bool BvhNode::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     if (!bbox.hit(r, ray_t)) return false;
 
     bool hit_left = left->hit(r, ray_t, rec);
-    bool hit_right = right->hit(r, interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec);
+    bool hit_right = right->hit(r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec);
 
     return hit_left || hit_right;
 }
 
-aabb bvh_node::bounding_box() const { return bbox; }
+Aabb BvhNode::bounding_box() const { return bbox; }
 
-bool bvh_node::box_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b, int axis_index) {
+bool BvhNode::box_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b, int axis_index) {
     const auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
     const auto b_axis_interval = b->bounding_box().axis_interval(axis_index);
     return a_axis_interval.min < b_axis_interval.min;
 }
 
-bool bvh_node::box_x_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b) { return box_compare(a, b, 0); }
-bool bvh_node::box_y_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b) { return box_compare(a, b, 1); }
-bool bvh_node::box_z_compare(const std::shared_ptr<hittable>& a, const std::shared_ptr<hittable>& b) { return box_compare(a, b, 2); }
+bool BvhNode::box_x_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b) { return box_compare(a, b, 0); }
+bool BvhNode::box_y_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b) { return box_compare(a, b, 1); }
+bool BvhNode::box_z_compare(const std::shared_ptr<Hittable>& a, const std::shared_ptr<Hittable>& b) { return box_compare(a, b, 2); }
 
 } // namespace pt

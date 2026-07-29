@@ -5,14 +5,14 @@
 
 namespace pt {
 
-class interval {
+class Interval {
 public:
     Float min{+infinity};
     Float max{-infinity};
 
-    constexpr interval() = default;
-    constexpr interval(Float min, Float max) : min(min), max(max) {}
-    constexpr interval(const interval& a, const interval& b) : min(std::min(a.min, b.min)), max(std::max(a.max, b.max)) {}
+    constexpr Interval() = default;
+    constexpr Interval(Float min, Float max) : min(min), max(max) {}
+    constexpr Interval(const Interval& a, const Interval& b) : min(std::min(a.min, b.min)), max(std::max(a.max, b.max)) {}
 
     constexpr bool contains(Float x) const {
         return min <= x && x <= max;
@@ -32,21 +32,21 @@ public:
         return max - min;
     }
 
-    [[nodiscard]] constexpr interval expand(Float delta) const {
+    [[nodiscard]] constexpr Interval expand(Float delta) const {
         const Float padding = delta / 2;
-        return interval(min - padding, max + padding);
+        return Interval(min - padding, max + padding);
     }
 
-    static const interval universe;
+    static const Interval universe;
 };
 
-inline const interval interval::universe{-infinity, +infinity};
+inline const Interval Interval::universe{-infinity, +infinity};
 
-[[nodiscard]] constexpr inline interval operator+(const interval& i, Float displacement) {
-    return interval(i.min + displacement, i.max + displacement);
+[[nodiscard]] constexpr inline Interval operator+(const Interval& i, Float displacement) {
+    return Interval(i.min + displacement, i.max + displacement);
 }
 
-[[nodiscard]] constexpr inline interval operator+(Float displacement, const interval& i) {
+[[nodiscard]] constexpr inline Interval operator+(Float displacement, const Interval& i) {
     return i + displacement;
 }
 

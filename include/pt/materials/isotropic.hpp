@@ -7,18 +7,18 @@
 
 namespace pt {
 
-class texture;
+class Texture;
 
-class isotropic final : public material {
+class Isotropic final : public Material {
 public:
-    explicit isotropic(const texture* tex) : tex(tex) {}
+    explicit Isotropic(const Texture* tex) : tex(tex) {}
 
-    [[nodiscard]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
-    [[nodiscard]] Float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const override;
+    [[nodiscard]] Float scattering_pdf(const Ray& r_in, const HitRecord& rec, const Ray& scattered) const override;
 
 private:
-    const texture* tex;
+    const Texture* tex;
 };
 
 } // namespace pt

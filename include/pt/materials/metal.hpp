@@ -8,14 +8,14 @@
 
 namespace pt {
 
-class metal final : public material {
+class Metal final : public Material {
 public:
-    explicit metal(const color& albedo, Float fuzz);
+    explicit Metal(const Color& albedo, Float fuzz);
 
-    [[nodiscard]] std::optional<scatter_record> scatter(const ray& r_in, const hit_record& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
 
 private:
-    color albedo;
+    Color albedo;
     Float fuzz{};
 };
 

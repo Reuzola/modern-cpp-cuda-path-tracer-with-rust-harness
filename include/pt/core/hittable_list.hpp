@@ -11,28 +11,28 @@
 
 namespace pt {
 
-class hittable_list final : public hittable {
-    friend class bvh_node;
+class HittableList final : public Hittable {
+    friend class BvhNode;
 
 public:
-    hittable_list() = default;
-    explicit hittable_list(std::shared_ptr<hittable> object);
+    HittableList() = default;
+    explicit HittableList(std::shared_ptr<Hittable> object);
 
-    [[nodiscard]] aabb bounding_box() const override;
+    [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
-    [[nodiscard]] Float pdf_value(const point3& origin, const vec3& direction) const override;
+    [[nodiscard]] Float pdf_value(const Point3& origin, const Vec3& direction) const override;
 
-    [[nodiscard]] vec3 random(const point3& origin) const override;
+    [[nodiscard]] Vec3 random(const Point3& origin) const override;
 
     void clear();
 
-    void add(std::shared_ptr<hittable> obj);
+    void add(std::shared_ptr<Hittable> obj);
 
 private:
-    std::vector<std::shared_ptr<hittable>> objects;
-    aabb bbox;
+    std::vector<std::shared_ptr<Hittable>> objects;
+    Aabb bbox;
 };
 
 } // namespace pt
