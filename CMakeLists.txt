@@ -29,6 +29,18 @@ option(PT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in Debug builds"
 
 option(PT_ENABLE_IPO "Enable interprocedural optimization (LTO) in Release builds" ON)
 
+# Scalar precision: the type behind pt::Float.
+#
+# ON  -> Float is double: the correctness-first default. Golden images and the
+#        performance baseline are produced in this mode only.
+# OFF -> Float is float:  half the memory traffic and twice the SIMD width,
+#        which is the mode optimization and GPU CUDA phase will actually want to measure.
+#
+# An option rather than two build types: this is one preprocessor definition,
+# not a configuration. Switching it is a re-configure of the same preset:
+#   cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
+option(PT_DOUBLE_PRECISION "Use double as the engine's scalar type (OFF selects float)" ON)
+
 if(PT_ENABLE_IPO)
   include(CheckIPOSupported)
   check_ipo_supported(RESULT pt_ipo_supported OUTPUT pt_ipo_error)
@@ -195,6 +207,34 @@ target_include_directories(pathtracer_core PUBLIC
 # PUBLIC for the same reason: the library itself is compiled as C++20, and so
 # is everything that links it.
 target_compile_features(pathtracer_core PUBLIC cxx_std_20)
+
+# PUBLIC, and this is the one keyword in the file that is a correctness
+# requirement rather than a hygiene preference.
+#
+# pt/math/scalar.hpp reads this macro to decide what Float is, and that header
+# is public: it is compiled once into this library's sources, and again into
+# main.cpp, and again into every test TU. If those compilations disagree, the
+# layout of every type containing a Float (hit_record, interval, aabb, ray)
+# differs across the boundary, and every inline function in include/ has two
+# different bodies under one name - an ODR violation the compiler never
+# diagnoses. PRIVATE here would not be a smaller scope, it would be a bug.
+#
+# The generator expression rather than if(): this is evaluated at generate
+# time against the cache variable, so a re-configure with -D flips it with no
+# stale-branch window in between.
+target_compile_definitions(pathtracer_core PUBLIC
+  $<$<BOOL:${PT_DOUBLE_PRECISION}>:PT_FLOAT_AS_DOUBLE>
+)
+
+# Configure-time echo. Cheap, and it puts the one build setting that silently
+# changes every rendered pixel into the configure log next to the build type.
+if(PT_DOUBLE_PRECISION)
+  set(PT_SCALAR_TYPE "double")
+else()
+  set(PT_SCALAR_TYPE "float")
+endif()
+
+message(STATUS "Scalar precision: ${CMAKE_PROJECT_NAME} Float = ${PT_SCALAR_TYPE}")
 
 # pt::stb is PRIVATE, It was PUBLIC for one reason: image_loader.hpp
 # was a public header and it included stb_image.h, which made stb's include
