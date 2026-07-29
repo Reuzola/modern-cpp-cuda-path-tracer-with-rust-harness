@@ -5,6 +5,7 @@
 #include "pt/math/interval.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cstddef>
 #include <memory>
@@ -17,7 +18,7 @@ hittable_list::hittable_list(std::shared_ptr<hittable> object) { add(std::move(o
 aabb hittable_list::bounding_box() const { return bbox; }
 
 bool hittable_list::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
-    double closest_so_far = ray_t.max;
+    Float closest_so_far = ray_t.max;
     hit_record temp_rec;
 
     bool is_hit = false;
@@ -31,11 +32,11 @@ bool hittable_list::hit(const ray& r, const interval& ray_t, hit_record& rec) co
     return is_hit;
 }
 
-double hittable_list::pdf_value(const point3& origin, const vec3& direction) const {
-    if (objects.empty()) return 0.0;
+Float hittable_list::pdf_value(const point3& origin, const vec3& direction) const {
+    if (objects.empty()) return 0.0_f;
 
-    const double weight = 1.0 / static_cast<double>(objects.size());
-    double sum{0.0};
+    const Float weight = 1.0_f / static_cast<Float>(objects.size());
+    Float sum{0.0_f};
 
     for (const auto& object : objects) {
         sum += weight * object->pdf_value(origin, direction);

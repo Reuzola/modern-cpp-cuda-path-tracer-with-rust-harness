@@ -14,6 +14,7 @@
 #include "pt/materials/material.hpp"
 #include "pt/materials/metal.hpp"
 #include "pt/math/random.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/render/camera.hpp"
 #include "pt/textures/checker_texture.hpp"
@@ -498,13 +499,13 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
 
     for (int i = 0; i < 20; i++) {
         for (int j = 0; j < 20; j++) {
-            const double w = 100.0;
-            const double x0 = -1000.0 + i * w;
-            const double z0 = -1000.0 + j * w;
-            const double y0 = 0.0;
-            const double x1 = x0 + w;
-            const double z1 = z0 + w;
-            const double y1 = pt::random_double(1, 101);
+            const pt::Float w = 100.0;
+            const pt::Float x0 = -1000.0 + i * w;
+            const pt::Float z0 = -1000.0 + j * w;
+            const pt::Float y0 = 0.0;
+            const pt::Float x1 = x0 + w;
+            const pt::Float z1 = z0 + w;
+            const pt::Float y1 = pt::random_double(1, 101);
             boxes1.add(pt::box(pt::point3(x0, y0, z0), pt::point3(x1, y1, z1), ground));
         }
     }

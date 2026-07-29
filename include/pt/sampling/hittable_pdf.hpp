@@ -1,4 +1,5 @@
 #pragma once
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/sampling/pdf.hpp"
 
@@ -10,7 +11,7 @@ class hittable_pdf final : public pdf {
 public:
     hittable_pdf(const hittable& objects, const point3& origin) : objects(objects), origin(origin) {}
 
-    [[nodiscard]] double value(const vec3& direction) const override;
+    [[nodiscard]] Float value(const vec3& direction) const override;
 
     [[nodiscard]] vec3 generate() const override;
 

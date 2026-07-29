@@ -1,5 +1,6 @@
 #include "pt/textures/perlin.hpp"
 #include "pt/math/random.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
 #include <cmath>
@@ -20,10 +21,10 @@ perlin::perlin() {
     std::ranges::shuffle(perm_z, rng());
 }
 
-double perlin::noise(const point3& p) const {
-    const double u = p.x() - std::floor(p.x());
-    const double v = p.y() - std::floor(p.y());
-    const double w = p.z() - std::floor(p.z());
+Float perlin::noise(const point3& p) const {
+    const Float u = p.x() - std::floor(p.x());
+    const Float v = p.y() - std::floor(p.y());
+    const Float w = p.z() - std::floor(p.z());
 
     const int i = static_cast<int>(std::floor(p.x()));
     const int j = static_cast<int>(std::floor(p.y()));
@@ -42,30 +43,34 @@ double perlin::noise(const point3& p) const {
     return perlin_interp(c, u, v, w);
 }
 
-double perlin::turb(const point3& p, int depth) const {
-    double accum{0};
+Float perlin::turb(const point3& p, int depth) const {
+    Float accum{0};
     point3 temp_p = p;
-    double weight{1.0};
+    Float weight{1.0_f};
 
     for (int i = 0; i < depth; i++) {
         accum += weight * noise(temp_p);
-        weight *= 0.5;
+        weight *= 0.5_f;
         temp_p *= 2;
     }
     return std::fabs(accum);
 }
 
-double perlin::perlin_interp(const vec3 c[2][2][2], double u, double v, double w) {
-    const double uu = u * u * (3 - 2 * u); // u = 3u² − 2u³
-    const double vv = v * v * (3 - 2 * v); // v = 3v² − 2v³
-    const double ww = w * w * (3 - 2 * w); // w = 3w² − 2w³
+Float perlin::perlin_interp(const vec3 c[2][2][2], Float u, Float v, Float w) {
+    const Float uu = u * u * (3 - 2 * u); // u = 3u² − 2u³
+    const Float vv = v * v * (3 - 2 * v); // v = 3v² − 2v³
+    const Float ww = w * w * (3 - 2 * w); // w = 3w² − 2w³
 
-    double accum{0};
+    Float accum{0};
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
             for (int k = 0; k < 2; k++) {
+                const Float fi = static_cast<Float>(i);
+                const Float fj = static_cast<Float>(j);
+                const Float fk = static_cast<Float>(k);
                 const vec3 weight_v(u - i, v - j, w - k);
-                accum += (i * uu + (1 - i) * (1 - uu)) * (j * vv + (1 - j) * (1 - vv)) * (k * ww + (1 - k) * (1 - ww)) * dot(c[i][j][k], weight_v);
+
+                accum += (fi * uu + (1 - fi) * (1 - uu)) * (fj * vv + (1 - fj) * (1 - vv)) * (fk * ww + (1 - fk) * (1 - ww)) * dot(c[i][j][k], weight_v);
             }
         }
     }

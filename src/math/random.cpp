@@ -1,4 +1,5 @@
 #include "pt/math/random.hpp"
+#include "pt/math/scalar.hpp"
 #include <random>
 
 namespace pt {
@@ -8,17 +9,19 @@ std::mt19937& rng() {
     return generator;
 }
 
-double random_double() {
-    thread_local static std::uniform_real_distribution<double> distribution{0.0, 1.0}; // [0, 1)
+Float random_double() {
+    thread_local static std::uniform_real_distribution<Float> distribution{0.0_f, 1.0_f}; // [0, 1)
     return distribution(rng());
 }
 
-double random_double(double min, double max) {
+Float random_double(Float min, Float max) {
     return min + (max - min) * random_double();
 }
 
 int random_int(int min, int max) {
-    return static_cast<int>(random_double(min, max + 1));
+    const Float low = static_cast<Float>(min);
+    const Float high = static_cast<Float>(max);
+    return static_cast<int>(random_double(low, high + 1));
 }
 
 } // namespace pt

@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 
 namespace pt {
@@ -36,10 +37,10 @@ public:
 
         for (int axis = 0; axis < 3; axis++) {
             const interval& ax = axis_interval(axis);
-            const double adinv = 1.0 / ray_dir[axis];
+            const Float adinv = 1.0_f / ray_dir[axis];
 
-            double t0 = (ax.min - ray_orig[axis]) * adinv;
-            double t1 = (ax.max - ray_orig[axis]) * adinv;
+            Float t0 = (ax.min - ray_orig[axis]) * adinv;
+            Float t1 = (ax.max - ray_orig[axis]) * adinv;
 
             if (t0 < t1) {
                 if (t0 > ray_t.min) ray_t.min = t0;
@@ -55,7 +56,7 @@ public:
 
 private:
     constexpr void pad_to_minimums() {
-        constexpr double delta = 0.0001;
+        constexpr Float delta = 0.0001_f;
 
         if (x.size() < delta) x = x.expand(delta);
         if (y.size() < delta) y = y.expand(delta);

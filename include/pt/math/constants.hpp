@@ -1,14 +1,16 @@
 #pragma once
+#include "pt/math/scalar.hpp"
 #include <limits>
+#include <numbers>
 
 namespace pt {
 
-inline constexpr double infinity = std::numeric_limits<double>::infinity();
+inline constexpr Float infinity = std::numeric_limits<Float>::infinity();
 
-inline constexpr double pi = 3.1415926535897932385;
+inline constexpr Float pi = std::numbers::pi_v<Float>;
 
-constexpr double degrees_to_radians(double degrees) {
-    return degrees * pi / 180.0;
+[[nodiscard]] constexpr Float degrees_to_radians(Float degrees) {
+    return degrees * pi / 180.0_f;
 }
 
 } // namespace pt

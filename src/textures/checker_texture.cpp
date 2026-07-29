@@ -1,4 +1,5 @@
 #include "pt/textures/checker_texture.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
 #include <cmath>
@@ -6,14 +7,14 @@
 
 namespace pt {
 
-checker_texture::checker_texture(double scale, const color& c1, const color& c2)
+checker_texture::checker_texture(Float scale, const color& c1, const color& c2)
     : checker_texture(scale, std::make_unique<solid_color>(c1), std::make_unique<solid_color>(c2)) {}
 
-color checker_texture::value(double u, double v, const point3& p) const {
-    const auto x_cell = static_cast<int>(std::floor(inv_scale * p.x()));
-    const auto y_cell = static_cast<int>(std::floor(inv_scale * p.y()));
-    const auto z_cell = static_cast<int>(std::floor(inv_scale * p.z()));
-    const auto sum_cells = x_cell + y_cell + z_cell;
+color checker_texture::value(Float u, Float v, const point3& p) const {
+    const int x_cell = static_cast<int>(std::floor(inv_scale * p.x()));
+    const int y_cell = static_cast<int>(std::floor(inv_scale * p.y()));
+    const int z_cell = static_cast<int>(std::floor(inv_scale * p.z()));
+    const int sum_cells = x_cell + y_cell + z_cell;
 
     if (sum_cells % 2 == 0) return even->value(u, v, p);
     return odd->value(u, v, p);

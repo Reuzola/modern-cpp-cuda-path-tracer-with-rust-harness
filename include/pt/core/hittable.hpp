@@ -3,6 +3,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 
 namespace pt {
@@ -13,7 +14,7 @@ public:
 
     [[nodiscard]] virtual aabb bounding_box() const = 0;
 
-    [[nodiscard]] virtual double pdf_value(const point3& origin, const vec3& direction) const;
+    [[nodiscard]] virtual Float pdf_value(const point3& origin, const vec3& direction) const;
 
     [[nodiscard]] virtual vec3 random(const point3& origin) const;
 

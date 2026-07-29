@@ -3,6 +3,7 @@
 #include "pt/materials/material.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/sampling/sphere_pdf.hpp"
 #include "pt/textures/texture.hpp"
 #include <optional>
@@ -13,8 +14,8 @@ std::optional<scatter_record> isotropic::scatter(const ray&, const hit_record& r
     return scatter_record{.attenuation = tex->value(rec.u, rec.v, rec.p), .bounce = diffuse_bounce{.sampling_pdf = sphere_pdf()}};
 }
 
-double isotropic::scattering_pdf(const ray&, const hit_record&, const ray&) const {
-    return 1.0 / (4.0 * pi);
+Float isotropic::scattering_pdf(const ray&, const hit_record&, const ray&) const {
+    return 1.0_f / (4.0_f * pi);
 }
 
 } // namespace pt

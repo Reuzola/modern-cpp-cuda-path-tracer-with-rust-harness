@@ -3,6 +3,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include <memory>
 
 namespace pt {
@@ -11,7 +12,7 @@ class interval;
 
 class rotate_y final : public hittable {
 public:
-    rotate_y(std::shared_ptr<hittable> object, double angle);
+    rotate_y(std::shared_ptr<hittable> object, Float angle);
 
     [[nodiscard]] aabb bounding_box() const override;
 
@@ -19,8 +20,8 @@ public:
 
 private:
     std::shared_ptr<hittable> object;
-    double sin_theta{};
-    double cos_theta{};
+    Float sin_theta{};
+    Float cos_theta{};
     aabb bbox;
 };
 

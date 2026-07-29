@@ -7,6 +7,7 @@
 #include "pt/math/interval.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/sampling/hittable_pdf.hpp"
 #include "pt/sampling/mixture_pdf.hpp"
@@ -22,16 +23,16 @@ namespace pt {
 
 class camera {
 public:
-    double aspect_ratio{1.0};
+    Float aspect_ratio{1.0_f};
     int image_width{100};
     int samples_per_pixel{10};
     int max_depth{10};
-    double vfov{90.0};
+    Float vfov{90.0_f};
     point3 lookfrom{0, 0, 0};
     point3 lookat{0, 0, -1};
     vec3 vup{0, 1, 0};
-    double defocus_angle{0};
-    double focus_dist{10};
+    Float defocus_angle{0};
+    Float focus_dist{10.0_f};
     color background{};
 
     void render(const hittable& world, const hittable* lights = nullptr) {
@@ -65,43 +66,43 @@ private:
     point3 pixel00_loc;
     vec3 pixel_delta_u;
     vec3 pixel_delta_v;
-    double pixel_samples_scale{};
+    Float pixel_samples_scale{};
     int sqrt_spp{};
-    double recip_sqrt_spp{};
+    Float recip_sqrt_spp{};
     vec3 u, v, w;
     vec3 defocus_disk_u;
     vec3 defocus_disk_v;
 
     void initialize() {
-        image_height = std::max(static_cast<int>(image_width / aspect_ratio), 1);
+        image_height = std::max(static_cast<int>(static_cast<Float>(image_width) / aspect_ratio), 1);
         center = lookfrom;
 
-        sqrt_spp = static_cast<int>(std::sqrt(samples_per_pixel));
-        recip_sqrt_spp = 1.0 / sqrt_spp;
+        sqrt_spp = static_cast<int>(std::sqrt(static_cast<Float>(samples_per_pixel)));
+        recip_sqrt_spp = 1.0_f / sqrt_spp;
 
-        pixel_samples_scale = 1.0 / (sqrt_spp * sqrt_spp);
+        pixel_samples_scale = 1.0_f / (sqrt_spp * sqrt_spp);
 
         w = unit_vector(lookfrom - lookat);
         u = unit_vector(cross(vup, w));
         v = cross(w, u);
 
-        const auto theta = degrees_to_radians(vfov);
-        const auto h = std::tan(theta / 2.0);
+        const Float theta = degrees_to_radians(vfov);
+        const Float h = std::tan(theta / 2.0_f);
 
-        const auto viewport_height = 2.0 * h * focus_dist;
-        const auto viewport_width = viewport_height * (static_cast<double>(image_width) / image_height);
+        const Float viewport_height = 2.0_f * h * focus_dist;
+        const Float viewport_width = viewport_height * (static_cast<Float>(image_width) / static_cast<Float>(image_height));
 
-        const auto viewport_u = viewport_width * u;
-        const auto viewport_v = viewport_height * (-v);
+        const vec3 viewport_u = viewport_width * u;
+        const vec3 viewport_v = viewport_height * (-v);
 
-        pixel_delta_u = viewport_u / image_width;
-        pixel_delta_v = viewport_v / image_height;
+        pixel_delta_u = viewport_u / static_cast<Float>(image_width);
+        pixel_delta_v = viewport_v / static_cast<Float>(image_height);
 
-        const auto viewport_upper_left = center - (focus_dist * w) - viewport_u / 2.0 - viewport_v / 2.0;
+        const vec3 viewport_upper_left = center - (focus_dist * w) - viewport_u / 2.0_f - viewport_v / 2.0_f;
 
-        pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+        pixel00_loc = viewport_upper_left + 0.5_f * (pixel_delta_u + pixel_delta_v);
 
-        const auto defocus_radius = focus_dist * std::tan(degrees_to_radians(defocus_angle / 2.0));
+        const Float defocus_radius = focus_dist * std::tan(degrees_to_radians(defocus_angle / 2.0_f));
 
         defocus_disk_u = u * defocus_radius;
         defocus_disk_v = v * defocus_radius;
@@ -112,16 +113,16 @@ private:
 
         hit_record rec;
 
-        if (!world.hit(r, interval(0.001, infinity), rec)) return background;
+        if (!world.hit(r, interval(0.001_f, infinity), rec)) return background;
 
         const color color_from_emission = rec.mat->emitted(r, rec);
 
         if (const auto sr = rec.mat->scatter(r, rec)) {
             const auto shade = [&](const pdf& p) -> color {
                 const ray scattered(rec.p, p.generate(), r.time());
-                const double pdf_value = p.value(scattered.direction());
+                const Float pdf_value = p.value(scattered.direction());
 
-                const double scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
+                const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
                 const color sample_color = ray_color(scattered, depth - 1, world, lights);
 
                 return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
@@ -148,18 +149,18 @@ private:
     }
 
     [[nodiscard]] vec3 sample_square_stratified(int s_i, int s_j) const {
-        const double px = ((s_i + random_double()) * recip_sqrt_spp) - 0.5;
-        const double py = ((s_j + random_double()) * recip_sqrt_spp) - 0.5;
-        return vec3(px, py, 0.0);
+        const Float px = ((static_cast<Float>(s_i) + random_double()) * recip_sqrt_spp) - 0.5_f;
+        const Float py = ((static_cast<Float>(s_j) + random_double()) * recip_sqrt_spp) - 0.5_f;
+        return vec3(px, py, 0.0_f);
     }
 
     [[nodiscard]] ray get_ray(int i, int j, int s_i, int s_j) const {
         const vec3 offset = sample_square_stratified(s_i, s_j);
 
-        const point3 sample_point = pixel00_loc + (i + offset.x()) * pixel_delta_u + (j + offset.y()) * pixel_delta_v;
+        const point3 sample_point = pixel00_loc + (static_cast<Float>(i) + offset.x()) * pixel_delta_u + (static_cast<Float>(j) + offset.y()) * pixel_delta_v;
         const point3 origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
 
-        const double ray_time = random_double();
+        const Float ray_time = random_double();
         return ray(origin, sample_point - origin, ray_time);
     }
 

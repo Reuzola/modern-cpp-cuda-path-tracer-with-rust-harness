@@ -1,4 +1,5 @@
 #include "pt/io/image_loader.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "stb_image.h"
 #include <algorithm>
@@ -19,9 +20,9 @@ color image_loader::pixel_data(int x, int y) const {
     y = std::clamp(y, 0, image_height - 1);
 
     const int index = (y * image_width + x) * 3;
-    const double r = static_cast<double>(fdata.get()[index]);
-    const double g = static_cast<double>(fdata.get()[index + 1]);
-    const double b = static_cast<double>(fdata.get()[index + 2]);
+    const Float r = static_cast<Float>(fdata.get()[index]);
+    const Float g = static_cast<Float>(fdata.get()[index + 1]);
+    const Float b = static_cast<Float>(fdata.get()[index + 2]);
 
     return color(r, g, b);
 }

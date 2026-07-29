@@ -4,6 +4,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <memory>
 #include <vector>
@@ -21,7 +22,7 @@ public:
 
     [[nodiscard]] bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override;
 
-    [[nodiscard]] double pdf_value(const point3& origin, const vec3& direction) const override;
+    [[nodiscard]] Float pdf_value(const point3& origin, const vec3& direction) const override;
 
     [[nodiscard]] vec3 random(const point3& origin) const override;
 

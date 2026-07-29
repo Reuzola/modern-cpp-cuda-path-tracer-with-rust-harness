@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/sampling/pdf_variant.hpp"
 #include <optional>
@@ -30,7 +31,7 @@ public:
 
     [[nodiscard]] virtual color emitted(const ray& r_in, const hit_record& rec) const;
 
-    [[nodiscard]] virtual double scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
+    [[nodiscard]] virtual Float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
 };
 
 } // namespace pt

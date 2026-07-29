@@ -1,4 +1,5 @@
 #pragma once
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <array>
 #include <cmath>
@@ -9,7 +10,7 @@ class onb {
 public:
     explicit onb(const vec3& n) {
         axis[2] = unit_vector(n);
-        const vec3 a = (std::fabs(axis[2].x()) > 0.9) ? vec3(0, 1, 0) : vec3(1, 0, 0);
+        const vec3 a = (std::fabs(axis[2].x()) > 0.9_f) ? vec3(0, 1, 0) : vec3(1, 0, 0);
         axis[1] = unit_vector(cross(axis[2], a));
         axis[0] = cross(axis[2], axis[1]);
     }

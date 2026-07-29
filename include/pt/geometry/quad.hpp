@@ -4,6 +4,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 
 namespace pt {
@@ -18,7 +19,7 @@ public:
 
     [[nodiscard]] aabb bounding_box() const override;
 
-    [[nodiscard]] double pdf_value(const point3& origin, const vec3& direction) const override;
+    [[nodiscard]] Float pdf_value(const point3& origin, const vec3& direction) const override;
 
     [[nodiscard]] vec3 random(const point3& origin) const override;
 
@@ -28,13 +29,13 @@ private:
     const material* mat = nullptr;
     aabb bbox;
     vec3 normal;
-    double D{};
+    Float D{};
     vec3 w;
-    double area{};
+    Float area{};
 
     void set_bounding_box();
 
-    [[nodiscard]] bool is_interior(double a, double b, hit_record& rec) const;
+    [[nodiscard]] bool is_interior(Float a, Float b, hit_record& rec) const;
 };
 
 } // namespace pt

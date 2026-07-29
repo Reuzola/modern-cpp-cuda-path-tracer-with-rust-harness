@@ -2,6 +2,7 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/texture.hpp"
 #include <optional>
@@ -13,7 +14,7 @@ std::optional<scatter_record> diffuse_light::scatter(const ray&, const hit_recor
 }
 
 color diffuse_light::emitted(const ray&, const hit_record& rec) const {
-    if (!rec.front_face) return color(0.0, 0.0, 0.0);
+    if (!rec.front_face) return color(0.0_f, 0.0_f, 0.0_f);
     return tex->value(rec.u, rec.v, rec.p);
 }
 

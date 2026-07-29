@@ -5,6 +5,7 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
 #include <memory>
@@ -12,8 +13,8 @@
 
 namespace pt {
 
-rotate_y::rotate_y(std::shared_ptr<hittable> object, double angle) : object(std::move(object)) {
-    const double radians = degrees_to_radians(angle);
+rotate_y::rotate_y(std::shared_ptr<hittable> object, Float angle) : object(std::move(object)) {
+    const Float radians = degrees_to_radians(angle);
     sin_theta = std::sin(radians);
     cos_theta = std::cos(radians);
 
@@ -24,12 +25,12 @@ rotate_y::rotate_y(std::shared_ptr<hittable> object, double angle) : object(std:
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
             for (int k = 0; k < 2; k++) {
-                const double x = i ? box.x.max : box.x.min;
-                const double y = j ? box.y.max : box.y.min;
-                const double z = k ? box.z.max : box.z.min;
+                const Float x = i ? box.x.max : box.x.min;
+                const Float y = j ? box.y.max : box.y.min;
+                const Float z = k ? box.z.max : box.z.min;
 
-                const double newx = cos_theta * x + sin_theta * z;
-                const double newz = -sin_theta * x + cos_theta * z;
+                const Float newx = cos_theta * x + sin_theta * z;
+                const Float newz = -sin_theta * x + cos_theta * z;
 
                 const vec3 tester(newx, y, newz);
                 for (int c = 0; c < 3; c++) {
@@ -46,8 +47,8 @@ rotate_y::rotate_y(std::shared_ptr<hittable> object, double angle) : object(std:
 aabb rotate_y::bounding_box() const { return bbox; }
 
 bool rotate_y::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
-    double x_prime = cos_theta * r.origin().x() - sin_theta * r.origin().z();
-    double z_prime = sin_theta * r.origin().x() + cos_theta * r.origin().z();
+    Float x_prime = cos_theta * r.origin().x() - sin_theta * r.origin().z();
+    Float z_prime = sin_theta * r.origin().x() + cos_theta * r.origin().z();
     const point3 origin(x_prime, r.origin().y(), z_prime);
 
     x_prime = cos_theta * r.direction().x() - sin_theta * r.direction().z();

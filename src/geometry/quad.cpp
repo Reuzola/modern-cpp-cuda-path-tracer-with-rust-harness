@@ -5,6 +5,7 @@
 #include "pt/math/interval.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
 
@@ -21,16 +22,16 @@ quad::quad(const point3& Q, const vec3& u, const vec3& v, const material* mat) :
 }
 
 bool quad::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
-    const double denom = dot(normal, r.direction());
-    if (std::fabs(denom) < 1e-8) return false;
+    const Float denom = dot(normal, r.direction());
+    if (std::fabs(denom) < 1e-8_f) return false;
 
-    const double t = (D - dot(normal, r.origin())) / denom;
+    const Float t = (D - dot(normal, r.origin())) / denom;
     if (!ray_t.contains(t)) return false;
 
     const point3 intersection = r.at(t);
     const vec3 planar_hitpt_vector = intersection - Q;
-    const double alpha = dot(w, cross(planar_hitpt_vector, v));
-    const double beta = dot(w, cross(u, planar_hitpt_vector));
+    const Float alpha = dot(w, cross(planar_hitpt_vector, v));
+    const Float beta = dot(w, cross(u, planar_hitpt_vector));
     if (!is_interior(alpha, beta, rec)) return false;
 
     rec.t = t;
@@ -43,12 +44,12 @@ bool quad::hit(const ray& r, const interval& ray_t, hit_record& rec) const {
 
 aabb quad::bounding_box() const { return bbox; }
 
-double quad::pdf_value(const point3& origin, const vec3& direction) const {
+Float quad::pdf_value(const point3& origin, const vec3& direction) const {
     hit_record rec;
-    if (!this->hit(ray(origin, direction), interval(0.001, infinity), rec)) return 0.0;
+    if (!this->hit(ray(origin, direction), interval(0.001_f, infinity), rec)) return 0.0_f;
 
-    const double distance_squared = rec.t * rec.t * direction.length_squared();
-    const double cosine = std::fabs(dot(direction, rec.normal)) / direction.length();
+    const Float distance_squared = rec.t * rec.t * direction.length_squared();
+    const Float cosine = std::fabs(dot(direction, rec.normal)) / direction.length();
 
     return distance_squared / (cosine * area);
 }
@@ -65,7 +66,7 @@ void quad::set_bounding_box() {
     bbox = aabb(bbox_diagonal1, bbox_diagonal2);
 }
 
-bool quad::is_interior(double a, double b, hit_record& rec) const {
+bool quad::is_interior(Float a, Float b, hit_record& rec) const {
     static constexpr interval unit_interval{0, 1};
     if (!unit_interval.contains(a) || !unit_interval.contains(b)) return false;
 

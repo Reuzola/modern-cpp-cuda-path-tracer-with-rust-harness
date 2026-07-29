@@ -2,13 +2,14 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
 #include <optional>
 
 namespace pt {
 
-metal::metal(const color& albedo, double fuzz) : albedo(albedo), fuzz(std::clamp(fuzz, 0.0, 1.0)) {}
+metal::metal(const color& albedo, Float fuzz) : albedo(albedo), fuzz(std::clamp(fuzz, 0.0_f, 1.0_f)) {}
 
 std::optional<scatter_record> metal::scatter(const ray& r_in, const hit_record& rec) const {
     auto reflected = reflect(unit_vector(r_in.direction()), rec.normal);

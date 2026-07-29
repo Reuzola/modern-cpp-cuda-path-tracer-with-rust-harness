@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/io/image_loader.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/texture.hpp"
 #include <string>
@@ -10,7 +11,7 @@ class image_texture final : public texture {
 public:
     explicit image_texture(const std::string& filename) : image(filename) {}
 
-    [[nodiscard]] color value(double u, double v, const point3& p) const override;
+    [[nodiscard]] color value(Float u, Float v, const point3& p) const override;
 
 private:
     image_loader image;

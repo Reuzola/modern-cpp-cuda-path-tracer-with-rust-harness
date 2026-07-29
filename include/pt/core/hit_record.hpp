@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 
 namespace pt {
@@ -9,9 +10,9 @@ class material;
 struct hit_record {
     point3 p;
     vec3 normal;
-    double t{};
-    double u{};
-    double v{};
+    Float t{};
+    Float u{};
+    Float v{};
     bool front_face{};
     const material* mat = nullptr;
 

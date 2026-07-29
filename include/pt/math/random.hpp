@@ -1,13 +1,14 @@
 #pragma once
+#include "pt/math/scalar.hpp"
 #include <random>
 
 namespace pt {
 
 [[nodiscard]] std::mt19937& rng();
 
-[[nodiscard]] double random_double();
+[[nodiscard]] Float random_double();
 
-[[nodiscard]] double random_double(double min, double max);
+[[nodiscard]] Float random_double(Float min, Float max);
 
 [[nodiscard]] int random_int(int min, int max);
 
