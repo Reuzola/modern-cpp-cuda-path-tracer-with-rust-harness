@@ -10,7 +10,7 @@ Float mixture_pdf::value(const vec3& direction) const {
 }
 
 vec3 mixture_pdf::generate() const {
-    return (random_double() < weight) ? p1.generate() : p2.generate();
+    return (random_scalar() < weight) ? p1.generate() : p2.generate();
 }
 
 } // namespace pt

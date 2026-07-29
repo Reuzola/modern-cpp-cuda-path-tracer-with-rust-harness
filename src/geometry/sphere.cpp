@@ -86,8 +86,8 @@ auto sphere::get_sphere_uv(const point3& p) -> uv_coords {
 }
 
 vec3 sphere::random_to_sphere(Float radius, Float distance_squared) {
-    const Float r1 = random_double();
-    const Float r2 = random_double();
+    const Float r1 = random_scalar();
+    const Float r2 = random_scalar();
 
     const Float z = 1.0_f + r2 * (std::sqrt(1.0_f - radius * radius / distance_squared) - 1.0_f);
     const Float phi = 2.0_f * pi * r1;

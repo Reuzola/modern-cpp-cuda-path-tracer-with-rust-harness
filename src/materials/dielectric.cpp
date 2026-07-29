@@ -19,7 +19,7 @@ std::optional<scatter_record> dielectric::scatter(const ray& r_in, const hit_rec
     const Float sin_theta = std::sqrt(1 - cos_theta * cos_theta);
 
     const bool cannot_refract = ri * sin_theta > 1.0_f;
-    const bool should_reflect = cannot_refract || reflectance(cos_theta, ri) > random_double();
+    const bool should_reflect = cannot_refract || reflectance(cos_theta, ri) > random_scalar();
 
     vec3 direction;
     if (should_reflect)

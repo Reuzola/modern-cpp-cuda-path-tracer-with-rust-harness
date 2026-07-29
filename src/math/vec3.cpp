@@ -8,11 +8,11 @@
 namespace pt {
 
 vec3 vec3::random() {
-    return vec3(random_double(), random_double(), random_double());
+    return vec3(random_scalar(), random_scalar(), random_scalar());
 }
 
 vec3 vec3::random(Float min, Float max) {
-    return vec3(random_double(min, max), random_double(min, max), random_double(min, max));
+    return vec3(random_scalar(min, max), random_scalar(min, max), random_scalar(min, max));
 }
 
 vec3 random_unit_vector() {
@@ -26,7 +26,7 @@ vec3 random_unit_vector() {
 
 vec3 random_in_unit_disk() {
     while (true) {
-        auto p = vec3(random_double(-1, 1), random_double(-1, 1), 0);
+        auto p = vec3(random_scalar(-1, 1), random_scalar(-1, 1), 0);
         const auto lensq = p.length_squared();
 
         if (lensq < 1) return p;
@@ -34,8 +34,8 @@ vec3 random_in_unit_disk() {
 }
 
 vec3 random_cosine_direction() {
-    const Float r1 = random_double();
-    const Float r2 = random_double();
+    const Float r1 = random_scalar();
+    const Float r2 = random_scalar();
     const Float sqrt_r2 = std::sqrt(r2);
 
     const Float phi = 2.0_f * pi * r1;

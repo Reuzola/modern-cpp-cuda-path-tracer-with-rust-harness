@@ -5,11 +5,11 @@
 namespace pt {
 
 color color::random() {
-    return color(random_double(), random_double(), random_double());
+    return color(random_scalar(), random_scalar(), random_scalar());
 }
 
 color color::random(Float min, Float max) {
-    return color(random_double(min, max), random_double(min, max), random_double(min, max));
+    return color(random_scalar(min, max), random_scalar(min, max), random_scalar(min, max));
 }
 
 } // namespace pt

@@ -33,7 +33,7 @@ bool constant_medium::hit(const ray& r, const interval& ray_t, hit_record& rec) 
 
     const Float ray_length = r.direction().length();
     const Float distance_inside_boundary = (rec2.t - rec1.t) * ray_length;
-    const Float hit_distance = neg_inv_density * std::log(random_double());
+    const Float hit_distance = neg_inv_density * std::log(random_scalar());
     if (hit_distance > distance_inside_boundary) return false;
 
     rec.t = rec1.t + hit_distance / ray_length;

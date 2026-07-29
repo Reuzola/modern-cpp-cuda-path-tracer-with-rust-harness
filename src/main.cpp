@@ -83,19 +83,19 @@ void bouncing_spheres() {
 
     for (int a = -11; a < 11; a++) {
         for (int b = -11; b < 11; b++) {
-            const auto choose_mat = pt::random_double();
+            const auto choose_mat = pt::random_scalar();
 
-            const pt::point3 center(a + 0.9 * pt::random_double(), 0.2, b + 0.9 * pt::random_double());
+            const pt::point3 center(a + 0.9 * pt::random_scalar(), 0.2, b + 0.9 * pt::random_scalar());
             if ((center - pt::point3(4.0, 0.2, 0.0)).length() > 0.9) {
                 if (choose_mat < 0.8) { // %80 diffuse
                     const auto albedo = pt::color::random() * pt::color::random();
                     textures.push_back(std::make_unique<pt::solid_color>(albedo));
                     materials.push_back(std::make_unique<pt::lambertian>(textures.back().get()));
-                    const auto center2 = center + pt::vec3(0.0, pt::random_double(0.0, 0.5), 0.0);
+                    const auto center2 = center + pt::vec3(0.0, pt::random_scalar(0.0, 0.5), 0.0);
                     world.add(std::make_shared<pt::sphere>(center, center2, 0.2, materials.back().get()));
                 } else if (choose_mat < 0.95) { // %15 pt::metal
                     const auto albedo = pt::color::random(0.5, 1.0);
-                    const auto fuzz = pt::random_double(0.0, 0.5);
+                    const auto fuzz = pt::random_scalar(0.0, 0.5);
                     materials.push_back(std::make_unique<pt::metal>(albedo, fuzz));
                     world.add(std::make_shared<pt::sphere>(center, 0.2, materials.back().get()));
                 } else { // %5 glass
@@ -506,7 +506,7 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
             const pt::Float y0 = 0.0;
             const pt::Float x1 = x0 + w;
             const pt::Float z1 = z0 + w;
-            const pt::Float y1 = pt::random_double(1, 101);
+            const pt::Float y1 = pt::random_scalar(1, 101);
             boxes1.add(pt::box(pt::point3(x0, y0, z0), pt::point3(x1, y1, z1), ground));
         }
     }

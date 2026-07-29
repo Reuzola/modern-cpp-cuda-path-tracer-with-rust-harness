@@ -150,8 +150,8 @@ private:
     }
 
     [[nodiscard]] vec3 sample_square_stratified(int s_i, int s_j) const {
-        const Float px = ((static_cast<Float>(s_i) + random_double()) * recip_sqrt_spp) - 0.5_f;
-        const Float py = ((static_cast<Float>(s_j) + random_double()) * recip_sqrt_spp) - 0.5_f;
+        const Float px = ((static_cast<Float>(s_i) + random_scalar()) * recip_sqrt_spp) - 0.5_f;
+        const Float py = ((static_cast<Float>(s_j) + random_scalar()) * recip_sqrt_spp) - 0.5_f;
         return vec3(px, py, 0.0_f);
     }
 
@@ -161,7 +161,7 @@ private:
         const point3 sample_point = pixel00_loc + (static_cast<Float>(i) + offset.x()) * pixel_delta_u + (static_cast<Float>(j) + offset.y()) * pixel_delta_v;
         const point3 origin = (defocus_angle <= 0) ? center : defocus_disk_sample();
 
-        const Float ray_time = random_double();
+        const Float ray_time = random_scalar();
         return ray(origin, sample_point - origin, ray_time);
     }
 

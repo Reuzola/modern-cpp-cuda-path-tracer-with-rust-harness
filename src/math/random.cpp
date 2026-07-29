@@ -9,19 +9,19 @@ std::mt19937& rng() {
     return generator;
 }
 
-Float random_double() {
+Float random_scalar() {
     thread_local static std::uniform_real_distribution<Float> distribution{0.0_f, 1.0_f}; // [0, 1)
     return distribution(rng());
 }
 
-Float random_double(Float min, Float max) {
-    return min + (max - min) * random_double();
+Float random_scalar(Float min, Float max) {
+    return min + (max - min) * random_scalar();
 }
 
 int random_int(int min, int max) {
     const Float low = static_cast<Float>(min);
     const Float high = static_cast<Float>(max);
-    return static_cast<int>(random_double(low, high + 1));
+    return static_cast<int>(random_scalar(low, high + 1));
 }
 
 } // namespace pt

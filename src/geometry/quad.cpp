@@ -55,7 +55,7 @@ Float quad::pdf_value(const point3& origin, const vec3& direction) const {
 }
 
 vec3 quad::random(const point3& origin) const {
-    const point3 point = Q + random_double() * u + random_double() * v;
+    const point3 point = Q + random_scalar() * u + random_scalar() * v;
     return point - origin;
 }
 
