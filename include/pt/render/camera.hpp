@@ -1,25 +1,17 @@
 #pragma once
-#include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
-#include "pt/math/interval.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/render/film.hpp"
+#include "pt/render/path_integrator.hpp"
 #include "pt/sampling/importance_targets.hpp"
-#include "pt/sampling/mixture_pdf.hpp"
-#include "pt/sampling/pdf.hpp"
-#include "pt/sampling/pdf_variant.hpp"
-#include "pt/sampling/sampleable_pdf.hpp"
-#include "pt/util/overloaded.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <variant>
 
 namespace pt {
 
@@ -39,7 +31,9 @@ public:
 
     [[nodiscard]] Film render(const Hittable& world, const ImportanceTargets& targets) {
         initialize();
+
         Film film(image_width, image_height_);
+        const PathIntegrator integrator(world, targets, background, max_depth);
 
         for (int j = 0; j < image_height_; j++) {
             std::clog << "\rScanlines remaining: " << (image_height_ - j) << ' ' << std::flush;
@@ -49,7 +43,7 @@ public:
 
                 for (int s_j = 0; s_j < sqrt_spp_; s_j++) {
                     for (int s_i = 0; s_i < sqrt_spp_; s_i++) {
-                        pixel_color += ray_color(get_ray(i, j, s_i, s_j), max_depth, world, targets);
+                        pixel_color += integrator.radiance(get_ray(i, j, s_i, s_j));
                     }
                 }
 
@@ -107,46 +101,6 @@ private:
 
         defocus_disk_u_ = u_ * defocus_radius;
         defocus_disk_v_ = v_ * defocus_radius;
-    }
-
-    [[nodiscard]] Color ray_color(const Ray& r, int depth, const Hittable& world, const ImportanceTargets& targets) const {
-        if (depth <= 0) return Color(0, 0, 0);
-
-        HitRecord rec;
-
-        if (!world.hit(r, Interval(0.001_f, infinity), rec)) return background;
-
-        const Color color_from_emission = rec.mat->emitted(r, rec);
-
-        if (const auto sr = rec.mat->scatter(r, rec)) {
-            const auto shade = [&](const Pdf& p) -> Color {
-                const Ray scattered(rec.p, p.generate(), r.time());
-                const Float pdf_value = p.value(scattered.direction());
-
-                const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
-                const Color sample_color = ray_color(scattered, depth - 1, world, targets);
-
-                return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
-            };
-
-            // clang-format off
-            return color_from_emission + std::visit(Overloaded{
-                [&](const SpecularBounce& sb) -> Color {
-                    return sr->attenuation * ray_color(sb.scattered, depth - 1, world, targets);
-                },
-                [&](const DiffuseBounce& db) -> Color {
-                    const auto& surface_pdf = as_pdf(db.sampling_pdf);
-
-                    if (targets.empty()) return shade(surface_pdf);
-
-                    const SampleablePdf target_pdf(targets, rec.p);
-                    const MixturePdf mixed_pdf(surface_pdf, target_pdf);
-                    return shade(mixed_pdf);
-                }
-            }, sr->bounce);
-            // clang-format on
-        }
-        return color_from_emission;
     }
 
     [[nodiscard]] Vec3 sample_square_stratified(int s_i, int s_j) const {

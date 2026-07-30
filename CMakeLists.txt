@@ -196,6 +196,8 @@ add_library(pathtracer_core STATIC
   src/sampling/sphere_pdf.cpp
 
   src/scene/scene.cpp
+
+  src/render/path_integrator.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
