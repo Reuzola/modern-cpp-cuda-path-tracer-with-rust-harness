@@ -7,6 +7,7 @@
 #include "pt/geometry/rotate_y.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/translate.hpp"
+#include "pt/io/color.hpp"
 #include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
@@ -17,6 +18,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/render/camera.hpp"
+#include "pt/render/film.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/textures/checker_texture.hpp"
 #include "pt/textures/image_texture.hpp"
@@ -36,6 +38,7 @@ pt::Scene cornell_box();
 pt::Scene cornell_smoke();
 pt::Scene final_scene();
 void render_scene(const pt::Scene& scene);
+void write_ppm(std::ostream& out, const pt::Film& film);
 
 int main() {
     pt::Scene scene;
@@ -496,10 +499,23 @@ void render_scene(const pt::Scene& scene) {
     cam.focus_dist = scene.camera.focus_dist;
 
     const auto start = std::chrono::steady_clock::now();
-    cam.render(scene.world(), scene.importance_targets());
+    const pt::Film film = cam.render(scene.world(), scene.importance_targets());
     const auto end = std::chrono::steady_clock::now();
+
+    write_ppm(std::cout, film); // temp
 
     const std::chrono::duration<double> elapsed = end - start;
 
     std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
+}
+
+void write_ppm(std::ostream& out, const pt::Film& film) {
+    out << "P3\n"
+        << film.width() << ' ' << film.height() << "\n255\n";
+
+    for (int j = 0; j < film.height(); j++) {
+        for (int i = 0; i < film.width(); i++) {
+            pt::write_color(out, film.pixel(i, j));
+        }
+    }
 }

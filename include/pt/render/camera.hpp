@@ -1,7 +1,6 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/io/color.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
@@ -10,6 +9,7 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/render/film.hpp"
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/sampling/mixture_pdf.hpp"
 #include "pt/sampling/pdf.hpp"
@@ -37,11 +37,9 @@ public:
     Float focus_dist{10.0_f};
     Color background{};
 
-    void render(const Hittable& world, const ImportanceTargets& targets) {
+    [[nodiscard]] Film render(const Hittable& world, const ImportanceTargets& targets) {
         initialize();
-
-        std::cout << "P3\n"
-                  << image_width << ' ' << image_height_ << "\n255\n";
+        Film film(image_width, image_height_);
 
         for (int j = 0; j < image_height_; j++) {
             std::clog << "\rScanlines remaining: " << (image_height_ - j) << ' ' << std::flush;
@@ -55,11 +53,12 @@ public:
                     }
                 }
 
-                write_color(std::cout, pixel_samples_scale_ * pixel_color);
+                film.set_pixel(i, j, pixel_samples_scale_ * pixel_color);
             }
         }
 
         std::clog << "\rDone.                 \n";
+        return film;
     }
 
 private:
