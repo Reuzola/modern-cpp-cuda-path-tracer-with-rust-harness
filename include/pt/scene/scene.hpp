@@ -1,10 +1,12 @@
 #pragma once
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
+#include "pt/core/sampleable.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/sampling/importance_targets.hpp"
 #include "pt/textures/texture.hpp"
 #include "pt/util/arena.hpp"
 #include <type_traits>
@@ -42,7 +44,7 @@ public:
 
     [[nodiscard]] const Hittable& world() const noexcept { return world_; }
 
-    [[nodiscard]] const Hittable* lights() const noexcept { return lights_.empty() ? nullptr : &lights_; }
+    [[nodiscard]] const ImportanceTargets& importance_targets() const noexcept { return importance_targets_; }
 
     [[nodiscard]] Arena<Hittable>& object_arena() noexcept { return objects_; }
 
@@ -63,7 +65,7 @@ public:
 
     void add_object(const Hittable* obj);
 
-    void add_light(const Hittable* obj);
+    void add_importance_target(const Sampleable* target);
 
     void build_bvh();
 
@@ -73,7 +75,7 @@ private:
     Arena<Material> materials_;
     Arena<Hittable> objects_;
     HittableList world_;
-    HittableList lights_;
+    ImportanceTargets importance_targets_;
 };
 
 static_assert(!std::is_copy_constructible_v<Scene>);

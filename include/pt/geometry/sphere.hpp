@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/core/sampleable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -11,7 +12,7 @@ namespace pt {
 
 class Material;
 
-class Sphere final : public Hittable {
+class Sphere final : public Hittable, public Sampleable {
 public:
     Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat);
 
@@ -21,9 +22,9 @@ public:
 
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
-    [[nodiscard]] Vec3 random(const Point3& origin) const override;
+    [[nodiscard]] Float pdf_direction(const Point3& origin, const Vec3& direction) const override;
 
-    [[nodiscard]] Float pdf_value(const Point3& origin, const Vec3& direction) const override;
+    [[nodiscard]] Vec3 sample_direction(const Point3& origin) const override;
 
 private:
     Ray center_;

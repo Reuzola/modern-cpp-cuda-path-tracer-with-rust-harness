@@ -10,10 +10,11 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include "pt/sampling/hittable_pdf.hpp"
+#include "pt/sampling/importance_targets.hpp"
 #include "pt/sampling/mixture_pdf.hpp"
 #include "pt/sampling/pdf.hpp"
 #include "pt/sampling/pdf_variant.hpp"
+#include "pt/sampling/sampleable_pdf.hpp"
 #include "pt/util/overloaded.hpp"
 #include <algorithm>
 #include <cmath>
@@ -36,7 +37,7 @@ public:
     Float focus_dist{10.0_f};
     Color background{};
 
-    void render(const Hittable& world, const Hittable* lights = nullptr) {
+    void render(const Hittable& world, const ImportanceTargets& targets) {
         initialize();
 
         std::cout << "P3\n"
@@ -50,7 +51,7 @@ public:
 
                 for (int s_j = 0; s_j < sqrt_spp_; s_j++) {
                     for (int s_i = 0; s_i < sqrt_spp_; s_i++) {
-                        pixel_color += ray_color(get_ray(i, j, s_i, s_j), max_depth, world, lights);
+                        pixel_color += ray_color(get_ray(i, j, s_i, s_j), max_depth, world, targets);
                     }
                 }
 
@@ -109,7 +110,7 @@ private:
         defocus_disk_v_ = v_ * defocus_radius;
     }
 
-    [[nodiscard]] Color ray_color(const Ray& r, int depth, const Hittable& world, const Hittable* lights) const {
+    [[nodiscard]] Color ray_color(const Ray& r, int depth, const Hittable& world, const ImportanceTargets& targets) const {
         if (depth <= 0) return Color(0, 0, 0);
 
         HitRecord rec;
@@ -124,7 +125,7 @@ private:
                 const Float pdf_value = p.value(scattered.direction());
 
                 const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
-                const Color sample_color = ray_color(scattered, depth - 1, world, lights);
+                const Color sample_color = ray_color(scattered, depth - 1, world, targets);
 
                 return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
             };
@@ -132,15 +133,15 @@ private:
             // clang-format off
             return color_from_emission + std::visit(Overloaded{
                 [&](const SpecularBounce& sb) -> Color {
-                    return sr->attenuation * ray_color(sb.scattered, depth - 1, world, lights);
+                    return sr->attenuation * ray_color(sb.scattered, depth - 1, world, targets);
                 },
                 [&](const DiffuseBounce& db) -> Color {
                     const auto& surface_pdf = as_pdf(db.sampling_pdf);
 
-                    if (lights == nullptr) return shade(surface_pdf);
+                    if (targets.empty()) return shade(surface_pdf);
 
-                    const HittablePdf light_pdf(*lights, rec.p);
-                    const MixturePdf mixed_pdf(surface_pdf, light_pdf);
+                    const SampleablePdf target_pdf(targets, rec.p);
+                    const MixturePdf mixed_pdf(surface_pdf, target_pdf);
                     return shade(mixed_pdf);
                 }
             }, sr->bounce);

@@ -3,12 +3,9 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
-#include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
-#include "pt/math/vec3.hpp"
 #include <cassert>
-#include <cstddef>
 
 namespace pt {
 
@@ -29,25 +26,6 @@ bool HittableList::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) cons
         }
     }
     return is_hit;
-}
-
-Float HittableList::pdf_value(const Point3& origin, const Vec3& direction) const {
-    if (objects_.empty()) return 0.0_f;
-
-    const Float weight = 1.0_f / static_cast<Float>(objects_.size());
-    Float sum{0.0_f};
-
-    for (const Hittable* object : objects_) {
-        sum += weight * object->pdf_value(origin, direction);
-    }
-    return sum;
-}
-
-Vec3 HittableList::random(const Point3& origin) const {
-    if (objects_.empty()) return Vec3(0, 0, 0);
-
-    const int count = static_cast<int>(objects_.size());
-    return objects_[static_cast<std::size_t>(random_int(0, count - 1))]->random(origin);
 }
 
 void HittableList::clear() {

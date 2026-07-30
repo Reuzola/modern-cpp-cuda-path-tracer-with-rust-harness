@@ -298,9 +298,12 @@ pt::Scene cornell_box() {
 
     const auto* glass = scene.create_material<pt::Dielectric>(1.5);
 
+    const auto* light_quad = scene.create_object<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), light);
+    const auto* glass_sphere = scene.create_object<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, glass);
+
     scene.add_object(scene.create_object<pt::Quad>(pt::Point3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), green));
     scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), red));
-    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), light));
+    scene.add_object(light_quad);
     scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), white));
     scene.add_object(scene.create_object<pt::Quad>(pt::Point3(555.0, 555.0, 555.0), pt::Vec3(-555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -555.0), white));
     scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 555.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), white));
@@ -310,12 +313,12 @@ pt::Scene cornell_box() {
     box1 = scene.create_object<pt::Translate>(box1, pt::Vec3(265.0, 0.0, 295.0));
     scene.add_object(box1);
 
-    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, glass));
+    scene.add_object(glass_sphere);
+
+    scene.add_importance_target(light_quad);
+    scene.add_importance_target(glass_sphere);
 
     scene.build_bvh();
-
-    scene.add_light(scene.create_object<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), nullptr));
-    scene.add_light(scene.create_object<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, nullptr));
 
     scene.render.image_width = 600;
     scene.render.samples_per_pixel = 200;
@@ -493,7 +496,7 @@ void render_scene(const pt::Scene& scene) {
     cam.focus_dist = scene.camera.focus_dist;
 
     const auto start = std::chrono::steady_clock::now();
-    cam.render(scene.world(), scene.lights());
+    cam.render(scene.world(), scene.importance_targets());
     const auto end = std::chrono::steady_clock::now();
 
     const std::chrono::duration<double> elapsed = end - start;

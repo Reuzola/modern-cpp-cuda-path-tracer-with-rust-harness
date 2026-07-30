@@ -190,8 +190,9 @@ add_library(pathtracer_core STATIC
   src/materials/metal.cpp
 
   src/sampling/cosine_pdf.cpp
-  src/sampling/hittable_pdf.cpp
+  src/sampling/importance_targets.cpp
   src/sampling/mixture_pdf.cpp
+  src/sampling/sampleable_pdf.cpp
   src/sampling/sphere_pdf.cpp
 
   src/scene/scene.cpp

@@ -44,7 +44,7 @@ bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
 
 Aabb Quad::bounding_box() const { return bbox_; }
 
-Float Quad::pdf_value(const Point3& origin, const Vec3& direction) const {
+Float Quad::pdf_direction(const Point3& origin, const Vec3& direction) const {
     HitRecord rec;
     if (!this->hit(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
 
@@ -54,7 +54,7 @@ Float Quad::pdf_value(const Point3& origin, const Vec3& direction) const {
     return distance_squared / (cosine * area_);
 }
 
-Vec3 Quad::random(const Point3& origin) const {
+Vec3 Quad::sample_direction(const Point3& origin) const {
     const Point3 point = Q_ + random_scalar() * u_ + random_scalar() * v_;
     return point - origin;
 }

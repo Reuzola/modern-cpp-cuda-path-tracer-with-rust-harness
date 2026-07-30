@@ -55,15 +55,7 @@ bool Sphere::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     return true;
 }
 
-Vec3 Sphere::random(const Point3& origin) const {
-    const Vec3 direction = center_.at(0) - origin;
-    const Float distance_squared = direction.length_squared();
-
-    const Onb uvw(direction);
-    return uvw.transform(random_to_sphere(radius_, distance_squared));
-}
-
-Float Sphere::pdf_value(const Point3& origin, const Vec3& direction) const {
+Float Sphere::pdf_direction(const Point3& origin, const Vec3& direction) const {
     HitRecord rec;
     if (!this->hit(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
 
@@ -74,6 +66,14 @@ Float Sphere::pdf_value(const Point3& origin, const Vec3& direction) const {
     const Float solid_angle = 2.0_f * pi * (1.0_f - cos_theta_max);
 
     return 1.0_f / solid_angle;
+}
+
+Vec3 Sphere::sample_direction(const Point3& origin) const {
+    const Vec3 direction = center_.at(0) - origin;
+    const Float distance_squared = direction.length_squared();
+
+    const Onb uvw(direction);
+    return uvw.transform(random_to_sphere(radius_, distance_squared));
 }
 
 auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
