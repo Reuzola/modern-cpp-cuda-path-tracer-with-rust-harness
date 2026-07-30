@@ -4,12 +4,10 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/vec3.hpp"
-#include <memory>
-#include <utility>
 
 namespace pt {
 
-Translate::Translate(std::shared_ptr<Hittable> object, const Vec3& offset) : object_(std::move(object)), offset_(offset) {
+Translate::Translate(const Hittable* object, const Vec3& offset) : object_(object), offset_(offset) {
     bbox_ = object_->bounding_box() + offset;
 }
 

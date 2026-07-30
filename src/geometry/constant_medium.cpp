@@ -8,14 +8,13 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <cassert>
 #include <cmath>
-#include <memory>
-#include <utility>
 
 namespace pt {
 
-ConstantMedium::ConstantMedium(std::shared_ptr<Hittable> boundary, Float density, const Material* phase_function)
-    : boundary_(std::move(boundary)), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) {}
+ConstantMedium::ConstantMedium(const Hittable* boundary, Float density, const Material* phase_function)
+    : boundary_(boundary), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) { assert(boundary != nullptr); }
 
 Aabb ConstantMedium::bounding_box() const { return boundary_->bounding_box(); }
 

@@ -6,17 +6,15 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include <memory>
+#include <span>
 #include <vector>
 
 namespace pt {
 
 class HittableList final : public Hittable {
-    friend class BvhNode;
-
 public:
     HittableList() = default;
-    explicit HittableList(std::shared_ptr<Hittable> object);
+    explicit HittableList(const Hittable* object);
 
     [[nodiscard]] Aabb bounding_box() const override;
 
@@ -28,12 +26,14 @@ public:
 
     void clear();
 
-    void add(std::shared_ptr<Hittable> obj);
+    void add(const Hittable* obj);
 
     [[nodiscard]] bool empty() const noexcept { return objects_.empty(); }
 
+    [[nodiscard]] std::span<const Hittable* const> objects() const noexcept { return objects_; }
+
 private:
-    std::vector<std::shared_ptr<Hittable>> objects_;
+    std::vector<const Hittable*> objects_;
     Aabb bbox_;
 };
 

@@ -4,7 +4,6 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
-#include <memory>
 
 namespace pt {
 
@@ -12,14 +11,14 @@ class Interval;
 
 class RotateY final : public Hittable {
 public:
-    RotateY(std::shared_ptr<Hittable> object, Float angle);
+    RotateY(const Hittable* object, Float angle);
 
     [[nodiscard]] Aabb bounding_box() const override;
 
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<Hittable> object_;
+    const Hittable* object_;
     Float sin_theta_{};
     Float cos_theta_{};
     Aabb bbox_;

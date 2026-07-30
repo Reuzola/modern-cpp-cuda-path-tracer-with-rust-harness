@@ -4,7 +4,6 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/scalar.hpp"
-#include <memory>
 
 namespace pt {
 
@@ -14,14 +13,14 @@ class Ray;
 
 class ConstantMedium final : public Hittable {
 public:
-    ConstantMedium(std::shared_ptr<Hittable> boundary, Float density, const Material* phase_function);
+    ConstantMedium(const Hittable* boundary, Float density, const Material* phase_function);
 
     [[nodiscard]] Aabb bounding_box() const override;
 
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
 private:
-    std::shared_ptr<Hittable> boundary_;
+    const Hittable* boundary_;
     Float neg_inv_density_{};
     const Material* phase_function_;
 };

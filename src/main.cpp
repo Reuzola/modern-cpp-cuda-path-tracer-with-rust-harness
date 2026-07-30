@@ -25,7 +25,6 @@
 #include <chrono>
 #include <format>
 #include <iostream>
-#include <memory>
 
 pt::Scene bouncing_spheres();
 pt::Scene checkered_spheres();
@@ -78,7 +77,7 @@ pt::Scene bouncing_spheres() {
 
     const auto* ground_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.5, 0.5, 0.5)); // ground
     const auto* ground_mat = scene.create_material<pt::Lambertian>(ground_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, -1000, 0.0), 1000.0, ground_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -1000, 0.0), 1000.0, ground_mat));
 
     for (int a = -11; a < 11; a++) {
         for (int b = -11; b < 11; b++) {
@@ -91,29 +90,29 @@ pt::Scene bouncing_spheres() {
                     const auto* tex = scene.create_texture<pt::SolidColor>(albedo);
                     const auto* mat = scene.create_material<pt::Lambertian>(tex);
                     const auto center2 = center + pt::Vec3(0.0, pt::random_scalar(0.0, 0.5), 0.0);
-                    scene.add_object(std::make_shared<pt::Sphere>(center, center2, 0.2, mat));
+                    scene.add_object(scene.create_object<pt::Sphere>(center, center2, 0.2, mat));
                 } else if (choose_mat < 0.95) { // %15 Metal
                     const auto albedo = pt::Color::random(0.5, 1.0);
                     const auto fuzz = pt::random_scalar(0.0, 0.5);
                     const auto* mat = scene.create_material<pt::Metal>(albedo, fuzz);
-                    scene.add_object(std::make_shared<pt::Sphere>(center, 0.2, mat));
+                    scene.add_object(scene.create_object<pt::Sphere>(center, 0.2, mat));
                 } else { // %5 Glass
                     const auto* mat = scene.create_material<pt::Dielectric>(1.5);
-                    scene.add_object(std::make_shared<pt::Sphere>(center, 0.2, mat));
+                    scene.add_object(scene.create_object<pt::Sphere>(center, 0.2, mat));
                 }
             }
         }
     }
 
     const auto* big_glass = scene.create_material<pt::Dielectric>(1.5);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 1.0, 0.0), 1.0, big_glass));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 1.0, 0.0), 1.0, big_glass));
 
     const auto* brown_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.4, 0.2, 0.1));
     const auto* brown_mat = scene.create_material<pt::Lambertian>(brown_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(-4.0, 1.0, 0.0), 1.0, brown_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(-4.0, 1.0, 0.0), 1.0, brown_mat));
 
     const auto* silver_mat = scene.create_material<pt::Metal>(pt::Color(0.7, 0.6, 0.5), 0.0);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(4.0, 1.0, 0.0), 1.0, silver_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(4.0, 1.0, 0.0), 1.0, silver_mat));
 
     scene.build_bvh();
 
@@ -138,8 +137,8 @@ pt::Scene checkered_spheres() {
 
     const auto* checker_tex = scene.create_texture<pt::CheckerTexture>(0.32, pt::Color(0.2, 0.3, 0.1), pt::Color(0.9, 0.9, 0.9));
     const auto* checker_mat = scene.create_material<pt::Lambertian>(checker_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, -10.0, 0.0), 10.0, checker_mat));
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 10.0, 0.0), 10.0, checker_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -10.0, 0.0), 10.0, checker_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 10.0, 0.0), 10.0, checker_mat));
 
     scene.build_bvh();
 
@@ -164,7 +163,7 @@ pt::Scene earth() {
 
     const auto* earth_tex = scene.create_texture<pt::ImageTexture>("earthmap.jpg");
     const auto* earth_mat = scene.create_material<pt::Lambertian>(earth_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 0.0, 0.0), 2.0, earth_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 0.0, 0.0), 2.0, earth_mat));
 
     scene.build_bvh();
 
@@ -189,8 +188,8 @@ pt::Scene perlin_spheres() {
 
     const auto* noise_tex = scene.create_texture<pt::NoiseTexture>(4.0);
     const auto* noise_mat = scene.create_material<pt::Lambertian>(noise_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, -1000.0, 0.0), 1000.0, noise_mat));
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 2.0, 0.0), 2.0, noise_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -1000.0, 0.0), 1000.0, noise_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 2.0, 0.0), 2.0, noise_mat));
 
     scene.build_bvh();
 
@@ -215,23 +214,23 @@ pt::Scene quads() {
 
     const auto* left_red_tex = scene.create_texture<pt::SolidColor>(pt::Color(1.0, 0.2, 0.2));
     const auto* left_red = scene.create_material<pt::Lambertian>(left_red_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(-3.0, -2.0, 5.0), pt::Vec3(0.0, 0.0, -4.0), pt::Vec3(0.0, 4.0, 0.0), left_red));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(-3.0, -2.0, 5.0), pt::Vec3(0.0, 0.0, -4.0), pt::Vec3(0.0, 4.0, 0.0), left_red));
 
     const auto* back_green_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.2, 1.0, 0.2));
     const auto* back_green = scene.create_material<pt::Lambertian>(back_green_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(-2.0, -2.0, 0.0), pt::Vec3(4.0, 0.0, 0.0), pt::Vec3(0.0, 4.0, 0.0), back_green));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(-2.0, -2.0, 0.0), pt::Vec3(4.0, 0.0, 0.0), pt::Vec3(0.0, 4.0, 0.0), back_green));
 
     const auto* right_blue_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.2, 0.2, 1.0));
     const auto* right_blue = scene.create_material<pt::Lambertian>(right_blue_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(3.0, -2.0, 1.0), pt::Vec3(0.0, 0.0, 4.0), pt::Vec3(0.0, 4.0, 0.0), right_blue));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(3.0, -2.0, 1.0), pt::Vec3(0.0, 0.0, 4.0), pt::Vec3(0.0, 4.0, 0.0), right_blue));
 
     const auto* top_orange_tex = scene.create_texture<pt::SolidColor>(pt::Color(1.0, 0.5, 0.0));
     const auto* top_orange = scene.create_material<pt::Lambertian>(top_orange_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(-2.0, 3.0, 1.0), pt::Vec3(4.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 4.0), top_orange));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(-2.0, 3.0, 1.0), pt::Vec3(4.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 4.0), top_orange));
 
     const auto* bottom_teal_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.2, 0.8, 0.8));
     const auto* bottom_teal = scene.create_material<pt::Lambertian>(bottom_teal_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(-2.0, -3.0, 5.0), pt::Vec3(4.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -4.0), bottom_teal));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(-2.0, -3.0, 5.0), pt::Vec3(4.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -4.0), bottom_teal));
 
     scene.build_bvh();
 
@@ -256,13 +255,13 @@ pt::Scene simple_light() {
 
     const auto* noise_tex = scene.create_texture<pt::NoiseTexture>(4.0);
     const auto* noise_mat = scene.create_material<pt::Lambertian>(noise_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, -1000.0, 0.0), 1000.0, noise_mat));
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 2.0, 0.0), 2.0, noise_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -1000.0, 0.0), 1000.0, noise_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 2.0, 0.0), 2.0, noise_mat));
 
     const auto* light_tex = scene.create_texture<pt::SolidColor>(pt::Color(4.0, 4.0, 4.0));
     const auto* light_mat = scene.create_material<pt::DiffuseLight>(light_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(3.0, 1.0, -2.0), pt::Vec3(2.0, 0.0, 0.0), pt::Vec3(0.0, 2.0, 0.0), light_mat));
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 7.0, 0.0), 2, light_mat));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(3.0, 1.0, -2.0), pt::Vec3(2.0, 0.0, 0.0), pt::Vec3(0.0, 2.0, 0.0), light_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 7.0, 0.0), 2, light_mat));
 
     scene.build_bvh();
 
@@ -299,24 +298,24 @@ pt::Scene cornell_box() {
 
     const auto* glass = scene.create_material<pt::Dielectric>(1.5);
 
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), green));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), red));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), light));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), white));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(555.0, 555.0, 555.0), pt::Vec3(-555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -555.0), white));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(0.0, 0.0, 555.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), white));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), green));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), red));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), light));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), white));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(555.0, 555.0, 555.0), pt::Vec3(-555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -555.0), white));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 555.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), white));
 
-    std::shared_ptr<pt::Hittable> box1 = pt::box(pt::Point3(0.0, 0.0, 0.0), pt::Point3(165.0, 330.0, 165.0), white);
-    box1 = std::make_shared<pt::RotateY>(box1, 15.0);
-    box1 = std::make_shared<pt::Translate>(box1, pt::Vec3(265.0, 0.0, 295.0));
+    const pt::Hittable* box1 = pt::box(scene.object_arena(), pt::Point3(0.0, 0.0, 0.0), pt::Point3(165.0, 330.0, 165.0), white);
+    box1 = scene.create_object<pt::RotateY>(box1, 15.0);
+    box1 = scene.create_object<pt::Translate>(box1, pt::Vec3(265.0, 0.0, 295.0));
     scene.add_object(box1);
 
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, glass));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, glass));
 
     scene.build_bvh();
 
-    scene.add_light(std::make_shared<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), nullptr));
-    scene.add_light(std::make_shared<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, nullptr));
+    scene.add_light(scene.create_object<pt::Quad>(pt::Point3(343.0, 554.0, 332.0), pt::Vec3(-130.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -105.0), nullptr));
+    scene.add_light(scene.create_object<pt::Sphere>(pt::Point3(190.0, 90.0, 190.0), 90.0, nullptr));
 
     scene.render.image_width = 600;
     scene.render.samples_per_pixel = 200;
@@ -349,28 +348,28 @@ pt::Scene cornell_smoke() {
     const auto* light_tex = scene.create_texture<pt::SolidColor>(pt::Color(7.0, 7.0, 7.0));
     const auto* light = scene.create_material<pt::DiffuseLight>(light_tex);
 
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), green));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), red));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(113.0, 554.0, 127.0), pt::Vec3(330.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 305.0), light));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), white));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(555.0, 555.0, 555.0), pt::Vec3(-555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -555.0), white));
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(0.0, 0.0, 555.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), white));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), green));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), red));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(113.0, 554.0, 127.0), pt::Vec3(330.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 305.0), light));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 0.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 555.0), white));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(555.0, 555.0, 555.0), pt::Vec3(-555.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, -555.0), white));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(0.0, 0.0, 555.0), pt::Vec3(555.0, 0.0, 0.0), pt::Vec3(0.0, 555.0, 0.0), white));
 
-    std::shared_ptr<pt::Hittable> box1 = pt::box(pt::Point3(0.0, 0.0, 0.0), pt::Point3(165.0, 330.0, 165.0), white);
-    box1 = std::make_shared<pt::RotateY>(box1, 15.0);
-    box1 = std::make_shared<pt::Translate>(box1, pt::Vec3(265.0, 0.0, 295.0));
+    const pt::Hittable* box1 = pt::box(scene.object_arena(), pt::Point3(0.0, 0.0, 0.0), pt::Point3(165.0, 330.0, 165.0), white);
+    box1 = scene.create_object<pt::RotateY>(box1, 15.0);
+    box1 = scene.create_object<pt::Translate>(box1, pt::Vec3(265.0, 0.0, 295.0));
 
-    std::shared_ptr<pt::Hittable> box2 = pt::box(pt::Point3(0.0, 0.0, 0.0), pt::Point3(165.0, 165.0, 165.0), white);
-    box2 = std::make_shared<pt::RotateY>(box2, -18.0);
-    box2 = std::make_shared<pt::Translate>(box2, pt::Vec3(130.0, 0.0, 65.0));
+    const pt::Hittable* box2 = pt::box(scene.object_arena(), pt::Point3(0.0, 0.0, 0.0), pt::Point3(165.0, 165.0, 165.0), white);
+    box2 = scene.create_object<pt::RotateY>(box2, -18.0);
+    box2 = scene.create_object<pt::Translate>(box2, pt::Vec3(130.0, 0.0, 65.0));
 
     const auto* smoke_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.0, 0.0, 0.0));
     const auto* smoke = scene.create_material<pt::Isotropic>(smoke_tex);
-    scene.add_object(std::make_shared<pt::ConstantMedium>(box1, 0.01, smoke));
+    scene.add_object(scene.create_object<pt::ConstantMedium>(box1, 0.01, smoke));
 
     const auto* fog_tex = scene.create_texture<pt::SolidColor>(pt::Color(1.0, 1.0, 1.0));
     const auto* fog = scene.create_material<pt::Isotropic>(fog_tex);
-    scene.add_object(std::make_shared<pt::ConstantMedium>(box2, 0.01, fog));
+    scene.add_object(scene.create_object<pt::ConstantMedium>(box2, 0.01, fog));
 
     scene.build_bvh();
 
@@ -407,54 +406,57 @@ pt::Scene final_scene() {
             const pt::Float x1 = x0 + w;
             const pt::Float z1 = z0 + w;
             const pt::Float y1 = pt::random_scalar(1, 101);
-            boxes1.add(pt::box(pt::Point3(x0, y0, z0), pt::Point3(x1, y1, z1), ground));
+            boxes1.add(pt::box(scene.object_arena(), pt::Point3(x0, y0, z0), pt::Point3(x1, y1, z1), ground));
         }
     }
 
-    scene.add_object(std::make_shared<pt::BvhNode>(boxes1));
+    scene.add_object(scene.create_object<pt::BvhNode>(scene.object_arena(), boxes1));
 
     const auto* light_tex = scene.create_texture<pt::SolidColor>(pt::Color(7.0, 7.0, 7.0));
     const auto* light = scene.create_material<pt::DiffuseLight>(light_tex);
-    scene.add_object(std::make_shared<pt::Quad>(pt::Point3(123.0, 554.0, 147.0), pt::Vec3(300.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 265.0), light));
+    scene.add_object(scene.create_object<pt::Quad>(pt::Point3(123.0, 554.0, 147.0), pt::Vec3(300.0, 0.0, 0.0), pt::Vec3(0.0, 0.0, 265.0), light));
 
     const auto* orange_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.7, 0.3, 0.1));
     const auto* orange = scene.create_material<pt::Lambertian>(orange_tex);
     const pt::Point3 center1 = pt::Point3(400.0, 400.0, 200.0);
     const pt::Point3 center2 = center1 + pt::Vec3(30.0, 0.0, 0.0);
-    scene.add_object(std::make_shared<pt::Sphere>(center1, center2, 50.0, orange));
+    scene.add_object(scene.create_object<pt::Sphere>(center1, center2, 50.0, orange));
 
     const auto* glass = scene.create_material<pt::Dielectric>(1.5);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(260.0, 150.0, 45.0), 50.0, glass));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(260.0, 150.0, 45.0), 50.0, glass));
 
     const auto* metal_mat = scene.create_material<pt::Metal>(pt::Color(0.8, 0.8, 0.9), 1.0);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(0.0, 150.0, 145.0), 50.0, metal_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 150.0, 145.0), 50.0, metal_mat));
 
-    const auto boundary = std::make_shared<pt::Sphere>(pt::Point3(360.0, 150.0, 145.0), 70.0, glass);
+    const auto* boundary = scene.create_object<pt::Sphere>(pt::Point3(360.0, 150.0, 145.0), 70.0, glass);
     scene.add_object(boundary);
     const auto* blue_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.2, 0.4, 0.9));
     const auto* blue = scene.create_material<pt::Isotropic>(blue_tex);
-    scene.add_object(std::make_shared<pt::ConstantMedium>(boundary, 0.2, blue));
+    scene.add_object(scene.create_object<pt::ConstantMedium>(boundary, 0.2, blue));
 
-    const auto mist_boundary = std::make_shared<pt::Sphere>(pt::Point3(0.0, 0.0, 0.0), 5000.0, glass);
+    const auto* mist_boundary = scene.create_object<pt::Sphere>(pt::Point3(0.0, 0.0, 0.0), 5000.0, glass);
     const auto* mist_tex = scene.create_texture<pt::SolidColor>(pt::Color(1.0, 1.0, 1.0));
     const auto* mist = scene.create_material<pt::Isotropic>(mist_tex);
-    scene.add_object(std::make_shared<pt::ConstantMedium>(mist_boundary, 0.0001, mist));
+    scene.add_object(scene.create_object<pt::ConstantMedium>(mist_boundary, 0.0001, mist));
 
     const auto* earth_tex = scene.create_texture<pt::ImageTexture>("earthmap.jpg");
     const auto* earth = scene.create_material<pt::Lambertian>(earth_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(400.0, 200.0, 400.0), 100.0, earth));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(400.0, 200.0, 400.0), 100.0, earth));
 
     const auto* perlin_tex = scene.create_texture<pt::NoiseTexture>(0.2);
     const auto* perlin_mat = scene.create_material<pt::Lambertian>(perlin_tex);
-    scene.add_object(std::make_shared<pt::Sphere>(pt::Point3(220.0, 280.0, 300.0), 80.0, perlin_mat));
+    scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(220.0, 280.0, 300.0), 80.0, perlin_mat));
 
     pt::HittableList boxes2;
     const auto* white_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.73, 0.73, 0.73));
     const auto* white = scene.create_material<pt::Lambertian>(white_tex);
     for (int j = 0; j < 1000; j++) {
-        boxes2.add(std::make_shared<pt::Sphere>(pt::Point3::random(0, 165), 10.0, white));
+        boxes2.add(scene.create_object<pt::Sphere>(pt::Point3::random(0, 165), 10.0, white));
     }
-    scene.add_object(std::make_shared<pt::Translate>(std::make_shared<pt::RotateY>(std::make_shared<pt::BvhNode>(boxes2), 15.0), pt::Vec3(-100.0, 270.0, 395.0)));
+    const pt::Hittable* spheres = scene.create_object<pt::BvhNode>(scene.object_arena(), boxes2);
+    spheres = scene.create_object<pt::RotateY>(spheres, 15.0);
+    spheres = scene.create_object<pt::Translate>(spheres, pt::Vec3(-100.0, 270.0, 395.0));
+    scene.add_object(spheres);
 
     scene.build_bvh();
 

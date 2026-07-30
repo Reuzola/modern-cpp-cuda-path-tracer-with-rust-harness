@@ -6,11 +6,9 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/texture.hpp"
-#include <concepts>
-#include <memory>
+#include "pt/util/arena.hpp"
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace pt {
 
@@ -46,33 +44,34 @@ public:
 
     [[nodiscard]] const Hittable* lights() const noexcept { return lights_.empty() ? nullptr : &lights_; }
 
+    [[nodiscard]] Arena<Hittable>& object_arena() noexcept { return objects_; }
+
     template <typename T, typename... Args>
-        requires std::derived_from<T, Texture>
     [[nodiscard]] const T* create_texture(Args&&... args) {
-        auto tex = std::make_unique<T>(std::forward<Args>(args)...);
-        const T* tex_ptr = tex.get();
-        textures_.push_back(std::move(tex));
-        return tex_ptr;
+        return textures_.create<T>(std::forward<Args>(args)...);
     }
 
     template <typename T, typename... Args>
-        requires std::derived_from<T, Material>
     [[nodiscard]] const T* create_material(Args&&... args) {
-        auto mat = std::make_unique<T>(std::forward<Args>(args)...);
-        const T* mat_ptr = mat.get();
-        materials_.push_back(std::move(mat));
-        return mat_ptr;
+        return materials_.create<T>(std::forward<Args>(args)...);
     }
 
-    void add_object(std::shared_ptr<Hittable> obj);
+    template <typename T, typename... Args>
+    [[nodiscard]] const T* create_object(Args&&... args) {
+        return objects_.create<T>(std::forward<Args>(args)...);
+    }
 
-    void add_light(std::shared_ptr<Hittable> obj);
+    void add_object(const Hittable* obj);
+
+    void add_light(const Hittable* obj);
 
     void build_bvh();
 
 private:
-    std::vector<std::unique_ptr<Texture>> textures_;
-    std::vector<std::unique_ptr<Material>> materials_;
+    // Order is critical: C++ destroys members in reverse. Arenas (owners) must outlive lists (non-owners).
+    Arena<Texture> textures_;
+    Arena<Material> materials_;
+    Arena<Hittable> objects_;
     HittableList world_;
     HittableList lights_;
 };

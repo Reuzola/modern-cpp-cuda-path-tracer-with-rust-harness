@@ -7,13 +7,12 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <cassert>
 #include <cstddef>
-#include <memory>
-#include <utility>
 
 namespace pt {
 
-HittableList::HittableList(std::shared_ptr<Hittable> object) { add(std::move(object)); }
+HittableList::HittableList(const Hittable* object) { add(object); }
 
 Aabb HittableList::bounding_box() const { return bbox_; }
 
@@ -22,7 +21,7 @@ bool HittableList::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) cons
     HitRecord temp_rec;
 
     bool is_hit = false;
-    for (const auto& obj : objects_) {
+    for (const Hittable* obj : objects_) {
         if (obj->hit(r, Interval(ray_t.min, closest_so_far), temp_rec)) {
             closest_so_far = temp_rec.t;
             rec = temp_rec;
@@ -38,7 +37,7 @@ Float HittableList::pdf_value(const Point3& origin, const Vec3& direction) const
     const Float weight = 1.0_f / static_cast<Float>(objects_.size());
     Float sum{0.0_f};
 
-    for (const auto& object : objects_) {
+    for (const Hittable* object : objects_) {
         sum += weight * object->pdf_value(origin, direction);
     }
     return sum;
@@ -56,9 +55,11 @@ void HittableList::clear() {
     bbox_ = Aabb();
 }
 
-void HittableList::add(std::shared_ptr<Hittable> obj) {
+void HittableList::add(const Hittable* obj) {
+    assert(obj != nullptr);
+
     bbox_ = Aabb(bbox_, obj->bounding_box());
-    objects_.push_back(std::move(obj));
+    objects_.push_back(obj);
 }
 
 } // namespace pt

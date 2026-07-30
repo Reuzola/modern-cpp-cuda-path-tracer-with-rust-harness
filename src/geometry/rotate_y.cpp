@@ -8,12 +8,10 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
-#include <memory>
-#include <utility>
 
 namespace pt {
 
-RotateY::RotateY(std::shared_ptr<Hittable> object, Float angle) : object_(std::move(object)) {
+RotateY::RotateY(const Hittable* object, Float angle) : object_(object) {
     const Float radians = degrees_to_radians(angle);
     sin_theta_ = std::sin(radians);
     cos_theta_ = std::cos(radians);
