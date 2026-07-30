@@ -19,12 +19,15 @@
 #include "pt/math/vec3.hpp"
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
+#include "pt/render/path_integrator.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/textures/checker_texture.hpp"
 #include "pt/textures/image_texture.hpp"
 #include "pt/textures/noise_texture.hpp"
 #include "pt/textures/solid_color.hpp"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <format>
 #include <iostream>
 
@@ -39,6 +42,8 @@ pt::Scene cornell_smoke();
 pt::Scene final_scene();
 void render_scene(const pt::Scene& scene);
 void write_ppm(std::ostream& out, const pt::Film& film);
+pt::Film render_image(const pt::Scene& scene);
+pt::Vec3 sample_square_stratified(int s_i, int s_j, pt::Float recip_sqrt_spp);
 
 int main() {
     pt::Scene scene;
@@ -483,23 +488,8 @@ pt::Scene final_scene() {
 }
 
 void render_scene(const pt::Scene& scene) {
-    pt::Camera cam;
-
-    cam.image_width = scene.render.image_width;
-    cam.samples_per_pixel = scene.render.samples_per_pixel;
-    cam.max_depth = scene.render.max_depth;
-    cam.background = scene.render.background;
-
-    cam.aspect_ratio = scene.camera.aspect_ratio;
-    cam.vfov = scene.camera.vfov;
-    cam.lookfrom = scene.camera.lookfrom;
-    cam.lookat = scene.camera.lookat;
-    cam.vup = scene.camera.vup;
-    cam.defocus_angle = scene.camera.defocus_angle;
-    cam.focus_dist = scene.camera.focus_dist;
-
     const auto start = std::chrono::steady_clock::now();
-    const pt::Film film = cam.render(scene.world(), scene.importance_targets());
+    const pt::Film film = render_image(scene);
     const auto end = std::chrono::steady_clock::now();
 
     write_ppm(std::cout, film); // temp
@@ -518,4 +508,43 @@ void write_ppm(std::ostream& out, const pt::Film& film) {
             pt::write_color(out, film.pixel(i, j));
         }
     }
+}
+
+pt::Vec3 sample_square_stratified(int s_i, int s_j, pt::Float recip_sqrt_spp) {
+    const pt::Float px = ((static_cast<pt::Float>(s_i) + pt::random_scalar()) * recip_sqrt_spp) - static_cast<pt::Float>(0.5);
+    const pt::Float py = ((static_cast<pt::Float>(s_j) + pt::random_scalar()) * recip_sqrt_spp) - static_cast<pt::Float>(0.5);
+    return pt::Vec3(px, py, static_cast<pt::Float>(0.0));
+}
+
+pt::Film render_image(const pt::Scene& scene) {
+    const int image_width = scene.render.image_width;
+    const int image_height = std::max(static_cast<int>(static_cast<pt::Float>(image_width) / scene.camera.aspect_ratio), 1);
+
+    const int sqrt_spp = static_cast<int>(std::sqrt(static_cast<pt::Float>(scene.render.samples_per_pixel)));
+    const pt::Float recip_sqrt_spp = static_cast<pt::Float>(1.0) / static_cast<pt::Float>(sqrt_spp);
+    const pt::Float pixel_samples_scale = static_cast<pt::Float>(1.0) / static_cast<pt::Float>(sqrt_spp * sqrt_spp);
+
+    const pt::Camera camera(scene.camera, image_width, image_height);
+    const pt::PathIntegrator integrator(scene.world(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
+
+    pt::Film film(image_width, image_height);
+    for (int j = 0; j < image_height; j++) {
+        std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+
+        for (int i = 0; i < image_width; i++) {
+            pt::Color pixel_color(0, 0, 0);
+
+            for (int s_j = 0; s_j < sqrt_spp; s_j++) {
+                for (int s_i = 0; s_i < sqrt_spp; s_i++) {
+                    const pt::Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp);
+                    pixel_color += integrator.radiance(camera.generate_ray(i, j, offset));
+                }
+            }
+
+            film.set_pixel(i, j, pixel_samples_scale * pixel_color);
+        }
+    }
+
+    std::clog << "\rDone.                 \n";
+    return film;
 }

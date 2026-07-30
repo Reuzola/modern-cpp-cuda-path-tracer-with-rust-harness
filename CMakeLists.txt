@@ -197,6 +197,7 @@ add_library(pathtracer_core STATIC
 
   src/scene/scene.cpp
 
+  src/render/camera.cpp
   src/render/path_integrator.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
