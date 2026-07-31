@@ -1,6 +1,7 @@
 #include "pt/render/renderer.hpp"
 #include "pt/math/color.hpp"
-#include "pt/math/random.hpp"
+#include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/render/camera.hpp"
@@ -11,6 +12,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <vector>
 
@@ -18,9 +20,9 @@ namespace pt {
 
 namespace {
 
-[[nodiscard]] Vec3 sample_square_stratified(int s_i, int s_j, Float recip_sqrt_spp) {
-    const Float px = ((static_cast<Float>(s_i) + random_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
-    const Float py = ((static_cast<Float>(s_j) + random_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
+[[nodiscard]] Vec3 sample_square_stratified(int s_i, int s_j, Float recip_sqrt_spp, Sampler& sampler) {
+    const Float px = ((static_cast<Float>(s_i) + sampler.next_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
+    const Float py = ((static_cast<Float>(s_j) + sampler.next_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
     return Vec3(px, py, static_cast<Float>(0.0_f));
 }
 
@@ -34,7 +36,8 @@ Renderer::Renderer(const Camera& camera, const Integrator& integrator, const Ren
       sqrt_spp_(static_cast<int>(std::sqrt(static_cast<Float>(settings.samples_per_pixel)))),
       recip_sqrt_spp_(1.0_f / static_cast<Float>(sqrt_spp_)),
       pixel_samples_scale_(1.0_f / static_cast<Float>(sqrt_spp_ * sqrt_spp_)),
-      tile_size_(tile_size) {
+      tile_size_(tile_size),
+      seed_(settings.seed) {
     assert(image_width_ > 0 && image_height_ > 0);
     assert(sqrt_spp_ > 0);
     assert(tile_size_ > 0);
@@ -43,10 +46,17 @@ Renderer::Renderer(const Camera& camera, const Integrator& integrator, const Ren
 Color Renderer::render_pixel(int x, int y) const {
     Color pixel_color(0, 0, 0);
 
+    const auto pixel_index = static_cast<std::uint64_t>(y) * static_cast<std::uint64_t>(image_width_) + static_cast<std::uint64_t>(x);
+
     for (int s_j = 0; s_j < sqrt_spp_; s_j++) {
         for (int s_i = 0; s_i < sqrt_spp_; s_i++) {
-            const Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp_);
-            pixel_color += integrator_.radiance(camera_.generate_ray(x, y, offset));
+            const auto sample_index = static_cast<std::uint64_t>(s_j) * static_cast<std::uint64_t>(sqrt_spp_) + static_cast<std::uint64_t>(s_i);
+
+            Sampler sampler(sampler_seed(seed_, pixel_index, sample_index));
+
+            const Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp_, sampler);
+            const Ray ray = camera_.generate_ray(x, y, offset, sampler);
+            pixel_color += integrator_.radiance(ray, sampler);
         }
     }
 

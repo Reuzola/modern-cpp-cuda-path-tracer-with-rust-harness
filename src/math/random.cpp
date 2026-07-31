@@ -1,5 +1,4 @@
 #include "pt/math/random.hpp"
-#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include <random>
 
@@ -23,11 +22,6 @@ int random_int(int min, int max) {
     const Float low = static_cast<Float>(min);
     const Float high = static_cast<Float>(max);
     return static_cast<int>(random_scalar(low, high + 1));
-}
-
-[[nodiscard]] Sampler& legacy_sampler() {
-    thread_local static Sampler sampler(hash_u64(std::random_device{}()));
-    return sampler;
 }
 
 } // namespace pt

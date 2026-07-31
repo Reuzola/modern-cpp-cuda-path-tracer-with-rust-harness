@@ -326,7 +326,7 @@ pt::Scene cornell_box() {
 
     scene.build_bvh();
 
-    scene.render.image_width = 600;
+    scene.render.image_width = 300;
     scene.render.samples_per_pixel = 200;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.0, 0.0, 0.0);

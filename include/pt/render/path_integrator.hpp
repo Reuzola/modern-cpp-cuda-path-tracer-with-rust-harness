@@ -9,12 +9,14 @@ class Hittable;
 
 class ImportanceTargets;
 
+class Sampler;
+
 class PathIntegrator final : public Integrator {
 public:
     PathIntegrator(const Hittable& world, const ImportanceTargets& targets, const Color& background, int max_depth)
         : world_(world), targets_(targets), background_(background), max_depth_(max_depth) {}
 
-    [[nodiscard]] Color radiance(const Ray& r) const override;
+    [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override;
 
 private:
     const Hittable& world_;
@@ -22,7 +24,7 @@ private:
     Color background_;
     int max_depth_;
 
-    [[nodiscard]] Color trace(const Ray& r, int depth) const;
+    [[nodiscard]] Color trace(const Ray& r, int depth, Sampler& sampler) const;
 };
 
 } // namespace pt

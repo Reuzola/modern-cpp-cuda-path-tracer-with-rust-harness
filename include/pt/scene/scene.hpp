@@ -9,6 +9,7 @@
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/textures/texture.hpp"
 #include "pt/util/arena.hpp"
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
@@ -29,6 +30,7 @@ struct RenderSettings {
     int samples_per_pixel = 10;
     int max_depth = 10;
     Color background = Color{0, 0, 0};
+    std::uint64_t seed = 0;
 };
 
 class Scene {

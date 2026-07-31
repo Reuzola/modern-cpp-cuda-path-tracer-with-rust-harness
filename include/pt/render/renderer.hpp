@@ -2,6 +2,7 @@
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/render/film.hpp"
+#include <cstdint>
 
 namespace pt {
 
@@ -32,6 +33,7 @@ private:
     Float recip_sqrt_spp_{};
     Float pixel_samples_scale_{};
     int tile_size_{};
+    std::uint64_t seed_{};
 
     [[nodiscard]] Color render_pixel(int x, int y) const;
 

@@ -14,6 +14,4 @@ class Sampler;
 
 [[nodiscard]] int random_int(int min, int max);
 
-[[nodiscard]] Sampler& legacy_sampler(); // TEMP
-
 } // namespace pt

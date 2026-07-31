@@ -5,8 +5,8 @@
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
-#include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/sampling/mixture_pdf.hpp"
@@ -18,26 +18,26 @@
 
 namespace pt {
 
-Color PathIntegrator::radiance(const Ray& r) const {
-    return trace(r, max_depth_);
+Color PathIntegrator::radiance(const Ray& r, Sampler& sampler) const {
+    return trace(r, max_depth_, sampler);
 }
 
-Color PathIntegrator::trace(const Ray& r, int depth) const {
+Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     if (depth <= 0) return Color(0, 0, 0);
 
     HitRecord rec;
 
-    if (!world_.hit(r, Interval(0.001_f, infinity), rec, legacy_sampler())) return background_;
+    if (!world_.hit(r, Interval(0.001_f, infinity), rec, sampler)) return background_;
 
     const Color color_from_emission = rec.mat->emitted(r, rec);
 
-    if (const auto sr = rec.mat->scatter(r, rec, legacy_sampler())) {
+    if (const auto sr = rec.mat->scatter(r, rec, sampler)) {
         const auto shade = [&](const Pdf& p) -> Color {
-            const Ray scattered(rec.p, p.generate(legacy_sampler()), r.time());
+            const Ray scattered(rec.p, p.generate(sampler), r.time());
             const Float pdf_value = p.value(scattered.direction());
 
             const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
-            const Color sample_color = trace(scattered, depth - 1);
+            const Color sample_color = trace(scattered, depth - 1, sampler);
 
             return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
         };
@@ -45,7 +45,7 @@ Color PathIntegrator::trace(const Ray& r, int depth) const {
         // clang-format off
         return color_from_emission + std::visit(Overloaded{
             [&](const SpecularBounce& sb) -> Color {
-                return sr->attenuation * trace(sb.scattered, depth - 1);
+                return sr->attenuation * trace(sb.scattered, depth - 1, sampler);
             },
             [&](const DiffuseBounce& db) -> Color {
                 const auto& surface_pdf = as_pdf(db.sampling_pdf);

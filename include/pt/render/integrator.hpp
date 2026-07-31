@@ -4,9 +4,11 @@
 
 namespace pt {
 
+class Sampler;
+
 class Integrator {
 public:
-    [[nodiscard]] virtual Color radiance(const Ray& r) const = 0;
+    [[nodiscard]] virtual Color radiance(const Ray& r, Sampler& sampler) const = 0;
 
 protected:
     ~Integrator() = default;
