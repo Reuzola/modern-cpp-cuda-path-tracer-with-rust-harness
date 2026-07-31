@@ -14,7 +14,7 @@
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/metal.hpp"
 #include "pt/math/color.hpp"
-#include "pt/math/random.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/render/camera.hpp"
@@ -28,8 +28,13 @@
 #include "pt/textures/solid_color.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <format>
 #include <iostream>
+
+namespace { // TEMP
+constexpr std::uint64_t scene_construction_seed = 1;
+} // namespace
 
 pt::Scene bouncing_spheres();
 pt::Scene checkered_spheres();
@@ -80,6 +85,7 @@ int main() {
 
 pt::Scene bouncing_spheres() {
     pt::Scene scene;
+    pt::Sampler sampler(pt::sampler_seed(scene_construction_seed, 0, 0));
 
     const auto* ground_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.5, 0.5, 0.5)); // ground
     const auto* ground_mat = scene.create_material<pt::Lambertian>(ground_tex);
@@ -87,19 +93,23 @@ pt::Scene bouncing_spheres() {
 
     for (int a = -11; a < 11; a++) {
         for (int b = -11; b < 11; b++) {
-            const auto choose_mat = pt::random_scalar();
+            const auto choose_mat = sampler.next_scalar();
 
-            const pt::Point3 center(a + 0.9 * pt::random_scalar(), 0.2, b + 0.9 * pt::random_scalar());
+            const pt::Float dx = sampler.next_scalar();
+            const pt::Float dz = sampler.next_scalar();
+            const pt::Point3 center(a + 0.9 * dx, 0.2, b + 0.9 * dz);
             if ((center - pt::Point3(4.0, 0.2, 0.0)).length() > 0.9) {
                 if (choose_mat < 0.8) { // %80 Diffuse
-                    const auto albedo = pt::Color::random() * pt::Color::random();
+                    const auto albedo_a = pt::Color::random(sampler);
+                    const auto albedo_b = pt::Color::random(sampler);
+                    const auto albedo = albedo_a * albedo_b;
                     const auto* tex = scene.create_texture<pt::SolidColor>(albedo);
                     const auto* mat = scene.create_material<pt::Lambertian>(tex);
-                    const auto center2 = center + pt::Vec3(0.0, pt::random_scalar(0.0, 0.5), 0.0);
+                    const auto center2 = center + pt::Vec3(0.0, sampler.next_scalar(0.0, 0.5), 0.0);
                     scene.add_object(scene.create_object<pt::Sphere>(center, center2, 0.2, mat));
                 } else if (choose_mat < 0.95) { // %15 Metal
-                    const auto albedo = pt::Color::random(0.5, 1.0);
-                    const auto fuzz = pt::random_scalar(0.0, 0.5);
+                    const auto albedo = pt::Color::random(0.5, 1.0, sampler);
+                    const auto fuzz = sampler.next_scalar(0.0, 0.5);
                     const auto* mat = scene.create_material<pt::Metal>(albedo, fuzz);
                     scene.add_object(scene.create_object<pt::Sphere>(center, 0.2, mat));
                 } else { // %5 Glass
@@ -191,8 +201,9 @@ pt::Scene earth() {
 
 pt::Scene perlin_spheres() {
     pt::Scene scene;
+    pt::Sampler sampler(pt::sampler_seed(scene_construction_seed, 0, 0));
 
-    const auto* noise_tex = scene.create_texture<pt::NoiseTexture>(4.0);
+    const auto* noise_tex = scene.create_texture<pt::NoiseTexture>(4.0, sampler);
     const auto* noise_mat = scene.create_material<pt::Lambertian>(noise_tex);
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -1000.0, 0.0), 1000.0, noise_mat));
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 2.0, 0.0), 2.0, noise_mat));
@@ -258,8 +269,9 @@ pt::Scene quads() {
 
 pt::Scene simple_light() {
     pt::Scene scene;
+    pt::Sampler sampler(pt::sampler_seed(scene_construction_seed, 0, 0));
 
-    const auto* noise_tex = scene.create_texture<pt::NoiseTexture>(4.0);
+    const auto* noise_tex = scene.create_texture<pt::NoiseTexture>(4.0, sampler);
     const auto* noise_mat = scene.create_material<pt::Lambertian>(noise_tex);
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -1000.0, 0.0), 1000.0, noise_mat));
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 2.0, 0.0), 2.0, noise_mat));
@@ -326,7 +338,7 @@ pt::Scene cornell_box() {
 
     scene.build_bvh();
 
-    scene.render.image_width = 300;
+    scene.render.image_width = 600;
     scene.render.samples_per_pixel = 200;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.0, 0.0, 0.0);
@@ -400,6 +412,7 @@ pt::Scene cornell_smoke() {
 
 pt::Scene final_scene() {
     pt::Scene scene;
+    pt::Sampler sampler(pt::sampler_seed(scene_construction_seed, 0, 0));
 
     pt::HittableList boxes1;
 
@@ -414,7 +427,7 @@ pt::Scene final_scene() {
             const pt::Float y0 = 0.0;
             const pt::Float x1 = x0 + w;
             const pt::Float z1 = z0 + w;
-            const pt::Float y1 = pt::random_scalar(1, 101);
+            const pt::Float y1 = sampler.next_scalar(1, 101);
             boxes1.add(pt::box(scene.object_arena(), pt::Point3(x0, y0, z0), pt::Point3(x1, y1, z1), ground));
         }
     }
@@ -452,7 +465,7 @@ pt::Scene final_scene() {
     const auto* earth = scene.create_material<pt::Lambertian>(earth_tex);
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(400.0, 200.0, 400.0), 100.0, earth));
 
-    const auto* perlin_tex = scene.create_texture<pt::NoiseTexture>(0.2);
+    const auto* perlin_tex = scene.create_texture<pt::NoiseTexture>(0.2, sampler);
     const auto* perlin_mat = scene.create_material<pt::Lambertian>(perlin_tex);
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(220.0, 280.0, 300.0), 80.0, perlin_mat));
 
@@ -460,7 +473,7 @@ pt::Scene final_scene() {
     const auto* white_tex = scene.create_texture<pt::SolidColor>(pt::Color(0.73, 0.73, 0.73));
     const auto* white = scene.create_material<pt::Lambertian>(white_tex);
     for (int j = 0; j < 1000; j++) {
-        boxes2.add(scene.create_object<pt::Sphere>(pt::Point3::random(0, 165), 10.0, white));
+        boxes2.add(scene.create_object<pt::Sphere>(pt::Point3::random(0, 165, sampler), 10.0, white));
     }
     const pt::Hittable* spheres = scene.create_object<pt::BvhNode>(scene.object_arena(), boxes2);
     spheres = scene.create_object<pt::RotateY>(spheres, 15.0);

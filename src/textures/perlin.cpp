@@ -1,24 +1,37 @@
 #include "pt/textures/perlin.hpp"
-#include "pt/math/random.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <numeric>
+#include <span>
 
 namespace pt {
 
-Perlin::Perlin() {
-    std::ranges::generate(randvec_, [] { return unit_vector(Vec3::random(-1, 1)); });
+namespace {
+
+void shuffle_permutation(std::span<int> perm, Sampler& sampler) {
+    for (int i = static_cast<int>(perm.size()) - 1; i > 0; i--) {
+        const int j = static_cast<int>(sampler.next_below(static_cast<std::uint32_t>(i) + 1U));
+        std::swap(perm[static_cast<std::size_t>(i)], perm[static_cast<std::size_t>(j)]);
+    }
+}
+
+} // namespace
+
+Perlin::Perlin(Sampler& sampler) {
+    std::ranges::generate(randvec_, [&sampler] { return unit_vector(Vec3::random(-1, 1, sampler)); });
 
     std::iota(perm_x_.begin(), perm_x_.end(), 0);
     std::iota(perm_y_.begin(), perm_y_.end(), 0);
     std::iota(perm_z_.begin(), perm_z_.end(), 0);
 
-    std::ranges::shuffle(perm_x_, rng());
-    std::ranges::shuffle(perm_y_, rng());
-    std::ranges::shuffle(perm_z_, rng());
+    shuffle_permutation(perm_x_, sampler);
+    shuffle_permutation(perm_y_, sampler);
+    shuffle_permutation(perm_z_, sampler);
 }
 
 Float Perlin::noise(const Point3& p) const {

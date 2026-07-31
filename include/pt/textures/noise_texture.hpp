@@ -7,9 +7,11 @@
 
 namespace pt {
 
+class Sampler;
+
 class NoiseTexture final : public Texture {
 public:
-    explicit NoiseTexture(Float scale) : scale_(scale) {}
+    NoiseTexture(Float scale, Sampler& sampler) : noise_(sampler), scale_(scale) {}
 
     [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 

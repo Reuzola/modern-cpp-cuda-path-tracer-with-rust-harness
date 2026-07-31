@@ -5,9 +5,11 @@
 
 namespace pt {
 
+class Sampler;
+
 class Perlin {
 public:
-    Perlin();
+    explicit Perlin(Sampler& sampler);
 
     [[nodiscard]] Float noise(const Point3& p) const;
 
