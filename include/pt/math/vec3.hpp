@@ -4,6 +4,8 @@
 
 namespace pt {
 
+class Sampler;
+
 class Vec3 {
 public:
     Vec3() : e_{0, 0, 0} {}
@@ -47,6 +49,10 @@ public:
     static Vec3 random();
 
     static Vec3 random(Float min, Float max);
+
+    [[nodiscard]] static Vec3 random(Sampler& sampler);
+
+    [[nodiscard]] static Vec3 random(Float min, Float max, Sampler& sampler);
 
     [[nodiscard]] bool near_zero() const {
         constexpr Float s = 1e-8_f;
@@ -110,6 +116,12 @@ inline Vec3 unit_vector(const Vec3& v) {
 [[nodiscard]] Vec3 random_in_unit_disk();
 
 [[nodiscard]] Vec3 random_cosine_direction();
+
+[[nodiscard]] Vec3 random_unit_vector(Sampler& sampler);
+
+[[nodiscard]] Vec3 random_in_unit_disk(Sampler& sampler);
+
+[[nodiscard]] Vec3 random_cosine_direction(Sampler& sampler);
 
 using Point3 = Vec3;
 

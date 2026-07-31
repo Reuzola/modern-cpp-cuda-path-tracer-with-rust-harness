@@ -3,6 +3,8 @@
 
 namespace pt {
 
+class Sampler;
+
 class Color {
 public:
     constexpr Color() noexcept = default;
@@ -22,6 +24,10 @@ public:
     [[nodiscard]] static Color random();
 
     [[nodiscard]] static Color random(Float min, Float max);
+
+    [[nodiscard]] static Color random(Sampler& sampler);
+
+    [[nodiscard]] static Color random(Float min, Float max, Sampler& sampler);
 
 private:
     Float r_{};
