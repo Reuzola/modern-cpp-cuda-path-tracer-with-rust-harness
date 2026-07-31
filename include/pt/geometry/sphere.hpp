@@ -12,6 +12,8 @@ namespace pt {
 
 class Material;
 
+class Sampler;
+
 class Sphere final : public Hittable, public Sampleable {
 public:
     Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat);
@@ -24,7 +26,7 @@ public:
 
     [[nodiscard]] Float pdf_direction(const Point3& origin, const Vec3& direction) const override;
 
-    [[nodiscard]] Vec3 sample_direction(const Point3& origin) const override;
+    [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
 private:
     Ray center_;
@@ -38,7 +40,7 @@ private:
 
     [[nodiscard]] static UvCoords get_sphere_uv(const Point3& p);
 
-    [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared);
+    [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared, Sampler& sampler);
 };
 
 } // namespace pt

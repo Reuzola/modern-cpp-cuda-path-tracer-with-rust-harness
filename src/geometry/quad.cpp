@@ -5,6 +5,7 @@
 #include "pt/math/interval.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
@@ -54,8 +55,10 @@ Float Quad::pdf_direction(const Point3& origin, const Vec3& direction) const {
     return distance_squared / (cosine * area_);
 }
 
-Vec3 Quad::sample_direction(const Point3& origin) const {
-    const Point3 point = Q_ + random_scalar() * u_ + random_scalar() * v_;
+Vec3 Quad::sample_direction(const Point3& origin, Sampler& sampler) const {
+    const Float a = sampler.next_scalar();
+    const Float b = sampler.next_scalar();
+    const Point3 point = Q_ + a * u_ + b * v_;
     return point - origin;
 }
 

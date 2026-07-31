@@ -1,6 +1,7 @@
 #include "pt/sampling/cosine_pdf.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/onb.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
@@ -14,8 +15,8 @@ Float CosinePdf::value(const Vec3& direction) const {
     return std::max(0.0_f, cosine_theta) / pi;
 }
 
-Vec3 CosinePdf::generate() const {
-    return uvw_.transform(random_cosine_direction());
+Vec3 CosinePdf::generate(Sampler& sampler) const {
+    return uvw_.transform(random_cosine_direction(sampler));
 }
 
 } // namespace pt

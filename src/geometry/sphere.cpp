@@ -6,6 +6,7 @@
 #include "pt/math/onb.hpp"
 #include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
@@ -68,12 +69,12 @@ Float Sphere::pdf_direction(const Point3& origin, const Vec3& direction) const {
     return 1.0_f / solid_angle;
 }
 
-Vec3 Sphere::sample_direction(const Point3& origin) const {
+Vec3 Sphere::sample_direction(const Point3& origin, Sampler& sampler) const {
     const Vec3 direction = center_.at(0) - origin;
     const Float distance_squared = direction.length_squared();
 
     const Onb uvw(direction);
-    return uvw.transform(random_to_sphere(radius_, distance_squared));
+    return uvw.transform(random_to_sphere(radius_, distance_squared, sampler));
 }
 
 auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
@@ -85,9 +86,9 @@ auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
     return {u, v};
 }
 
-Vec3 Sphere::random_to_sphere(Float radius, Float distance_squared) {
-    const Float r1 = random_scalar();
-    const Float r2 = random_scalar();
+Vec3 Sphere::random_to_sphere(Float radius, Float distance_squared, Sampler& sampler) {
+    const Float r1 = sampler.next_scalar();
+    const Float r2 = sampler.next_scalar();
 
     const Float z = 1.0_f + r2 * (std::sqrt(1.0_f - radius * radius / distance_squared) - 1.0_f);
     const Float phi = 2.0_f * pi * r1;

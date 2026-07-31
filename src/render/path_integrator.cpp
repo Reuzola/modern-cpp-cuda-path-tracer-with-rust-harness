@@ -5,6 +5,7 @@
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
+#include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/sampling/importance_targets.hpp"
@@ -32,7 +33,7 @@ Color PathIntegrator::trace(const Ray& r, int depth) const {
 
     if (const auto sr = rec.mat->scatter(r, rec)) {
         const auto shade = [&](const Pdf& p) -> Color {
-            const Ray scattered(rec.p, p.generate(), r.time());
+            const Ray scattered(rec.p, p.generate(legacy_sampler()), r.time());
             const Float pdf_value = p.value(scattered.direction());
 
             const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);

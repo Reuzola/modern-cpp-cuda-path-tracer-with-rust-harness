@@ -6,6 +6,8 @@
 
 namespace pt {
 
+class Sampler;
+
 class ImportanceTargets final : public Sampleable {
 public:
     void add(const Sampleable* target);
@@ -14,7 +16,7 @@ public:
 
     [[nodiscard]] Float pdf_direction(const Point3& origin, const Vec3& direction) const override;
 
-    [[nodiscard]] Vec3 sample_direction(const Point3& origin) const override;
+    [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
 private:
     std::vector<const Sampleable*> targets_;

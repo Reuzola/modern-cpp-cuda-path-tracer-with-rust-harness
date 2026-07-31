@@ -8,13 +8,15 @@ namespace pt {
 
 class Sampleable;
 
+class Sampler;
+
 class SampleablePdf final : public Pdf {
 public:
     SampleablePdf(const Sampleable& target, const Point3& origin) : target_(target), origin_(origin) {}
 
     [[nodiscard]] Float value(const Vec3& direction) const override;
 
-    [[nodiscard]] Vec3 generate() const override;
+    [[nodiscard]] Vec3 generate(Sampler& sampler) const override;
 
 private:
     const Sampleable& target_;

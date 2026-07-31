@@ -12,6 +12,8 @@ namespace pt {
 
 class Material;
 
+class Sampler;
+
 class Quad final : public Hittable, public Sampleable {
 public:
     Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat);
@@ -22,7 +24,7 @@ public:
 
     [[nodiscard]] Float pdf_direction(const Point3& origin, const Vec3& direction) const override;
 
-    [[nodiscard]] Vec3 sample_direction(const Point3& origin) const override;
+    [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
 private:
     Point3 Q_;

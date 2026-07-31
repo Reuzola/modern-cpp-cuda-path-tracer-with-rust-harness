@@ -4,6 +4,8 @@
 
 namespace pt {
 
+class Sampler;
+
 [[nodiscard]] std::mt19937& rng();
 
 [[nodiscard]] Float random_scalar();
@@ -11,5 +13,7 @@ namespace pt {
 [[nodiscard]] Float random_scalar(Float min, Float max);
 
 [[nodiscard]] int random_int(int min, int max);
+
+[[nodiscard]] Sampler& legacy_sampler(); // TEMP
 
 } // namespace pt

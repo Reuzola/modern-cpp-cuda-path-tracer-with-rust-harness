@@ -4,11 +4,13 @@
 
 namespace pt {
 
+class Sampler;
+
 class Pdf {
 public:
     [[nodiscard]] virtual Float value(const Vec3& direction) const = 0;
 
-    [[nodiscard]] virtual Vec3 generate() const = 0;
+    [[nodiscard]] virtual Vec3 generate(Sampler& sampler) const = 0;
 
 protected:
     ~Pdf() = default;

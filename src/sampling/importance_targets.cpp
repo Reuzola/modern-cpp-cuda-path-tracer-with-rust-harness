@@ -1,10 +1,11 @@
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/math/random.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cassert>
-#include <cstddef>
+#include <cstdint>
 
 namespace pt {
 
@@ -26,11 +27,12 @@ Float ImportanceTargets::pdf_direction(const Point3& origin, const Vec3& directi
     return sum;
 }
 
-Vec3 ImportanceTargets::sample_direction(const Point3& origin) const {
+Vec3 ImportanceTargets::sample_direction(const Point3& origin, Sampler& sampler) const {
     if (targets_.empty()) return Vec3(0, 0, 0);
 
-    const int count = static_cast<int>(targets_.size());
-    return targets_[static_cast<std::size_t>(random_int(0, count - 1))]->sample_direction(origin);
+    const auto count = static_cast<std::uint32_t>(targets_.size());
+    const std::uint32_t index = sampler.next_below(count);
+    return targets_[index]->sample_direction(origin, sampler);
 }
 
 } // namespace pt
