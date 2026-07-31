@@ -2,8 +2,8 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
-#include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
@@ -11,7 +11,7 @@
 
 namespace pt {
 
-std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecord& rec) const {
+std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecord& rec, Sampler& sampler) const {
     const Float ri = rec.front_face ? (1.0_f / refraction_index_) : refraction_index_; // ri means refraction index ratio
     const auto unit_direction = unit_vector(r_in.direction());
 
@@ -19,7 +19,7 @@ std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecor
     const Float sin_theta = std::sqrt(1 - cos_theta * cos_theta);
 
     const bool cannot_refract = ri * sin_theta > 1.0_f;
-    const bool should_reflect = cannot_refract || reflectance(cos_theta, ri) > random_scalar();
+    const bool should_reflect = cannot_refract || reflectance(cos_theta, ri) > sampler.next_scalar();
 
     Vec3 direction;
     if (should_reflect)

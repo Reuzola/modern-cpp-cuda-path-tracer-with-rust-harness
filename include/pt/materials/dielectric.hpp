@@ -7,11 +7,13 @@
 
 namespace pt {
 
+class Sampler;
+
 class Dielectric final : public Material {
 public:
     explicit Dielectric(Float refraction_index) : refraction_index_(refraction_index) {}
 
-    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec, Sampler& sampler) const override;
 
 private:
     Float refraction_index_{};

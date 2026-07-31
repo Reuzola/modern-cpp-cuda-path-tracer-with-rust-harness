@@ -9,11 +9,13 @@ namespace pt {
 
 class Texture;
 
+class Sampler;
+
 class DiffuseLight final : public Material {
 public:
     explicit DiffuseLight(const Texture* tex) : tex_(tex) {}
 
-    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec, Sampler& sampler) const override;
 
     [[nodiscard]] Color emitted(const Ray& r_in, const HitRecord& rec) const override;
 

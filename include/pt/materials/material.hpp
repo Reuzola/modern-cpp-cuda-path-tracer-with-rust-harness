@@ -8,6 +8,8 @@
 
 namespace pt {
 
+class Sampler;
+
 struct HitRecord;
 
 struct SpecularBounce {
@@ -27,7 +29,7 @@ class Material {
 public:
     virtual ~Material();
 
-    [[nodiscard]] virtual std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const = 0;
+    [[nodiscard]] virtual std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec, Sampler& sampler) const = 0;
 
     [[nodiscard]] virtual Color emitted(const Ray& r_in, const HitRecord& rec) const;
 

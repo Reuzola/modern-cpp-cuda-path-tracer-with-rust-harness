@@ -31,7 +31,7 @@ Color PathIntegrator::trace(const Ray& r, int depth) const {
 
     const Color color_from_emission = rec.mat->emitted(r, rec);
 
-    if (const auto sr = rec.mat->scatter(r, rec)) {
+    if (const auto sr = rec.mat->scatter(r, rec, legacy_sampler())) {
         const auto shade = [&](const Pdf& p) -> Color {
             const Ray scattered(rec.p, p.generate(legacy_sampler()), r.time());
             const Float pdf_value = p.value(scattered.direction());

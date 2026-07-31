@@ -3,13 +3,14 @@
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/textures/texture.hpp"
 #include <optional>
 
 namespace pt {
 
-std::optional<ScatterRecord> DiffuseLight::scatter(const Ray&, const HitRecord&) const {
+std::optional<ScatterRecord> DiffuseLight::scatter(const Ray&, const HitRecord&, Sampler&) const {
     return std::nullopt;
 }
 

@@ -8,11 +8,13 @@
 
 namespace pt {
 
+class Sampler;
+
 class Metal final : public Material {
 public:
     explicit Metal(const Color& albedo, Float fuzz);
 
-    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec) const override;
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec, Sampler& sampler) const override;
 
 private:
     Color albedo_;
