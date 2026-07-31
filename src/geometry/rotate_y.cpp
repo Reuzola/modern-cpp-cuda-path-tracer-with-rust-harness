@@ -5,6 +5,7 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
@@ -44,7 +45,7 @@ RotateY::RotateY(const Hittable* object, Float angle) : object_(object) {
 
 Aabb RotateY::bounding_box() const { return bbox_; }
 
-bool RotateY::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+bool RotateY::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
     Float x_prime = cos_theta_ * r.origin().x() - sin_theta_ * r.origin().z();
     Float z_prime = sin_theta_ * r.origin().x() + cos_theta_ * r.origin().z();
     const Point3 origin(x_prime, r.origin().y(), z_prime);
@@ -54,7 +55,7 @@ bool RotateY::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     const Vec3 direction(x_prime, r.direction().y(), z_prime);
 
     const Ray rotated_r(origin, direction, r.time());
-    if (!object_->hit(rotated_r, ray_t, rec)) return false;
+    if (!object_->hit(rotated_r, ray_t, rec, sampler)) return false;
 
     x_prime = cos_theta_ * rec.p.x() + sin_theta_ * rec.p.z();
     z_prime = -sin_theta_ * rec.p.x() + cos_theta_ * rec.p.z();

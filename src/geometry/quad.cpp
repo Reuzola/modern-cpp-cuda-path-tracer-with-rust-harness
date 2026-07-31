@@ -3,7 +3,6 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
-#include "pt/math/random.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
@@ -22,32 +21,15 @@ Quad::Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat) :
     set_bounding_box();
 }
 
-bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    const Float denom = dot(normal_, r.direction());
-    if (std::fabs(denom) < 1e-8_f) return false;
-
-    const Float t = (D_ - dot(normal_, r.origin())) / denom;
-    if (!ray_t.contains(t)) return false;
-
-    const Point3 intersection = r.at(t);
-    const Vec3 planar_hitpt_vector = intersection - Q_;
-    const Float alpha = dot(w_, cross(planar_hitpt_vector, v_));
-    const Float beta = dot(w_, cross(u_, planar_hitpt_vector));
-    if (!is_interior(alpha, beta, rec)) return false;
-
-    rec.t = t;
-    rec.p = intersection;
-    rec.mat = mat_;
-    rec.set_face_normal(r, normal_);
-
-    return true;
+bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler&) const {
+    return intersect(r, ray_t, rec);
 }
 
 Aabb Quad::bounding_box() const { return bbox_; }
 
 Float Quad::pdf_direction(const Point3& origin, const Vec3& direction) const {
     HitRecord rec;
-    if (!this->hit(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
+    if (!intersect(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
 
     const Float distance_squared = rec.t * rec.t * direction.length_squared();
     const Float cosine = std::fabs(dot(direction, rec.normal)) / direction.length();
@@ -75,6 +57,27 @@ bool Quad::is_interior(Float a, Float b, HitRecord& rec) const {
 
     rec.u = a;
     rec.v = b;
+    return true;
+}
+
+bool Quad::intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+    const Float denom = dot(normal_, r.direction());
+    if (std::fabs(denom) < 1e-8_f) return false;
+
+    const Float t = (D_ - dot(normal_, r.origin())) / denom;
+    if (!ray_t.contains(t)) return false;
+
+    const Point3 intersection = r.at(t);
+    const Vec3 planar_hitpt_vector = intersection - Q_;
+    const Float alpha = dot(w_, cross(planar_hitpt_vector, v_));
+    const Float beta = dot(w_, cross(u_, planar_hitpt_vector));
+    if (!is_interior(alpha, beta, rec)) return false;
+
+    rec.t = t;
+    rec.p = intersection;
+    rec.mat = mat_;
+    rec.set_face_normal(r, normal_);
+
     return true;
 }
 

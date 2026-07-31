@@ -3,6 +3,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/vec3.hpp"
 
 namespace pt {
@@ -13,10 +14,10 @@ Translate::Translate(const Hittable* object, const Vec3& offset) : object_(objec
 
 Aabb Translate::bounding_box() const { return bbox_; }
 
-bool Translate::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+bool Translate::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
     const Ray offset_r(r.origin() - offset_, r.direction(), r.time());
 
-    if (!object_->hit(offset_r, ray_t, rec)) return false;
+    if (!object_->hit(offset_r, ray_t, rec, sampler)) return false;
 
     rec.p += offset_;
     return true;

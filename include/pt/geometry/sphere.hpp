@@ -22,7 +22,7 @@ public:
 
     [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
 
     [[nodiscard]] Float pdf_direction(const Point3& origin, const Vec3& direction) const override;
 
@@ -41,6 +41,8 @@ private:
     [[nodiscard]] static UvCoords get_sphere_uv(const Point3& p);
 
     [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared, Sampler& sampler);
+
+    [[nodiscard]] bool intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const;
 };
 
 } // namespace pt

@@ -5,6 +5,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/util/arena.hpp"
 #include <algorithm>
 #include <span>
@@ -19,11 +20,11 @@ BvhNode::BvhNode(Arena<Hittable>& arena, const HittableList& list) {
 
 BvhNode::BvhNode(Arena<Hittable>& arena, std::span<const Hittable*> objects) { build(arena, objects); }
 
-bool BvhNode::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+bool BvhNode::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
     if (!bbox_.hit(r, ray_t)) return false;
 
-    bool hit_left = left_->hit(r, ray_t, rec);
-    bool hit_right = right_->hit(r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec);
+    bool hit_left = left_->hit(r, ray_t, rec, sampler);
+    bool hit_right = right_->hit(r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec, sampler);
 
     return hit_left || hit_right;
 }

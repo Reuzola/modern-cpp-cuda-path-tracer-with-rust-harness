@@ -9,13 +9,15 @@ namespace pt {
 
 class Interval;
 
+class Sampler;
+
 class Translate final : public Hittable {
 public:
     Translate(const Hittable* object, const Vec3& offset);
 
     [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
 
 private:
     const Hittable* object_;

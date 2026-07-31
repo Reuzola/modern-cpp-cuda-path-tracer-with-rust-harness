@@ -11,13 +11,15 @@ namespace pt {
 
 class Ray;
 
+class Sampler;
+
 class BvhNode final : public Hittable {
 public:
     BvhNode(Arena<Hittable>& arena, const HittableList& list);
 
     BvhNode(Arena<Hittable>& arena, std::span<const Hittable*> objects);
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
 
     [[nodiscard]] Aabb bounding_box() const override;
 

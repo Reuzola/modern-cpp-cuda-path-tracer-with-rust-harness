@@ -4,6 +4,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include <cassert>
 
@@ -13,13 +14,13 @@ HittableList::HittableList(const Hittable* object) { add(object); }
 
 Aabb HittableList::bounding_box() const { return bbox_; }
 
-bool HittableList::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+bool HittableList::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
     Float closest_so_far = ray_t.max;
     HitRecord temp_rec;
 
     bool is_hit = false;
     for (const Hittable* obj : objects_) {
-        if (obj->hit(r, Interval(ray_t.min, closest_so_far), temp_rec)) {
+        if (obj->hit(r, Interval(ray_t.min, closest_so_far), temp_rec, sampler)) {
             closest_so_far = temp_rec.t;
             rec = temp_rec;
             is_hit = true;

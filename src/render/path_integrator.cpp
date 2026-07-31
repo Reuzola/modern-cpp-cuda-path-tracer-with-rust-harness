@@ -27,7 +27,7 @@ Color PathIntegrator::trace(const Ray& r, int depth) const {
 
     HitRecord rec;
 
-    if (!world_.hit(r, Interval(0.001_f, infinity), rec)) return background_;
+    if (!world_.hit(r, Interval(0.001_f, infinity), rec, legacy_sampler())) return background_;
 
     const Color color_from_emission = rec.mat->emitted(r, rec);
 
