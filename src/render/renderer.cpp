@@ -1,0 +1,79 @@
+#include "pt/render/renderer.hpp"
+#include "pt/math/color.hpp"
+#include "pt/math/random.hpp"
+#include "pt/math/scalar.hpp"
+#include "pt/math/vec3.hpp"
+#include "pt/render/camera.hpp"
+#include "pt/render/film.hpp"
+#include "pt/render/integrator.hpp"
+#include "pt/render/tile.hpp"
+#include "pt/scene/scene.hpp"
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <iostream>
+#include <vector>
+
+namespace pt {
+
+namespace {
+
+[[nodiscard]] Vec3 sample_square_stratified(int s_i, int s_j, Float recip_sqrt_spp) {
+    const Float px = ((static_cast<Float>(s_i) + random_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
+    const Float py = ((static_cast<Float>(s_j) + random_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
+    return Vec3(px, py, static_cast<Float>(0.0_f));
+}
+
+} // namespace
+
+Renderer::Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int image_height, int tile_size)
+    : camera_(camera),
+      integrator_(integrator),
+      image_width_(settings.image_width),
+      image_height_(image_height),
+      sqrt_spp_(static_cast<int>(std::sqrt(static_cast<Float>(settings.samples_per_pixel)))),
+      recip_sqrt_spp_(1.0_f / static_cast<Float>(sqrt_spp_)),
+      pixel_samples_scale_(1.0_f / static_cast<Float>(sqrt_spp_ * sqrt_spp_)),
+      tile_size_(tile_size) {
+    assert(image_width_ > 0 && image_height_ > 0);
+    assert(sqrt_spp_ > 0);
+    assert(tile_size_ > 0);
+}
+
+Color Renderer::render_pixel(int x, int y) const {
+    Color pixel_color(0, 0, 0);
+
+    for (int s_j = 0; s_j < sqrt_spp_; s_j++) {
+        for (int s_i = 0; s_i < sqrt_spp_; s_i++) {
+            const Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp_);
+            pixel_color += integrator_.radiance(camera_.generate_ray(x, y, offset));
+        }
+    }
+
+    return pixel_samples_scale_ * pixel_color;
+}
+
+Film Renderer::render() const {
+    Film film(image_width_, image_height_);
+
+    const std::vector<Tile> tiles = make_tiles(image_width_, image_height_, tile_size_);
+
+    std::size_t remaining = tiles.size();
+    for (const Tile& tile : tiles) {
+        std::clog << "\rTiles remaining: " << remaining-- << ' ' << std::flush;
+        render_tile(film, tile);
+    }
+
+    std::clog << "\rDone.                 \n";
+    return film;
+}
+
+void Renderer::render_tile(Film& film, const Tile& tile) const {
+    for (int y = tile.y0; y < tile.y1; y++) {
+        for (int x = tile.x0; x < tile.x1; x++) {
+            film.set_pixel(x, y, render_pixel(x, y));
+        }
+    }
+}
+
+} // namespace pt
