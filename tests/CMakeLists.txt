@@ -13,6 +13,7 @@ find_package(Catch2 3 REQUIRED)
 
 add_executable(pathtracer_tests
   smoke_test.cpp
+  sampler_test.cpp
 )
 
 # PRIVATE throughout, and not as a default: an executable has no consumers,
