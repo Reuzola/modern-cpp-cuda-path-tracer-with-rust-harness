@@ -21,10 +21,6 @@ public:
         return *this;
     }
 
-    [[nodiscard]] static Color random();
-
-    [[nodiscard]] static Color random(Float min, Float max);
-
     [[nodiscard]] static Color random(Sampler& sampler);
 
     [[nodiscard]] static Color random(Float min, Float max, Sampler& sampler);

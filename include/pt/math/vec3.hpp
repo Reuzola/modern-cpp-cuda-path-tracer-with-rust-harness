@@ -46,10 +46,6 @@ public:
         return std::sqrt(length_squared());
     }
 
-    static Vec3 random();
-
-    static Vec3 random(Float min, Float max);
-
     [[nodiscard]] static Vec3 random(Sampler& sampler);
 
     [[nodiscard]] static Vec3 random(Float min, Float max, Sampler& sampler);
@@ -98,8 +94,6 @@ inline Vec3 unit_vector(const Vec3& v) {
     return v / v.length();
 }
 
-[[nodiscard]] Vec3 random_unit_vector();
-
 [[nodiscard]] inline Vec3 reflect(const Vec3& v, const Vec3& n) {
     return v - 2 * dot(v, n) * n;
 }
@@ -112,10 +106,6 @@ inline Vec3 unit_vector(const Vec3& v) {
 
     return r_out_perp + r_out_parallel;
 }
-
-[[nodiscard]] Vec3 random_in_unit_disk();
-
-[[nodiscard]] Vec3 random_cosine_direction();
 
 [[nodiscard]] Vec3 random_unit_vector(Sampler& sampler);
 

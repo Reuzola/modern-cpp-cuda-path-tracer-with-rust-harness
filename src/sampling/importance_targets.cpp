@@ -1,6 +1,5 @@
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/core/sampleable.hpp"
-#include "pt/math/random.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
