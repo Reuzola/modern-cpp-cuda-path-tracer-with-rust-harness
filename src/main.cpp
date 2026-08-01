@@ -20,6 +20,7 @@
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
 #include "pt/render/path_integrator.hpp"
+#include "pt/render/progress.hpp"
 #include "pt/render/renderer.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/textures/checker_texture.hpp"
@@ -30,6 +31,7 @@
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <functional>
 #include <iostream>
 
 namespace { // TEMP
@@ -505,9 +507,10 @@ void render_scene(const pt::Scene& scene) {
     const pt::Camera camera(scene.camera, image_width, image_height);
     const pt::PathIntegrator integrator(scene.world(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
     const pt::Renderer renderer(camera, integrator, scene.render, image_height);
+    pt::ConsoleProgressReporter reporter;
 
     const auto start = std::chrono::steady_clock::now();
-    const pt::Film film = renderer.render();
+    const pt::Film film = renderer.render(std::ref(reporter));
     const auto end = std::chrono::steady_clock::now();
 
     write_ppm(std::cout, film); // temp

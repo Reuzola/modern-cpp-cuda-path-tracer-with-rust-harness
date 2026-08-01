@@ -7,13 +7,12 @@
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
 #include "pt/render/integrator.hpp"
+#include "pt/render/progress.hpp"
 #include "pt/render/tile.hpp"
 #include "pt/scene/scene.hpp"
 #include <cassert>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 namespace pt {
@@ -63,18 +62,20 @@ Color Renderer::render_pixel(int x, int y) const {
     return pixel_samples_scale_ * pixel_color;
 }
 
-Film Renderer::render() const {
+Film Renderer::render(const ProgressCallback& progress) const {
     Film film(image_width_, image_height_);
 
     const std::vector<Tile> tiles = make_tiles(image_width_, image_height_, tile_size_);
 
-    std::size_t remaining = tiles.size();
-    for (const Tile& tile : tiles) {
-        std::clog << "\rTiles remaining: " << remaining-- << ' ' << std::flush;
-        render_tile(film, tile);
-    }
+    const int total = static_cast<int>(tiles.size());
+    if (progress) progress(RenderProgress{0, total});
 
-    std::clog << "\rDone.                 \n";
+    int completed = 0;
+    for (const Tile& tile : tiles) {
+        render_tile(film, tile);
+        completed++;
+        if (progress) progress(RenderProgress{completed, total});
+    }
     return film;
 }
 

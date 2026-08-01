@@ -198,6 +198,7 @@ add_library(pathtracer_core STATIC
 
   src/render/camera.cpp
   src/render/path_integrator.cpp
+  src/render/progress.cpp
   src/render/renderer.cpp
   src/render/tile.cpp
 )

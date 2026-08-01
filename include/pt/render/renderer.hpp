@@ -2,6 +2,7 @@
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/render/film.hpp"
+#include "pt/render/progress.hpp"
 #include <cstdint>
 
 namespace pt {
@@ -22,7 +23,7 @@ public:
 
     Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int image_height, int tile_size = default_tile_size);
 
-    [[nodiscard]] Film render() const;
+    [[nodiscard]] Film render(const ProgressCallback& progress = {}) const;
 
 private:
     const Camera& camera_;
