@@ -157,7 +157,9 @@ target_include_directories(pt_stb SYSTEM INTERFACE
 # condition - which is what a later optional target (a viewer, say) would need,
 # and what this list does not.
 add_library(pathtracer_core STATIC
+  src/io/color.cpp
   src/io/image_loader.cpp
+  src/io/ppm_writer.cpp
   src/io/stb_impl.cpp
 
   src/math/color.cpp
