@@ -159,6 +159,8 @@ target_include_directories(pt_stb SYSTEM INTERFACE
 add_library(pathtracer_core STATIC
   src/io/color.cpp
   src/io/image_loader.cpp
+  src/io/image_writer.cpp
+  src/io/png_writer.cpp
   src/io/ppm_writer.cpp
   src/io/stb_impl.cpp
 

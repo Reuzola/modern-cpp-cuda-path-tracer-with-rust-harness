@@ -7,7 +7,8 @@
 #include "pt/geometry/rotate_y.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/translate.hpp"
-#include "pt/io/ppm_writer.hpp"
+#include "pt/io/image_format.hpp"
+#include "pt/io/image_writer.hpp"
 #include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
@@ -34,11 +35,13 @@
 #include <format>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <system_error>
 
 namespace { // TEMP
 constexpr std::uint64_t scene_construction_seed = 1;
-const std::filesystem::path output_path = "out/image.ppm";
+const std::filesystem::path output_path = "out/image.png";
+constexpr pt::ImageFormat output_format = pt::ImageFormat::png;
 } // namespace
 
 pt::Scene bouncing_spheres();
@@ -523,8 +526,8 @@ void render_scene(const pt::Scene& scene) {
         return;
     }
 
-    const pt::PpmWriter writer;
-    if (!writer.write(film, output_path)) {
+    const std::unique_ptr<pt::ImageWriter> writer = pt::make_image_writer(output_format);
+    if (!writer->write(film, output_path)) {
         std::cerr << std::format("{} {}\n", ec.message(), output_path.string());
     }
 

@@ -51,12 +51,12 @@ cmake --build --preset dev
 
 Available presets:
 
-| Preset | Purpose |
-|---|---|
-| `dev` | Debug build, warnings as errors |
-| `asan-ubsan` | AddressSanitizer + UndefinedBehaviorSanitizer |
-| `relwithdebinfo` | Optimized with debug info and frame pointers, for profiling |
-| `release` | Optimized with ThinLTO, portable across x86-64 machines |
+| Preset           | Purpose                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `dev`            | Debug build, warnings as errors                                         |
+| `asan-ubsan`     | AddressSanitizer + UndefinedBehaviorSanitizer                           |
+| `relwithdebinfo` | Optimized with debug info and frame pointers, for profiling             |
+| `release`        | Optimized with ThinLTO, portable across x86-64 machines                 |
 | `release-native` | Release tuned to the host CPU — not portable, not for reference renders |
 
 ## Running
@@ -64,7 +64,7 @@ Available presets:
 Run from the repository root — image textures are resolved by relative path.
 
 ```bash
-./build/release/pathtracer > render.ppm
+./build/release/pathtracer
 ```
 
 The scene is chosen by the `switch` value in `main()`. Resolution, samples

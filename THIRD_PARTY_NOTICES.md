@@ -16,16 +16,17 @@ Components fall into two categories:
 
 ## Vendored components
 
-| Component | Version | Author | License | Local modifications |
-|---|---|---|---|---|
-| [stb_image](https://github.com/nothings/stb) | v2.30 | Sean Barrett | MIT *or* Public Domain (dual-licensed) | None |
+| Component                                          | Version | Author       | License                                | Local modifications |
+| -------------------------------------------------- | ------- | ------------ | -------------------------------------- | ------------------- |
+| [stb_image](https://github.com/nothings/stb)       | v2.30   | Sean Barrett | MIT *or* Public Domain (dual-licensed) | None                |
+| [stb_image_write](https://github.com/nothings/stb) | v1.16   | Sean Barrett | MIT *or* Public Domain (dual-licensed) | None                |
 
-`stb_image.h` is offered by its author under a choice of two licenses. This
-project elects the **MIT** alternative, for consistency with its own license.
-The full original text of both alternatives is preserved at the end of
-`external/stb_image.h`.
+`stb_image.h` and `stb_image_write.h` are offered by their author under a
+choice of two licenses. This project elects the **MIT** alternative for both,
+for consistency with its own license. The full original text of both
+alternatives is preserved at the end of each header.
 
-### stb_image — MIT License
+### stb_image and stb_image_write — MIT License
 
 ```
 Copyright (c) 2017 Sean Barrett
@@ -55,16 +56,16 @@ SOFTWARE.
 
 As dependencies are introduced through the package manager, each is recorded here
 
-| Component | Version | Author | License | Role |
-|---|---|---|---|---|
-| [Catch2](https://github.com/catchorg/Catch2) | 3.15.2 | Martin Hořeňovský, Phil Nash and contributors | BSL-1.0 (Boost Software License 1.0) | Test framework - linked into the test binary only |
+| Component                                    | Version | Author                                        | License                              | Role                                              |
+| -------------------------------------------- | ------- | --------------------------------------------- | ------------------------------------ | ------------------------------------------------- |
+| [Catch2](https://github.com/catchorg/Catch2) | 3.15.2  | Martin Hořeňovský, Phil Nash and contributors | BSL-1.0 (Boost Software License 1.0) | Test framework - linked into the test binary only |
 
 ---
 
 ## Assets
 
-| Asset | Source | Credit | License |
-|---|---|---|---|
+| Asset          | Source                                                                                                                                     | Credit                                                                        | License                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `earthmap.jpg` | [Blue Marble: Next Generation](https://svs.gsfc.nasa.gov/12564/) (`world.topo.2004-08`, August 2004), NASA Scientific Visualization Studio | NASA Earth Observatory; Blue Marble data courtesy of Reto Stöckli (NASA/GSFC) | Public domain — U.S. Government work, not subject to copyright ([NASA Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media)) |
 
 Resized from 5400×2700 to 2048×1024 and re-encoded as JPEG. No other

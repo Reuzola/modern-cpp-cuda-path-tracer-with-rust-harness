@@ -1,5 +1,7 @@
 #pragma once
+#include "pt/io/image_format.hpp"
 #include <filesystem>
+#include <memory>
 
 namespace pt {
 
@@ -17,5 +19,7 @@ public:
 
     [[nodiscard]] virtual bool write(const Film& film, const std::filesystem::path& path) const = 0;
 };
+
+[[nodiscard]] std::unique_ptr<ImageWriter> make_image_writer(ImageFormat format);
 
 } // namespace pt
