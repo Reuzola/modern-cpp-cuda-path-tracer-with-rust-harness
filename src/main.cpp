@@ -18,6 +18,7 @@
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/post/tonemap.hpp"
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
 #include "pt/render/path_integrator.hpp"
@@ -36,12 +37,14 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <system_error>
 
 namespace { // TEMP
 constexpr std::uint64_t scene_construction_seed = 1;
 const std::filesystem::path output_path = "out/image.png";
 constexpr pt::ImageFormat output_format = pt::ImageFormat::png;
+constexpr pt::ToneMapSettings tone_map_settings{};
 } // namespace
 
 pt::Scene bouncing_spheres();
@@ -526,8 +529,14 @@ void render_scene(const pt::Scene& scene) {
         return;
     }
 
+    std::optional<pt::Film> display;
+    if (!pt::is_hdr(output_format)) {
+        display = pt::tone_map(film, tone_map_settings);
+    }
+    const pt::Film& image = display ? *display : film;
+
     const std::unique_ptr<pt::ImageWriter> writer = pt::make_image_writer(output_format);
-    if (!writer->write(film, output_path)) {
+    if (!writer->write(image, output_path)) {
         std::cerr << std::format("{} {}\n", ec.message(), output_path.string());
     }
 

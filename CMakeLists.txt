@@ -227,6 +227,8 @@ add_library(pathtracer_core STATIC
   src/render/progress.cpp
   src/render/renderer.cpp
   src/render/tile.cpp
+
+  src/post/tonemap.cpp
 )
 add_library(pt::core ALIAS pathtracer_core)
 
