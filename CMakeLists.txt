@@ -144,6 +144,27 @@ target_include_directories(pt_stb SYSTEM INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external>
 )
 
+# OpenEXR - HDR image output
+#
+# Found at the root rather than in a subdirectory scope the way Catch2 is:
+# Catch2 lives in tests/ because nothing outside that directory links it, and
+# scoping it there also contains the CMAKE_MODULE_PATH change it brings. This
+# dependency is consumed by pathtracer_core, whose definition is in this file,
+# so this is where it belongs.
+#
+# CONFIG is not decoration. Without it, find_package first looks for a
+# FindOpenEXR.cmake module - CMake ships none, but a stale one on the module
+# path would win over the config file that OpenEXR itself installs, and would
+# hand back raw library paths instead of an imported target carrying include
+# directories and its own transitive dependencies. CONFIG says "only accept
+# the package's own config file".
+#
+# REQUIRED, not optional: this is not a feature that can be compiled out. An
+# ImageFormat enumerator will name it, and a missing case there is a build
+# error by design (make_image_writer has no default label). A configure-time
+# failure with a clear message beats a link error three minutes later.
+find_package(OpenEXR CONFIG REQUIRED)
+
 # pathtracer_core - the engine
 #
 # Sources are the engine's own translation units, grouped by layer. Until this
@@ -158,6 +179,7 @@ target_include_directories(pt_stb SYSTEM INTERFACE
 # and what this list does not.
 add_library(pathtracer_core STATIC
   src/io/color.cpp
+  src/io/exr_writer.cpp
   src/io/image_loader.cpp
   src/io/image_writer.cpp
   src/io/png_writer.cpp
@@ -266,8 +288,25 @@ message(STATUS "Scalar precision: ${CMAKE_PROJECT_NAME} Float = ${PT_SCALAR_TYPE
 # library's PRIVATE link dependencies to consumers, but wrapped in
 # $<LINK_ONLY:>, so only the link edge travels and none of the usage
 # requirements do - and neither of these targets has an artifact to link.
+#
+# OpenEXR::OpenEXR is PRIVATE for exactly the reason pt::stb is: no public
+# header of this library names an OpenEXR type. exr_writer.hpp will declare a
+# class deriving from ImageWriter and nothing more - every OpenEXR include
+# stays inside src/io/exr_writer.cpp. If a consumer of pt::core ever needed
+# OpenEXR to compile our headers, this keyword would have to change, which is
+# the same trap image_loader.hpp fell into.
+#
+# One target name covers the whole stack: OpenEXR::OpenEXR declares Imath,
+# Iex and IlmThread as its own INTERFACE dependencies, so they arrive
+# transitively. Naming them here would be duplicating the package's own
+# dependency graph into ours, and it would rot the day upstream reorganises it.
+#
+# Not repeated on the `pathtracer` executable: CMake propagates a static
+# library's PRIVATE link dependencies to consumers wrapped in $<LINK_ONLY:>,
+# so the link edge travels even though the usage requirements do not - which
+# is precisely what an executable linking pt::core needs and all it needs.
 target_link_libraries(pathtracer_core
-  PRIVATE pt::stb pt::warnings
+  PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR
 )
 
 # pathtracer - the driver executable

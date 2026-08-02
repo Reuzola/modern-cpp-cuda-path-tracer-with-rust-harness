@@ -56,9 +56,11 @@ SOFTWARE.
 
 As dependencies are introduced through the package manager, each is recorded here
 
-| Component                                    | Version | Author                                        | License                              | Role                                              |
-| -------------------------------------------- | ------- | --------------------------------------------- | ------------------------------------ | ------------------------------------------------- |
-| [Catch2](https://github.com/catchorg/Catch2) | 3.15.2  | Martin Hořeňovský, Phil Nash and contributors | BSL-1.0 (Boost Software License 1.0) | Test framework - linked into the test binary only |
+| Component                                                       | Version | Author                                                            | License                              | Role                                                                |
+| --------------------------------------------------------------- | ------- | ----------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| [Catch2](https://github.com/catchorg/Catch2)                    | 3.15.2  | Martin Hořeňovský, Phil Nash and contributors                     | BSL-1.0 (Boost Software License 1.0) | Test framework - linked into the test binary only                   |
+| [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr) | 3.4.13  | Contributors to the OpenEXR Project (Academy Software Foundation) | BSD-3-Clause                         | HDR image output - linked into the engine library                   |
+| [Imath](https://github.com/AcademySoftwareFoundation/Imath)     | 3.2.2   | Contributors to the Imath Project (Academy Software Foundation)   | BSD-3-Clause                         | Math types required by OpenEXR - arrives as a transitive dependency |
 
 ---
 

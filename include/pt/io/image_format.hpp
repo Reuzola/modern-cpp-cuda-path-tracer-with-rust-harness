@@ -3,6 +3,7 @@
 namespace pt {
 
 enum class ImageFormat { ppm,
-                         png };
+                         png,
+                         exr };
 
 } // namespace pt
