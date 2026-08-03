@@ -1,0 +1,705 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/main/schema/scene.schema.json",
+  "title": "Path tracer scene",
+  "description": "Scene description consumed by the C++ loader and the Rust scene-tool validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "camera",
+    "render",
+    "materials",
+    "objects"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor hint; not read by the loader."
+    },
+    "version": {
+      "const": 1,
+      "description": "Scene format version. Bumped only on a breaking change."
+    },
+    "camera": {
+      "$ref": "#/$defs/camera"
+    },
+    "render": {
+      "$ref": "#/$defs/render"
+    },
+    "textures": {
+      "$ref": "#/$defs/texture_map"
+    },
+    "materials": {
+      "$ref": "#/$defs/material_map"
+    },
+    "objects": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/object"
+      }
+    },
+    "importance_targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/name"
+      },
+      "description": "Names of objects sampled explicitly by the integrator."
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "color": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "texture_map": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/texture"
+      }
+    },
+    "texture": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "solid_color",
+            "checker",
+            "noise",
+            "image"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "solid_color"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "albedo"
+            ],
+            "properties": {
+              "albedo": {
+                "$ref": "#/$defs/color"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "checker"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "scale",
+              "even",
+              "odd"
+            ],
+            "properties": {
+              "scale": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "even": {
+                "$ref": "#/$defs/texture"
+              },
+              "odd": {
+                "$ref": "#/$defs/texture"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "noise"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "scale"
+            ],
+            "properties": {
+              "scale": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "image"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "filename"
+            ],
+            "properties": {
+              "filename": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "material_map": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/material"
+      }
+    },
+    "material": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "lambertian",
+            "metal",
+            "dielectric",
+            "diffuse_light",
+            "isotropic"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "lambertian"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "texture"
+            ],
+            "properties": {
+              "texture": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "metal"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "albedo"
+            ],
+            "properties": {
+              "albedo": {
+                "$ref": "#/$defs/color"
+              },
+              "fuzz": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "dielectric"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "refraction_index"
+            ],
+            "properties": {
+              "refraction_index": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "diffuse_light"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "texture"
+            ],
+            "properties": {
+              "texture": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "isotropic"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "texture"
+            ],
+            "properties": {
+              "texture": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "object_or_ref": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "if": {
+        "type": "string"
+      },
+      "then": {
+        "$ref": "#/$defs/name"
+      },
+      "else": {
+        "$ref": "#/$defs/object"
+      }
+    },
+    "object": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "sphere",
+            "quad",
+            "box",
+            "group",
+            "translate",
+            "rotate_y",
+            "constant_medium"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/name",
+          "description": "Optional identifier, referenced by importance_targets or by another object."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "sphere"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "center",
+              "radius",
+              "material"
+            ],
+            "properties": {
+              "center": {
+                "$ref": "#/$defs/vec3"
+              },
+              "center_end": {
+                "$ref": "#/$defs/vec3",
+                "description": "Present only for a moving sphere; the centre at shutter close."
+              },
+              "radius": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "material": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "quad"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "q",
+              "u",
+              "v",
+              "material"
+            ],
+            "properties": {
+              "q": {
+                "$ref": "#/$defs/vec3"
+              },
+              "u": {
+                "$ref": "#/$defs/vec3"
+              },
+              "v": {
+                "$ref": "#/$defs/vec3"
+              },
+              "material": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "box"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "a",
+              "b",
+              "material"
+            ],
+            "properties": {
+              "a": {
+                "$ref": "#/$defs/vec3"
+              },
+              "b": {
+                "$ref": "#/$defs/vec3"
+              },
+              "material": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "group"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "children"
+            ],
+            "properties": {
+              "children": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/object_or_ref"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "translate"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "object",
+              "offset"
+            ],
+            "properties": {
+              "object": {
+                "$ref": "#/$defs/object_or_ref"
+              },
+              "offset": {
+                "$ref": "#/$defs/vec3"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "rotate_y"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "object",
+              "angle"
+            ],
+            "properties": {
+              "object": {
+                "$ref": "#/$defs/object_or_ref"
+              },
+              "angle": {
+                "type": "number",
+                "description": "Degrees, counter-clockwise about the Y axis."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "constant_medium"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "boundary",
+              "density",
+              "phase_function"
+            ],
+            "properties": {
+              "boundary": {
+                "$ref": "#/$defs/object_or_ref"
+              },
+              "density": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "phase_function": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lookfrom",
+        "lookat",
+        "vfov"
+      ],
+      "properties": {
+        "lookfrom": {
+          "$ref": "#/$defs/vec3"
+        },
+        "lookat": {
+          "$ref": "#/$defs/vec3"
+        },
+        "vup": {
+          "$ref": "#/$defs/vec3",
+          "default": [
+            0,
+            1,
+            0
+          ],
+          "description": "Camera-relative up direction."
+        },
+        "vfov": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 180,
+          "description": "Vertical field of view, in degrees."
+        },
+        "defocus_angle": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Apex angle of the defocus cone, in degrees. 0 disables depth of field."
+        },
+        "focus_dist": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 10,
+          "description": "Distance to the plane in perfect focus. Ignored when defocus_angle is 0."
+        }
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height",
+        "samples_per_pixel",
+        "max_depth",
+        "background"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "samples_per_pixel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "background": {
+          "$ref": "#/$defs/color",
+          "description": "Radiance returned by rays that escape the scene."
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Base seed for deterministic sampling. Overridden by --seed."
+        },
+        "tone_map": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exposure": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1
+            },
+            "operator": {
+              "enum": [
+                "none",
+                "reinhard",
+                "aces"
+              ],
+              "default": "none"
+            }
+          }
+        }
+      }
+    }
+  }
+}
