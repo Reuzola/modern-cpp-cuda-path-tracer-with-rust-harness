@@ -311,9 +311,30 @@ target_link_libraries(pathtracer_core
   PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR
 )
 
+# CLI11 - command-line argument parsing
+#
+# Found here, next to the target that consumes it, rather than beside
+# find_package(OpenEXR) above: OpenEXR is a dependency of the engine library,
+# CLI11 is a dependency of the driver. Placing each find_package() next to its
+# consumer keeps the answer to "who needs this?" in the file itself.
+#
+# CONFIG for the same reason as OpenEXR: accept only the package's own config
+# file, never a stray FindCLI11.cmake on the module path that would hand back
+# a bare include directory instead of an imported target.
+#
+# CLI11 is header-only, so the imported target carries no library to link -
+# only an include directory and a C++ standard requirement. Linking it is
+# still the right verb: usage requirements travel along link edges in CMake,
+# whether or not an archive exists at the other end. (pt::warnings and pt::stb
+# in this same file are the same shape.)
+find_package(CLI11 CONFIG REQUIRED)
+
 # pathtracer - the driver executable
-# Deliberately thin: it owns main() and nothing else.
-add_executable(pathtracer src/main.cpp)
+# Deliberately thin: it owns main(), the command line, and nothing else.
+add_executable(pathtracer
+  src/main.cpp
+  src/app/cli.cpp
+)
 
 # Interprocedural optimization, Release only.
 #
@@ -335,9 +356,35 @@ if(PT_ENABLE_IPO AND pt_ipo_supported)
   set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
+# A second, private include root - src/ - so that app/cli.hpp is reachable as
+# "app/cli.hpp", matching the project's root-relative include style.
+#
+# The point of this line is what it does NOT do. The engine's public headers
+# live in include/, which pathtracer_core exports PUBLIC and install(DIRECTORY)
+# ships. A CLI header placed there would become part of the library's
+# interface and would be installed alongside it, quietly making CLI11 part of
+# what a consumer of the engine needs. Giving the driver its own private root
+# makes that structurally impossible rather than merely discouraged: nothing
+# outside this target can even name the header.
+target_include_directories(pathtracer PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 # pt::core brings the engine and, transitively, stb's include path.
 # pt::warnings is this target's own opt-in - see pathtracer_core above.
-target_link_libraries(pathtracer PRIVATE pt::core pt::warnings)
+#
+# CLI11::CLI11 is PRIVATE and, unlike the keywords above, this one is not a
+# judgement call: an executable has no consumers, so PUBLIC and INTERFACE have
+# nothing to propagate to. The keyword that matters is the one this line does
+# NOT appear on - pathtracer_core. The engine library never learns that a
+# command line exists.
+#
+# The imported target's include directory arrives as SYSTEM (CMake treats an
+# IMPORTED target's INTERFACE_INCLUDE_DIRECTORIES as system headers by
+# default), which is what keeps ~9000 lines of heavily templated header out
+# from under -Wconversion / -Wold-style-cast and, in Debug, out from under
+# -Werror. Same mechanism as pt::stb, obtained for free instead of by hand.
+target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11)
 
 # Tests live in their own directory scope so that the dependency they need
 # (Catch2) and the CMAKE_MODULE_PATH it drags in stay contained there.

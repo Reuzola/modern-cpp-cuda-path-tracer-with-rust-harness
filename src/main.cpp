@@ -1,3 +1,4 @@
+#include "app/cli.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/box.hpp"
@@ -29,21 +30,22 @@
 #include "pt/textures/image_texture.hpp"
 #include "pt/textures/noise_texture.hpp"
 #include "pt/textures/solid_color.hpp"
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <system_error>
+#include <variant>
 
 namespace { // TEMP
 constexpr std::uint64_t scene_construction_seed = 1;
-const std::filesystem::path output_path = "out/image.png";
-constexpr pt::ImageFormat output_format = pt::ImageFormat::png;
 constexpr pt::ToneMapSettings tone_map_settings{};
 } // namespace
 
@@ -56,41 +58,48 @@ pt::Scene simple_light();
 pt::Scene cornell_box();
 pt::Scene cornell_smoke();
 pt::Scene final_scene();
-void render_scene(const pt::Scene& scene);
+[[nodiscard]] int render_scene(const pt::Scene& scene, const pt::CliOptions& opts);
 
-int main() {
-    pt::Scene scene;
+namespace { // TEMP
+const std::map<std::string, pt::Scene (*)()> builtin_scenes{
+    {"bouncing_spheres", &bouncing_spheres},
+    {"checkered_spheres", &checkered_spheres},
+    {"cornell_box", &cornell_box},
+    {"cornell_smoke", &cornell_smoke},
+    {"earth", &earth},
+    {"final_scene", &final_scene},
+    {"perlin_spheres", &perlin_spheres},
+    {"quads", &quads},
+    {"simple_light", &simple_light}};
 
-    switch (7) {
-    case 1:
-        scene = bouncing_spheres();
-        break;
-    case 2:
-        scene = checkered_spheres();
-        break;
-    case 3:
-        scene = earth();
-        break;
-    case 4:
-        scene = perlin_spheres();
-        break;
-    case 5:
-        scene = quads();
-        break;
-    case 6:
-        scene = simple_light();
-        break;
-    case 7:
-        scene = cornell_box();
-        break;
-    case 8:
-        scene = cornell_smoke();
-        break;
-    case 9:
-        scene = final_scene();
-        break;
+[[nodiscard]] std::optional<pt::Scene> make_builtin_scene(const std::filesystem::path& path) {
+    const auto it = builtin_scenes.find(path.stem().string());
+    if (it == builtin_scenes.end()) return std::nullopt;
+    return it->second();
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    const auto parsed = pt::parse_command_line(argc, argv);
+    if (const auto* exit_code = std::get_if<int>(&parsed)) return *exit_code;
+
+    const auto& opts = std::get<pt::CliOptions>(parsed);
+
+    std::optional<pt::Scene> scene = make_builtin_scene(opts.scene);
+    if (!scene) {
+        std::string available;
+        for (const auto& [name, factory] : builtin_scenes) {
+            if (!available.empty()) available += ", ";
+            available += name;
+        }
+        std::cerr << std::format("ERROR: Unknown scene '{}'. Available scenes: {}\n", opts.scene.string(), available);
+        return EXIT_FAILURE;
     }
-    render_scene(scene);
+
+    pt::apply_overrides(*scene, opts);
+
+    return render_scene(*scene, opts);
 }
 
 pt::Scene bouncing_spheres() {
@@ -508,39 +517,42 @@ pt::Scene final_scene() {
     return scene;
 }
 
-void render_scene(const pt::Scene& scene) {
+int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     const int image_width = scene.render.image_width;
-    const int image_height = std::max(static_cast<int>(static_cast<pt::Float>(image_width) / scene.camera.aspect_ratio), 1);
+    const int image_height = pt::resolve_image_height(scene, opts);
 
     const pt::Camera camera(scene.camera, image_width, image_height);
     const pt::PathIntegrator integrator(scene.world(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
     const pt::Renderer renderer(camera, integrator, scene.render, image_height);
     pt::ConsoleProgressReporter reporter;
 
+    std::error_code ec;
+    const std::filesystem::path parent = opts.output.parent_path();
+    if (!parent.empty()) std::filesystem::create_directories(parent, ec);
+    if (ec) {
+        std::cerr << std::format("ERROR: Could not create directory '{}': {}\n", parent.string(), ec.message());
+        return EXIT_FAILURE;
+    }
+
     const auto start = std::chrono::steady_clock::now();
     const pt::Film film = renderer.render(std::ref(reporter));
     const auto end = std::chrono::steady_clock::now();
 
-    std::error_code ec;
-    const std::filesystem::path parent = output_path.parent_path();
-    if (!parent.empty()) std::filesystem::create_directories(parent, ec);
-    if (ec) {
-        std::cerr << ec.message();
-        return;
-    }
-
     std::optional<pt::Film> display;
-    if (!pt::is_hdr(output_format)) {
+    if (!pt::is_hdr(opts.format)) {
         display = pt::tone_map(film, tone_map_settings);
     }
     const pt::Film& image = display ? *display : film;
 
-    const std::unique_ptr<pt::ImageWriter> writer = pt::make_image_writer(output_format);
-    if (!writer->write(image, output_path)) {
-        std::cerr << std::format("{} {}\n", ec.message(), output_path.string());
+    const std::unique_ptr<pt::ImageWriter> writer = pt::make_image_writer(opts.format);
+    if (!writer->write(image, opts.output)) {
+        std::cerr << std::format("ERROR: Could not write image '{}'\n", opts.output.string());
+        return EXIT_FAILURE;
     }
 
     const std::chrono::duration<double> elapsed = end - start;
 
     std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
+
+    return EXIT_SUCCESS;
 }

@@ -6,6 +6,7 @@
   "license": "MIT",
   "dependencies": [
     "catch2",
+    "cli11",
     "openexr"
   ],
   "builtin-baseline": "6d9d7df564a1ccdaa994e4ad39ccd4a32360867b"
