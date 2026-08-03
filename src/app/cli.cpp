@@ -2,6 +2,7 @@
 #include "pt/io/image_format.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/util/log.hpp"
 #include <CLI/CLI.hpp>
 #include <algorithm>
 #include <limits>
@@ -21,6 +22,13 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
         {"png", ImageFormat::png},
         {"exr", ImageFormat::exr}};
 
+    // Same caveat as format_map: enumerators spelled where the compiler cannot check them.
+    const std::map<std::string, LogLevel> log_level_map{
+        {"info", LogLevel::info},
+        {"warning", LogLevel::warning},
+        {"error", LogLevel::error},
+        {"off", LogLevel::off}};
+
     const CLI::Range positive_int = CLI::Range(1, std::numeric_limits<int>::max());
 
     CLI::App app{"Physically-based path tracer"};
@@ -33,6 +41,10 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
     app.add_option("--format", opts.format, "Output image format")
         ->transform(CLI::CheckedTransformer(format_map, CLI::ignore_case))
         ->option_text("FORMAT:{ppm, png, exr}")
+        ->capture_default_str();
+    app.add_option("--log-level", opts.log_level, "Logging verbosity")
+        ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case))
+        ->option_text("LEVEL:{info, warning, error, off}")
         ->capture_default_str();
 
     CLI::Option* width_opt = app.add_option("--width", opts.width, "image width to render")

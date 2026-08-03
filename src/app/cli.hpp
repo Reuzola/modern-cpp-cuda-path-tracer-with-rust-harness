@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/io/image_format.hpp"
+#include "pt/util/log.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -13,6 +14,7 @@ struct CliOptions { // CLI options with default values
     std::filesystem::path scene;
     std::filesystem::path output{"out/image.png"};
     ImageFormat format{ImageFormat::png};
+    LogLevel log_level{LogLevel::info};
     std::optional<int> width;
     std::optional<int> height;
     std::optional<int> samples_per_pixel;

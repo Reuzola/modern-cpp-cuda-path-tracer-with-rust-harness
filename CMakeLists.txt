@@ -178,6 +178,8 @@ find_package(OpenEXR CONFIG REQUIRED)
 # condition - which is what a later optional target (a viewer, say) would need,
 # and what this list does not.
 add_library(pathtracer_core STATIC
+  src/util/log.cpp
+
   src/io/color.cpp
   src/io/exr_writer.cpp
   src/io/image_loader.cpp

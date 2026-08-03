@@ -1,9 +1,10 @@
 #include "pt/io/image_loader.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
+#include "pt/util/log.hpp"
 #include "stb_image.h"
 #include <algorithm>
-#include <iostream>
+#include <format>
 #include <string>
 
 namespace pt {
@@ -12,7 +13,7 @@ void StbiDeleter::operator()(float* ptr) const { stbi_image_free(ptr); }
 
 ImageLoader::ImageLoader(const std::string& filename) {
     const bool success = load(filename);
-    if (!success) std::cerr << "ERROR: Could not load image file '" << filename << "'.\n";
+    if (!success) log_warning("Could not load image file '{}'", filename);
 }
 
 Color ImageLoader::pixel_data(int x, int y) const {

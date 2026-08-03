@@ -30,13 +30,12 @@
 #include "pt/textures/image_texture.hpp"
 #include "pt/textures/noise_texture.hpp"
 #include "pt/textures/solid_color.hpp"
+#include "pt/util/log.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <format>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <optional>
@@ -86,6 +85,8 @@ int main(int argc, char** argv) {
 
     const auto& opts = std::get<pt::CliOptions>(parsed);
 
+    pt::set_log_level(opts.log_level);
+
     std::optional<pt::Scene> scene = make_builtin_scene(opts.scene);
     if (!scene) {
         std::string available;
@@ -93,7 +94,7 @@ int main(int argc, char** argv) {
             if (!available.empty()) available += ", ";
             available += name;
         }
-        std::cerr << std::format("ERROR: Unknown scene '{}'. Available scenes: {}\n", opts.scene.string(), available);
+        pt::log_error("Unknown scene '{}'. Available scenes: {}", opts.scene.string(), available);
         return EXIT_FAILURE;
     }
 
@@ -530,12 +531,15 @@ int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     const std::filesystem::path parent = opts.output.parent_path();
     if (!parent.empty()) std::filesystem::create_directories(parent, ec);
     if (ec) {
-        std::cerr << std::format("ERROR: Could not create directory '{}': {}\n", parent.string(), ec.message());
+        pt::log_error("Could not create directory '{}': {}", parent.string(), ec.message());
         return EXIT_FAILURE;
     }
 
+    const pt::ProgressCallback progress =
+        pt::should_log(pt::LogLevel::info) ? pt::ProgressCallback(std::ref(reporter)) : pt::ProgressCallback{};
+
     const auto start = std::chrono::steady_clock::now();
-    const pt::Film film = renderer.render(std::ref(reporter));
+    const pt::Film film = renderer.render(std::ref(progress));
     const auto end = std::chrono::steady_clock::now();
 
     std::optional<pt::Film> display;
@@ -546,13 +550,13 @@ int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
 
     const std::unique_ptr<pt::ImageWriter> writer = pt::make_image_writer(opts.format);
     if (!writer->write(image, opts.output)) {
-        std::cerr << std::format("ERROR: Could not write image '{}'\n", opts.output.string());
+        pt::log_error("Could not write image '{}'", opts.output.string());
         return EXIT_FAILURE;
     }
 
     const std::chrono::duration<double> elapsed = end - start;
 
-    std::clog << std::format("Render time: {:.2f}s\n", elapsed.count());
+    pt::log_info("Render time: {:.2f}s", elapsed.count());
 
     return EXIT_SUCCESS;
 }

@@ -1,6 +1,7 @@
 #include "pt/io/exr_writer.hpp"
 #include "pt/math/color.hpp"
 #include "pt/render/film.hpp"
+#include "pt/util/log.hpp"
 #include <OpenEXR/ImfChannelList.h>
 #include <OpenEXR/ImfCompression.h>
 #include <OpenEXR/ImfFrameBuffer.h>
@@ -70,7 +71,8 @@ bool ExrWriter::write(const Film& film, const std::filesystem::path& path) const
         file.writePixels(height);
 
         return true;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        log_error("EXR write failed: {}", e.what());
         return false;
     }
 }
