@@ -26,6 +26,4 @@ struct CliOptions { // CLI options with default values
 
 void apply_overrides(Scene& scene, const CliOptions& opts);
 
-[[nodiscard]] int resolve_image_height(const Scene& scene, const CliOptions& opts);
-
 } // namespace pt

@@ -6,6 +6,7 @@
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/post/tonemap.hpp"
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/textures/texture.hpp"
 #include "pt/util/arena.hpp"
@@ -16,19 +17,20 @@
 namespace pt {
 
 struct CameraSettings {
-    Float aspect_ratio = 1.0_f;
     Float vfov = 90.0_f;
     Point3 lookfrom = Point3{0, 0, 0};
     Point3 lookat = Point3{0, 0, 0};
-    Vec3 vup = Vec3{0, 0, 0};
+    Vec3 vup = Vec3{0, 1, 0};
     Float defocus_angle = 0.0_f;
     Float focus_dist = 10.0_f;
 };
 
 struct RenderSettings {
     int image_width = 100;
+    int image_height = 100;
     int samples_per_pixel = 10;
     int max_depth = 10;
+    ToneMapSettings tone_map{};
     Color background = Color{0, 0, 0};
     std::uint64_t seed = 0;
 };

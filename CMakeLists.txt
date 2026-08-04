@@ -6,38 +6,24 @@ project(PathTracer
   LANGUAGES CXX
 )
 
-# Language extensions stay off: -std=c++20, never -std=gnu++20.
+# GNU extensions off: -std=c++20, never -std=gnu++20.
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Standard bin/lib/include layout. Included this early because the variables it
-# defines are expanded at configure time, below.
+# Standard bin/lib/include layout.
 include(GNUInstallDirs)
 
-# CTest is enabled here so test presets have something to run; the actual
-# test target arrives with Catch2.
+# Enables CTest so test presets have something to run.
 enable_testing()
 
-# Warnings are errors in Debug only: Debug is the development loop, where the
-# feedback should be strictest.
-#
-# Behind an option because warnings are compiler heuristics, not standard-defined:
-# a newer Clang can invent a diagnostic and break a build with no code change.
-# Toolchains that pin their compiler can afford an unconditional -Werror; this
-# one uses whatever Clang the distro ships, so it needs an escape hatch:
+# Warnings-as-errors in Debug only. Off by default escape hatch:
 #   cmake --preset dev -DPT_WARNINGS_AS_ERRORS=OFF
 option(PT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in Debug builds" ON)
 
 option(PT_ENABLE_IPO "Enable interprocedural optimization (LTO) in Release builds" ON)
 
-# Scalar precision: the type behind pt::Float.
-#
-# ON  -> Float is double: the correctness-first default. Golden images and the
-#        performance baseline are produced in this mode only.
-# OFF -> Float is float:  half the memory traffic and twice the SIMD width,
-#        which is the mode optimization and GPU CUDA phase will actually want to measure.
-#
-# An option rather than two build types: this is one preprocessor definition,
-# not a configuration. Switching it is a re-configure of the same preset:
+# Scalar precision behind pt::Float.
+# ON  -> double (correctness-first default; golden images use this).
+# OFF -> float (half memory traffic, wider SIMD; used for perf/GPU work).
 #   cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
 option(PT_DOUBLE_PRECISION "Use double as the engine's scalar type (OFF selects float)" ON)
 
@@ -49,34 +35,24 @@ if(PT_ENABLE_IPO)
   endif()
 endif()
 
-# ---------------------------------------------------------------------------
-# pt_warnings - the project's warning policy
-#
-# An INTERFACE library carries no code: it is a named bundle of usage
-# requirements. Targets opt in by linking it, and opt out by not linking it.
-# That is the whole reason this is a target and not CMAKE_CXX_FLAGS or
-# add_compile_options(), both of which apply to everything in scope with no
-# way to exempt a single target later.
-# ---------------------------------------------------------------------------
+# pt_warnings - project warning policy, as an INTERFACE library so targets
+# can opt in/out by linking (unlike CMAKE_CXX_FLAGS, which is global)
 add_library(pt_warnings INTERFACE)
 add_library(pt::warnings ALIAS pt_warnings)
 
-# Warnings for the GCC/Clang command-line dialect.
-# Chosen against a measured baseline of this codebase rather than copied from
-# a template: every flag below was compiled against the tree first, and the
-# comments record what it actually found.
+# GCC/Clang warning flags, tuned against this codebase.
 set(pt_gnu_like_warnings
   # Baseline.
   -Wall
   -Wextra
 
-  # Diagnose anything the standard requires a diagnostic for, and reject GNU extensions.
+  # Standard-required diagnostics; reject GNU extensions.
   -Wpedantic
 
   # Shadowed declarations.
   -Wshadow
 
-  # Implicit conversions that can lose value or change signedness.
+  # Implicit conversions that lose value or change signedness.
   -Wconversion
   -Wsign-conversion
 
@@ -97,46 +73,24 @@ set(pt_gnu_like_warnings
   -Wformat=2
 )
 
-# MSVC speaks a different flag dialect entirely. This project targets
-# WSL/Linux + Clang and there is no plan to build on Windows, but the branch is
-# kept as a one-line skeleton so the structure is obvious if that ever changes.
+# MSVC dialect skeleton; project only targets WSL/Linux + Clang for now.
 set(pt_msvc_warnings
   /W4
 )
 
-# COMPILE_LANG_AND_ID rather than CXX_COMPILER_ID: this also filters on the
-# language being compiled, so C++ warning flags are never handed to a compiler
-# driver for another language.
+# COMPILE_LANG_AND_ID also filters by language, so C++ flags never leak to other languages.
 target_compile_options(pt_warnings INTERFACE
   $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:${pt_gnu_like_warnings}>
   $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:${pt_msvc_warnings}>
 
-  # $<CONFIG:Debug> is evaluated at generate time, not configure time, so this
-  # stays correct under multi-config generators where CMAKE_BUILD_TYPE is empty.
+  # $<CONFIG:Debug> is generate-time, so this stays correct under multi-config generators.
   $<$<AND:$<BOOL:${PT_WARNINGS_AS_ERRORS}>,$<CONFIG:Debug>,$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>>:-Werror>
   $<$<AND:$<BOOL:${PT_WARNINGS_AS_ERRORS}>,$<CONFIG:Debug>,$<COMPILE_LANG_AND_ID:CXX,MSVC>>:/WX>
 )
 
-# pt_stb - vendored third-party headers
-#
-# Third-party code gets a target of its own rather than an include directory
-# attached to pathtracer_core. Two reasons:
-#
-#   1. It names the dependency. "pt::core links pt::stb" is a statement about
-#      the build graph; an include directory buried inside pathtracer_core's
-#      own call is invisible to anyone reading the target list.
-#   2. It makes the isolation structural. SYSTEM applies per
-#      target_include_directories() call, so external/ was already forced into
-#      a separate call - promoting that call to a target turns an accident of
-#      syntax into a boundary, and lets any other target depend on stb without
-#      dragging in the entire engine.
-#
-# SYSTEM is the load-bearing keyword: it emits -isystem instead of -I, and the
-# compiler does not diagnose code reached through -isystem. That is the only
-# thing keeping ~7000 lines of 2000s-era C out from under pt::warnings, and in
-# Debug out from under -Werror. The suppression is tied to the search path, not
-# to the file: a relative "../../external/stb_image.h" finds the same header
-# with the protection gone.
+# pt_stb - vendored third-party headers, as their own target so the isolation
+# is structural (SYSTEM include, -isystem suppresses diagnostics) rather than
+# buried inside pathtracer_core's own include call.
 add_library(pt_stb INTERFACE)
 add_library(pt::stb ALIAS pt_stb)
 
@@ -144,39 +98,20 @@ target_include_directories(pt_stb SYSTEM INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external>
 )
 
-# OpenEXR - HDR image output
-#
-# Found at the root rather than in a subdirectory scope the way Catch2 is:
-# Catch2 lives in tests/ because nothing outside that directory links it, and
-# scoping it there also contains the CMAKE_MODULE_PATH change it brings. This
-# dependency is consumed by pathtracer_core, whose definition is in this file,
-# so this is where it belongs.
-#
-# CONFIG is not decoration. Without it, find_package first looks for a
-# FindOpenEXR.cmake module - CMake ships none, but a stale one on the module
-# path would win over the config file that OpenEXR itself installs, and would
-# hand back raw library paths instead of an imported target carrying include
-# directories and its own transitive dependencies. CONFIG says "only accept
-# the package's own config file".
-#
-# REQUIRED, not optional: this is not a feature that can be compiled out. An
-# ImageFormat enumerator will name it, and a missing case there is a build
-# error by design (make_image_writer has no default label). A configure-time
-# failure with a clear message beats a link error three minutes later.
+# OpenEXR - HDR image output.
+# CONFIG: only accept OpenEXR's own config file, never a stray FindOpenEXR.cmake.
+# REQUIRED: not an optional feature, must succeed at configure time.
 find_package(OpenEXR CONFIG REQUIRED)
 
-# pathtracer_core - the engine
-#
-# Sources are the engine's own translation units, grouped by layer. Until this
-# stop the only entry was stb_impl.cpp - third-party C with no engine code in
-# it - so the library archived nothing of ours. The math layer is the first
-# engine code to land here.
-#
-# Listed directly in add_library() rather than appended with target_sources():
-# there is one list, in one place, and it is trivially greppable. target_sources()
-# earns its keep when sources are added from a subdirectory scope or behind a
-# condition - which is what a later optional target (a viewer, say) would need,
-# and what this list does not.
+# nlohmann_json - JSON scene file parsing.
+# Package name has an underscore (vcpkg port name uses a hyphen).
+# CONFIG: same reasoning as OpenEXR above.
+# REQUIRED: a renderer that can't read a scene file has nothing to render.
+find_package(nlohmann_json CONFIG REQUIRED)
+
+# pathtracer_core - the engine.
+# Sources listed directly in add_library() (not target_sources()) so the list
+# stays in one place and is trivially greppable.
 add_library(pathtracer_core STATIC
   src/util/log.cpp
 
@@ -223,6 +158,7 @@ add_library(pathtracer_core STATIC
   src/sampling/sphere_pdf.cpp
 
   src/scene/scene.cpp
+  src/scene/scene_loader.cpp
 
   src/render/camera.cpp
   src/render/path_integrator.cpp
@@ -234,39 +170,23 @@ add_library(pathtracer_core STATIC
 )
 add_library(pt::core ALIAS pathtracer_core)
 
-# PUBLIC, not INTERFACE. The keyword now carries information it could not carry
-# before: INTERFACE means "consumers only", which was the only answer available
-# to a target with no sources of its own. PUBLIC means "this target's sources
-# and its consumers", which is what the engine's own include root actually is.
+# PUBLIC: this is the engine's own include root, used by its sources and its consumers.
 target_include_directories(pathtracer_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# PUBLIC for the same reason: the library itself is compiled as C++20, and so
-# is everything that links it.
+# PUBLIC: the library and everything linking it compile as C++20.
 target_compile_features(pathtracer_core PUBLIC cxx_std_20)
 
-# PUBLIC, and this is the one keyword in the file that is a correctness
-# requirement rather than a hygiene preference.
-#
-# pt/math/scalar.hpp reads this macro to decide what Float is, and that header
-# is public: it is compiled once into this library's sources, and again into
-# main.cpp, and again into every test TU. If those compilations disagree, the
-# layout of every type containing a Float (HitRecord, Interval, Aabb, Ray)
-# differs across the boundary, and every inline function in include/ has two
-# different bodies under one name - an ODR violation the compiler never
-# diagnoses. PRIVATE here would not be a smaller scope, it would be a bug.
-#
-# The generator expression rather than if(): this is evaluated at generate
-# time against the cache variable, so a re-configure with -D flips it with no
-# stale-branch window in between.
+# PUBLIC and load-bearing: pt/math/scalar.hpp reads this macro to define Float,
+# and that header is compiled into this library, main.cpp, and every test TU.
+# A mismatch here is an ODR violation the compiler won't catch.
 target_compile_definitions(pathtracer_core PUBLIC
   $<$<BOOL:${PT_DOUBLE_PRECISION}>:PT_FLOAT_AS_DOUBLE>
 )
 
-# Configure-time echo. Cheap, and it puts the one build setting that silently
-# changes every rendered pixel into the configure log next to the build type.
+# Configure-time echo of the scalar type, since it silently affects every pixel.
 if(PT_DOUBLE_PRECISION)
   set(PT_SCALAR_TYPE "double")
 else()
@@ -275,138 +195,56 @@ endif()
 
 message(STATUS "Scalar precision: ${CMAKE_PROJECT_NAME} Float = ${PT_SCALAR_TYPE}")
 
-# pt::stb is PRIVATE, It was PUBLIC for one reason: image_loader.hpp
-# was a public header and it included stb_image.h, which made stb's include
-# directory part of this library's interface - a consumer handed our headers
-# without it would fail to compile. Moving stbi_deleter::operator()'s body into
-# image_loader.cpp removed the last mention of stb_image.h from include/, so the
-# dependency is now an implementation detail and travels no further than this
-# target's own sources.
-#
-# This also repairs the install rules: install(DIRECTORY include/) has been
-# shipping headers, and until now those headers named a third-party
-# file that is not installed with them.
-#
-# pt::warnings stays PRIVATE: a warning policy is a build-time developer concern,
-# never something to impose on a consumer. CMake does still propagate a static
-# library's PRIVATE link dependencies to consumers, but wrapped in
-# $<LINK_ONLY:>, so only the link edge travels and none of the usage
-# requirements do - and neither of these targets has an artifact to link.
-#
-# OpenEXR::OpenEXR is PRIVATE for exactly the reason pt::stb is: no public
-# header of this library names an OpenEXR type. exr_writer.hpp will declare a
-# class deriving from ImageWriter and nothing more - every OpenEXR include
-# stays inside src/io/exr_writer.cpp. If a consumer of pt::core ever needed
-# OpenEXR to compile our headers, this keyword would have to change, which is
-# the same trap image_loader.hpp fell into.
-#
-# One target name covers the whole stack: OpenEXR::OpenEXR declares Imath,
-# Iex and IlmThread as its own INTERFACE dependencies, so they arrive
-# transitively. Naming them here would be duplicating the package's own
-# dependency graph into ours, and it would rot the day upstream reorganises it.
-#
-# Not repeated on the `pathtracer` executable: CMake propagates a static
-# library's PRIVATE link dependencies to consumers wrapped in $<LINK_ONLY:>,
-# so the link edge travels even though the usage requirements do not - which
-# is precisely what an executable linking pt::core needs and all it needs.
+# pt::stb, pt::warnings, OpenEXR::OpenEXR, nlohmann_json::nlohmann_json: all PRIVATE.
+# None of their types appear in this library's public headers (include/), so
+# none of these dependencies should leak to consumers. CMake still propagates
+# a static library's PRIVATE link deps via $<LINK_ONLY:>, so the link edge
+# reaches consumers even though the usage requirements don't.
 target_link_libraries(pathtracer_core
-  PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR
+  PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR nlohmann_json::nlohmann_json
 )
 
-# CLI11 - command-line argument parsing
-#
-# Found here, next to the target that consumes it, rather than beside
-# find_package(OpenEXR) above: OpenEXR is a dependency of the engine library,
-# CLI11 is a dependency of the driver. Placing each find_package() next to its
-# consumer keeps the answer to "who needs this?" in the file itself.
-#
-# CONFIG for the same reason as OpenEXR: accept only the package's own config
-# file, never a stray FindCLI11.cmake on the module path that would hand back
-# a bare include directory instead of an imported target.
-#
-# CLI11 is header-only, so the imported target carries no library to link -
-# only an include directory and a C++ standard requirement. Linking it is
-# still the right verb: usage requirements travel along link edges in CMake,
-# whether or not an archive exists at the other end. (pt::warnings and pt::stb
-# in this same file are the same shape.)
+# CLI11 - command-line argument parsing, found here next to its consumer
+# (the driver) rather than up with OpenEXR/nlohmann_json (the engine's deps).
+# CONFIG: same reasoning as above. Header-only, so linking just carries usage requirements.
 find_package(CLI11 CONFIG REQUIRED)
 
-# pathtracer - the driver executable
-# Deliberately thin: it owns main(), the command line, and nothing else.
+# pathtracer - the driver executable. Deliberately thin: owns main() and the CLI only.
 add_executable(pathtracer
   src/main.cpp
   src/app/cli.cpp
 )
 
-# Interprocedural optimization, Release only.
-#
-# Set on both targets, and that pairing is the whole point: LTO removes the
-# translation-unit boundary at link time, but only where both sides of that
-# boundary were compiled with it. The engine's math bodies now live in
-# pathtracer_core while every call site still lives in main.cpp, so enabling
-# this on the executable alone would optimize across a boundary that no longer
-# has anything on the other side of it.
-#
-# The _RELEASE suffix restricts this to the Release configuration. Without it,
-# LTO would apply to Debug too - which costs link time, folds functions together,
-# and produces exactly the kind of debug info that makes a stack trace lie.
-#
-# Deliberately not set on pathtracer_tests: nobody profiles a test binary, and
-# LTO would tax every CI run with a slower link for no measurable return.
+# IPO/LTO, Release only, set on both targets since LTO needs both sides of a
+# TU boundary compiled with it. Not set on pathtracer_tests (no benefit, slower CI links).
 if(PT_ENABLE_IPO AND pt_ipo_supported)
   set_property(TARGET pathtracer_core PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
   set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
-# A second, private include root - src/ - so that app/cli.hpp is reachable as
-# "app/cli.hpp", matching the project's root-relative include style.
-#
-# The point of this line is what it does NOT do. The engine's public headers
-# live in include/, which pathtracer_core exports PUBLIC and install(DIRECTORY)
-# ships. A CLI header placed there would become part of the library's
-# interface and would be installed alongside it, quietly making CLI11 part of
-# what a consumer of the engine needs. Giving the driver its own private root
-# makes that structurally impossible rather than merely discouraged: nothing
-# outside this target can even name the header.
+# Private include root for src/, so app/cli.hpp is reachable without living in
+# include/ (which is public and installed).
 target_include_directories(pathtracer PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# pt::core brings the engine and, transitively, stb's include path.
-# pt::warnings is this target's own opt-in - see pathtracer_core above.
-#
-# CLI11::CLI11 is PRIVATE and, unlike the keywords above, this one is not a
-# judgement call: an executable has no consumers, so PUBLIC and INTERFACE have
-# nothing to propagate to. The keyword that matters is the one this line does
-# NOT appear on - pathtracer_core. The engine library never learns that a
-# command line exists.
-#
-# The imported target's include directory arrives as SYSTEM (CMake treats an
-# IMPORTED target's INTERFACE_INCLUDE_DIRECTORIES as system headers by
-# default), which is what keeps ~9000 lines of heavily templated header out
-# from under -Wconversion / -Wold-style-cast and, in Debug, out from under
-# -Werror. Same mechanism as pt::stb, obtained for free instead of by hand.
+# pt::core brings the engine (and transitively stb's include path).
+# CLI11::CLI11 is PRIVATE: an executable has no consumers to propagate to.
+# Its include dir arrives as SYSTEM automatically, keeping it out from under
+# -Wconversion/-Wold-style-cast and -Werror.
 target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11)
 
-# Tests live in their own directory scope so that the dependency they need
-# (Catch2) and the CMAKE_MODULE_PATH it drags in stay contained there.
-#
-# Ordering is a real constraint, not style: enable_testing() above must run
-# before this line. add_test() calls in a subdirectory whose parent never
-# enabled testing register nothing at all - silently, with no diagnostic.
+# Tests get their own directory scope so Catch2 (and the CMAKE_MODULE_PATH it
+# adds) stays contained there. Must come after enable_testing() above.
 add_subdirectory(tests)
 
-# Installation
-# Deliberately minimal: the executable and the public headers, nothing else.
-# pathtracer_core now produces an artifact but is still not installed - it is an
-# implementation detail of the binary, and installing it usefully would mean an
-# export set, a package config file, and an answer for how a consumer obtains
-# stb. None of that is needed to ship a renderer.
+# Installation: executable + public headers only. pathtracer_core is not
+# installed - it's an implementation detail of the binary.
 install(TARGETS pathtracer
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-# Trailing slash on "include/" is load-bearing: it installs the *contents* of the directory.
+# Trailing slash on "include/" installs the directory's *contents*.
 install(DIRECTORY include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp"

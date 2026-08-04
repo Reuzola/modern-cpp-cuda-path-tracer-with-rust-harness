@@ -1,10 +1,8 @@
 #include "cli.hpp"
 #include "pt/io/image_format.hpp"
-#include "pt/math/scalar.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/util/log.hpp"
 #include <CLI/CLI.hpp>
-#include <algorithm>
 #include <limits>
 #include <map>
 #include <string>
@@ -70,14 +68,10 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
 
 void apply_overrides(Scene& scene, const CliOptions& opts) {
     if (opts.width) scene.render.image_width = *opts.width;
+    if (opts.height) scene.render.image_height = *opts.height;
     if (opts.samples_per_pixel) scene.render.samples_per_pixel = *opts.samples_per_pixel;
     if (opts.max_depth) scene.render.max_depth = *opts.max_depth;
     if (opts.seed) scene.render.seed = *opts.seed;
-}
-
-int resolve_image_height(const Scene& scene, const CliOptions& opts) {
-    if (opts.height) return *opts.height;
-    return std::max(static_cast<int>(static_cast<Float>(scene.render.image_width) / scene.camera.aspect_ratio), 1);
 }
 
 } // namespace pt

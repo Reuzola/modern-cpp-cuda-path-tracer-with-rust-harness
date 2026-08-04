@@ -27,11 +27,11 @@ namespace {
 
 } // namespace
 
-Renderer::Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int image_height, int tile_size)
+Renderer::Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int tile_size)
     : camera_(camera),
       integrator_(integrator),
       image_width_(settings.image_width),
-      image_height_(image_height),
+      image_height_(settings.image_height),
       sqrt_spp_(static_cast<int>(std::sqrt(static_cast<Float>(settings.samples_per_pixel)))),
       recip_sqrt_spp_(1.0_f / static_cast<Float>(sqrt_spp_)),
       pixel_samples_scale_(1.0_f / static_cast<Float>(sqrt_spp_ * sqrt_spp_)),

@@ -21,7 +21,7 @@ class Renderer final {
 public:
     static constexpr int default_tile_size = 16;
 
-    Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int image_height, int tile_size = default_tile_size);
+    Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int tile_size = default_tile_size);
 
     [[nodiscard]] Film render(const ProgressCallback& progress = {}) const;
 

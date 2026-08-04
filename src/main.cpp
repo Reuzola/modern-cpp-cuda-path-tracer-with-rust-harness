@@ -45,7 +45,6 @@
 
 namespace { // TEMP
 constexpr std::uint64_t scene_construction_seed = 1;
-constexpr pt::ToneMapSettings tone_map_settings{};
 } // namespace
 
 pt::Scene bouncing_spheres();
@@ -153,11 +152,11 @@ pt::Scene bouncing_spheres() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 225;
     scene.render.samples_per_pixel = 100;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.7, 0.8, 1.0);
 
-    scene.camera.aspect_ratio = 16.0 / 9.0;
     scene.camera.vfov = 20;
     scene.camera.lookfrom = pt::Point3(13.0, 2.0, 3.0);
     scene.camera.lookat = pt::Point3(0.0, 0.0, 0.0);
@@ -179,11 +178,11 @@ pt::Scene checkered_spheres() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 225;
     scene.render.samples_per_pixel = 100;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.7, 0.8, 1.0);
 
-    scene.camera.aspect_ratio = 16.0 / 9.0;
     scene.camera.vfov = 20;
     scene.camera.lookfrom = pt::Point3(13.0, 2.0, 3.0);
     scene.camera.lookat = pt::Point3(0.0, 0.0, 0.0);
@@ -204,11 +203,11 @@ pt::Scene earth() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 225;
     scene.render.samples_per_pixel = 100;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.7, 0.8, 1.0);
 
-    scene.camera.aspect_ratio = 16.0 / 9.0;
     scene.camera.vfov = 20;
     scene.camera.lookfrom = pt::Point3(0.0, 0.0, 12.0);
     scene.camera.lookat = pt::Point3(0.0, 0.0, 0.0);
@@ -231,11 +230,11 @@ pt::Scene perlin_spheres() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 225;
     scene.render.samples_per_pixel = 100;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.7, 0.8, 1.0);
 
-    scene.camera.aspect_ratio = 16.0 / 9.0;
     scene.camera.vfov = 20;
     scene.camera.lookfrom = pt::Point3(13.0, 2.0, 3.0);
     scene.camera.lookat = pt::Point3(0.0, 0.0, 0.0);
@@ -272,11 +271,11 @@ pt::Scene quads() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 400;
     scene.render.samples_per_pixel = 100;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.7, 0.8, 1.0);
 
-    scene.camera.aspect_ratio = 1.0;
     scene.camera.vfov = 80;
     scene.camera.lookfrom = pt::Point3(0.0, 0.0, 9.0);
     scene.camera.lookat = pt::Point3(0.0, 0.0, 0.0);
@@ -304,11 +303,11 @@ pt::Scene simple_light() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 225;
     scene.render.samples_per_pixel = 100;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.0, 0.0, 0.0);
 
-    scene.camera.aspect_ratio = 16.0 / 9.0;
     scene.camera.vfov = 20;
     scene.camera.lookfrom = pt::Point3(26.0, 3.0, 6.0);
     scene.camera.lookat = pt::Point3(0.0, 2.0, 0.0);
@@ -359,11 +358,11 @@ pt::Scene cornell_box() {
     scene.build_bvh();
 
     scene.render.image_width = 600;
+    scene.render.image_height = 600;
     scene.render.samples_per_pixel = 200;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.0, 0.0, 0.0);
 
-    scene.camera.aspect_ratio = 1.0;
     scene.camera.vfov = 40;
     scene.camera.lookfrom = pt::Point3(278.0, 278.0, -800.0);
     scene.camera.lookat = pt::Point3(278.0, 278.0, 0.0);
@@ -415,11 +414,11 @@ pt::Scene cornell_smoke() {
     scene.build_bvh();
 
     scene.render.image_width = 600;
+    scene.render.image_height = 600;
     scene.render.samples_per_pixel = 200;
     scene.render.max_depth = 50;
     scene.render.background = pt::Color(0.0, 0.0, 0.0);
 
-    scene.camera.aspect_ratio = 1.0;
     scene.camera.vfov = 40;
     scene.camera.lookfrom = pt::Point3(278.0, 278.0, -800.0);
     scene.camera.lookat = pt::Point3(278.0, 278.0, 0.0);
@@ -503,11 +502,11 @@ pt::Scene final_scene() {
     scene.build_bvh();
 
     scene.render.image_width = 400;
+    scene.render.image_height = 400;
     scene.render.samples_per_pixel = 250;
     scene.render.max_depth = 4;
     scene.render.background = pt::Color(0.0, 0.0, 0.0);
 
-    scene.camera.aspect_ratio = 1.0;
     scene.camera.vfov = 40;
     scene.camera.lookfrom = pt::Point3(478.0, 278.0, -600.0);
     scene.camera.lookat = pt::Point3(278.0, 278.0, 0.0);
@@ -520,11 +519,11 @@ pt::Scene final_scene() {
 
 int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     const int image_width = scene.render.image_width;
-    const int image_height = pt::resolve_image_height(scene, opts);
+    const int image_height = scene.render.image_height;
 
     const pt::Camera camera(scene.camera, image_width, image_height);
     const pt::PathIntegrator integrator(scene.world(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
-    const pt::Renderer renderer(camera, integrator, scene.render, image_height);
+    const pt::Renderer renderer(camera, integrator, scene.render);
     pt::ConsoleProgressReporter reporter;
 
     std::error_code ec;
@@ -544,7 +543,7 @@ int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
 
     std::optional<pt::Film> display;
     if (!pt::is_hdr(opts.format)) {
-        display = pt::tone_map(film, tone_map_settings);
+        display = pt::tone_map(film, scene.render.tone_map);
     }
     const pt::Film& image = display ? *display : film;
 
