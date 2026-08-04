@@ -170,7 +170,10 @@ pt::Scene bouncing_spheres() {
 pt::Scene checkered_spheres() {
     pt::Scene scene;
 
-    const auto* checker_tex = scene.create_texture<pt::CheckerTexture>(0.32, pt::Color(0.2, 0.3, 0.1), pt::Color(0.9, 0.9, 0.9));
+    const auto* even = scene.create_texture<pt::SolidColor>(pt::Color(0.2, 0.3, 0.1));
+    const auto* odd = scene.create_texture<pt::SolidColor>(pt::Color(0.9, 0.9, 0.9));
+    const auto* checker_tex = scene.create_texture<pt::CheckerTexture>(0.32, even, odd);
+
     const auto* checker_mat = scene.create_material<pt::Lambertian>(checker_tex);
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, -10.0, 0.0), 10.0, checker_mat));
     scene.add_object(scene.create_object<pt::Sphere>(pt::Point3(0.0, 10.0, 0.0), 10.0, checker_mat));
