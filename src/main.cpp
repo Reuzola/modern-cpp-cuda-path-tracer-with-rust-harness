@@ -26,6 +26,7 @@
 #include "pt/render/progress.hpp"
 #include "pt/render/renderer.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/scene/scene_loader.hpp"
 #include "pt/textures/checker_texture.hpp"
 #include "pt/textures/image_texture.hpp"
 #include "pt/textures/noise_texture.hpp"
@@ -86,14 +87,25 @@ int main(int argc, char** argv) {
 
     pt::set_log_level(opts.log_level);
 
-    std::optional<pt::Scene> scene = make_builtin_scene(opts.scene);
-    if (!scene) {
-        std::string available;
-        for (const auto& [name, factory] : builtin_scenes) {
-            if (!available.empty()) available += ", ";
-            available += name;
+    std::optional<pt::Scene> scene;
+    try {
+        std::error_code ec;
+        if (std::filesystem::exists(opts.scene, ec)) {
+            scene = pt::load_scene(opts.scene);
+        } else {
+            scene = make_builtin_scene(opts.scene);
+            if (!scene) {
+                std::string available;
+                for (const auto& [name, factory] : builtin_scenes) {
+                    if (!available.empty()) available += ", ";
+                    available += name;
+                }
+                pt::log_error("Unknown scene '{}'. Available scenes: {}", opts.scene.string(), available);
+                return EXIT_FAILURE;
+            }
         }
-        pt::log_error("Unknown scene '{}'. Available scenes: {}", opts.scene.string(), available);
+    } catch (const pt::SceneError& e) {
+        pt::log_error("{}", e.what());
         return EXIT_FAILURE;
     }
 
