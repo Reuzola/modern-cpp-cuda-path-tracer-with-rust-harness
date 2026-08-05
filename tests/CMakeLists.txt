@@ -22,6 +22,17 @@ target_link_libraries(pathtracer_tests PRIVATE
   pt::warnings
 )
 
+# Release builds pathtracer_core with ThinLTO, so its archive holds LLVM
+# bitcode rather than native objects. A link line without -flto drives the
+# system linker with no LTO plugin, and it rejects the archive outright:
+# "file format not recognized". Any target linking the core must opt into
+# IPO as well - this is a linkability requirement, not a performance choice.
+#
+# The variables come from the parent scope; add_subdirectory inherits them.
+if(PT_ENABLE_IPO AND pt_ipo_supported)
+  set_property(TARGET pathtracer_tests PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
+
 # Baked-in path to scene files. Avoids relying on catch_discover_tests'
 # WORKING_DIRECTORY, which would break under `ctest -j`, IDEs, or direct
 # binary invocation. Quotes required for a valid C++ string literal.

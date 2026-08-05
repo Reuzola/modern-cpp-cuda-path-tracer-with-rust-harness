@@ -216,7 +216,8 @@ add_executable(pathtracer
 )
 
 # IPO/LTO, Release only, set on both targets since LTO needs both sides of a
-# TU boundary compiled with it. Not set on pathtracer_tests (no benefit, slower CI links).
+# TU boundary compiled with it. pathtracer_tests needs it too and sets it in
+# tests/CMakeLists.txt, where the target exists.
 if(PT_ENABLE_IPO AND pt_ipo_supported)
   set_property(TARGET pathtracer_core PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
   set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
