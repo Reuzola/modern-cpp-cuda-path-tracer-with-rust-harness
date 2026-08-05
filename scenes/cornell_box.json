@@ -1,0 +1,51 @@
+{
+  "$schema": "../schema/scene.schema.json",
+  "version": 1,
+  "camera": {
+    "lookfrom": [278, 278, -800],
+    "lookat": [278, 278, 0],
+    "vup": [0, 1, 0],
+    "vfov": 40,
+    "defocus_angle": 0,
+    "focus_dist": 10
+  },
+  "render": {
+    "width": 600,
+    "height": 600,
+    "samples_per_pixel": 200,
+    "max_depth": 50,
+    "background": [0, 0, 0]
+  },
+  "textures": {
+    "red": { "type": "solid_color", "albedo": [0.65, 0.05, 0.05] },
+    "white": { "type": "solid_color", "albedo": [0.73, 0.73, 0.73] },
+    "green": { "type": "solid_color", "albedo": [0.12, 0.45, 0.15] },
+    "emission": { "type": "solid_color", "albedo": [15, 15, 15] }
+  },
+  "materials": {
+    "red": { "type": "lambertian", "texture": "red" },
+    "white": { "type": "lambertian", "texture": "white" },
+    "green": { "type": "lambertian", "texture": "green" },
+    "light": { "type": "diffuse_light", "texture": "emission" },
+    "glass": { "type": "dielectric", "refraction_index": 1.5 }
+  },
+  "objects": [
+    { "type": "quad", "q": [555, 0, 0], "u": [0, 555, 0], "v": [0, 0, 555], "material": "green" },
+    { "type": "quad", "q": [0, 0, 0], "u": [0, 555, 0], "v": [0, 0, 555], "material": "red" },
+    { "type": "quad", "name": "light_quad", "q": [343, 554, 332], "u": [-130, 0, 0], "v": [0, 0, -105], "material": "light" },
+    { "type": "quad", "q": [0, 0, 0], "u": [555, 0, 0], "v": [0, 0, 555], "material": "white" },
+    { "type": "quad", "q": [555, 555, 555], "u": [-555, 0, 0], "v": [0, 0, -555], "material": "white" },
+    { "type": "quad", "q": [0, 0, 555], "u": [555, 0, 0], "v": [0, 555, 0], "material": "white" },
+    {
+      "type": "translate",
+      "offset": [265, 0, 295],
+      "object": {
+        "type": "rotate_y",
+        "angle": 15,
+        "object": { "type": "box", "a": [0, 0, 0], "b": [165, 330, 165], "material": "white" }
+      }
+    },
+    { "type": "sphere", "name": "glass_sphere", "center": [190, 90, 190], "radius": 90, "material": "glass" }
+  ],
+  "importance_targets": ["light_quad", "glass_sphere"]
+}

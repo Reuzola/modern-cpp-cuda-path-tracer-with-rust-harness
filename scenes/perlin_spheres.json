@@ -1,0 +1,29 @@
+{
+  "$schema": "../schema/scene.schema.json",
+  "version": 1,
+  "camera": {
+    "lookfrom": [13, 2, 3],
+    "lookat": [0, 0, 0],
+    "vup": [0, 1, 0],
+    "vfov": 20,
+    "defocus_angle": 0,
+    "focus_dist": 10
+  },
+  "render": {
+    "width": 400,
+    "height": 225,
+    "samples_per_pixel": 100,
+    "max_depth": 50,
+    "background": [0.7, 0.8, 1.0]
+  },
+  "textures": {
+    "perlin": { "type": "noise", "scale": 4, "seed": 1 }
+  },
+  "materials": {
+    "perlin": { "type": "lambertian", "texture": "perlin" }
+  },
+  "objects": [
+    { "type": "sphere", "center": [0, -1000, 0], "radius": 1000, "material": "perlin" },
+    { "type": "sphere", "center": [0, 2, 0], "radius": 2, "material": "perlin" }
+  ]
+}

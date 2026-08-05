@@ -1,0 +1,28 @@
+{
+  "$schema": "../schema/scene.schema.json",
+  "version": 1,
+  "camera": {
+    "lookfrom": [0, 0, 12],
+    "lookat": [0, 0, 0],
+    "vup": [0, 1, 0],
+    "vfov": 20,
+    "defocus_angle": 0,
+    "focus_dist": 10
+  },
+  "render": {
+    "width": 400,
+    "height": 225,
+    "samples_per_pixel": 100,
+    "max_depth": 50,
+    "background": [0.7, 0.8, 1.0]
+  },
+  "textures": {
+    "earth": { "type": "image", "filename": "../assets/earthmap.jpg" }
+  },
+  "materials": {
+    "earth": { "type": "lambertian", "texture": "earth" }
+  },
+  "objects": [
+    { "type": "sphere", "center": [0, 0, 0], "radius": 2, "material": "earth" }
+  ]
+}

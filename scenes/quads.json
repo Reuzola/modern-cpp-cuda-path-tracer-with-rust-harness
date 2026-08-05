@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/scene.schema.json",
+  "version": 1,
+  "camera": {
+    "lookfrom": [0, 0, 9],
+    "lookat": [0, 0, 0],
+    "vup": [0, 1, 0],
+    "vfov": 80,
+    "defocus_angle": 0,
+    "focus_dist": 10
+  },
+  "render": {
+    "width": 400,
+    "height": 400,
+    "samples_per_pixel": 100,
+    "max_depth": 50,
+    "background": [0.7, 0.8, 1.0]
+  },
+  "textures": {
+    "left_red": { "type": "solid_color", "albedo": [1.0, 0.2, 0.2] },
+    "back_green": { "type": "solid_color", "albedo": [0.2, 1.0, 0.2] },
+    "right_blue": { "type": "solid_color", "albedo": [0.2, 0.2, 1.0] },
+    "top_orange": { "type": "solid_color", "albedo": [1.0, 0.5, 0.0] },
+    "bottom_teal": { "type": "solid_color", "albedo": [0.2, 0.8, 0.8] }
+  },
+  "materials": {
+    "left_red": { "type": "lambertian", "texture": "left_red" },
+    "back_green": { "type": "lambertian", "texture": "back_green" },
+    "right_blue": { "type": "lambertian", "texture": "right_blue" },
+    "top_orange": { "type": "lambertian", "texture": "top_orange" },
+    "bottom_teal": { "type": "lambertian", "texture": "bottom_teal" }
+  },
+  "objects": [
+    { "type": "quad", "q": [-3, -2, 5], "u": [0, 0, -4], "v": [0, 4, 0], "material": "left_red" },
+    { "type": "quad", "q": [-2, -2, 0], "u": [4, 0, 0], "v": [0, 4, 0], "material": "back_green" },
+    { "type": "quad", "q": [3, -2, 1], "u": [0, 0, 4], "v": [0, 4, 0], "material": "right_blue" },
+    { "type": "quad", "q": [-2, 3, 1], "u": [4, 0, 0], "v": [0, 0, 4], "material": "top_orange" },
+    { "type": "quad", "q": [-2, -3, 5], "u": [4, 0, 0], "v": [0, 0, -4], "material": "bottom_teal" }
+  ]
+}
