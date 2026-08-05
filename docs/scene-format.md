@@ -236,8 +236,7 @@ them. They are named `a` and `b` rather than `min` and `max` for that reason.
 | `rotate_y` | `object`, `angle` (degrees, counter-clockwise) |
 | `constant_medium` | `boundary`, `density` (> 0), `phase_function` (material name) |
 
-`group` collects children into one node, which is what makes it possible to
-rotate or translate a set of primitives as a unit.
+Children of a `group` are organised into a bounding volume hierarchy when the scene is loaded. This is an implementation detail of the renderer: the scene format deliberately does not expose or name an acceleration structure.
 
 `constant_medium` fills its boundary volume with a participating medium. The
 boundary contributes no visible surface of its own; if you also want to see it,

@@ -3,6 +3,7 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/box.hpp"
+#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/rotate_y.hpp"
@@ -242,7 +243,9 @@ template <typename T>
             ++index;
         }
 
-        result = ctx.scene.create_object<HittableList>(std::move(list));
+        // The children are organised into a BVH: acceleration is the renderer's
+        // decision, not the scene author's, so the format does not name it.
+        result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), list);
     } else if (type == "translate") {
         const Hittable* child = child_at(j, ctx, "object");
         const Vec3 offset = read_vec3(field(j, "offset"));
