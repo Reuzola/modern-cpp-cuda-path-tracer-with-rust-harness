@@ -51,12 +51,12 @@ cmake --build --preset dev
 
 Available presets:
 
-| Preset           | Purpose                                                                 |
-| ---------------- | ----------------------------------------------------------------------- |
-| `dev`            | Debug build, warnings as errors                                         |
-| `asan-ubsan`     | AddressSanitizer + UndefinedBehaviorSanitizer                           |
-| `relwithdebinfo` | Optimized with debug info and frame pointers, for profiling             |
-| `release`        | Optimized with ThinLTO, portable across x86-64 machines                 |
+| Preset | Purpose |
+|---|---|
+| `dev` | Debug build, warnings as errors |
+| `asan-ubsan` | AddressSanitizer + UndefinedBehaviorSanitizer |
+| `relwithdebinfo` | Optimized with debug info and frame pointers, for profiling |
+| `release` | Optimized with ThinLTO, portable across x86-64 machines |
 | `release-native` | Release tuned to the host CPU — not portable, not for reference renders |
 
 ## Running
@@ -91,4 +91,4 @@ Shirley, Trevor David Black and Steve Hollasch, then extended beyond it.
 MIT — see [LICENSE](LICENSE).
 
 Third-party components and assets are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
