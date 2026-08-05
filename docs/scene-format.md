@@ -155,15 +155,24 @@ An object mapping names to definitions. Names match `^[A-Za-z_][A-Za-z0-9_]*$`.
 | `noise` | `scale` (> 0), `seed` (integer ≥ 0, optional) |
 | `image` | `filename` (non-empty string) |
 
-`checker` takes **inline** textures for `even` and `odd`, not names. A checker
-owns its two children outright, whereas a material only observes a texture that
-the scene owns; a name would imply a sharing the engine does not offer. The
-cost is that a repeated checker pattern is written out twice.
+`checker` takes **inline** textures for `even` and `odd`, not names. Its two
+children are ordinary textures owned by the scene, exactly like a named one;
+the checker only observes them. The restriction is therefore a property of the
+format rather than a limit of the engine: a name here would need a rule for
+what happens when a checker child is also referenced by a material, and the
+format does not define one. The cost is that a repeated checker pattern is
+written out twice.
 
 `noise` is Perlin turbulence at a fixed depth, with no parameter for it. Its
 `seed` selects the permutation table and is the only randomness that remains at
 scene-construction time — geometry that was once generated randomly is written
 out as literal coordinates.
+
+An `image` texture's `filename` is resolved relative to the directory holding
+the scene file, not the working directory, so a scene and its images move
+together. An absolute path is used as given. A file that cannot be opened is
+not a load error: the loader logs a warning and the texture renders as a solid
+placeholder, and reporting it properly is the validator's job.
 
 Colors are `[r, g, b]` arrays. Components must be non-negative and may exceed
 `1`: emissive materials routinely do.
@@ -251,6 +260,14 @@ of a medium. Writing it out twice would create two distinct objects.
 
 Top-level entries in `objects` are always definitions; a bare name there is not
 accepted.
+
+A name must be defined before the point that refers to it. The loader reads the
+document once, in order, and a name resolves to an object it has already built,
+so a reference that appears earlier than its definition is an error even though
+both are present in the file. One consequence is worth stating: because an
+object enters the name table only after its own children are built, it cannot
+reach itself through a child slot. The reference cycle listed below as the
+validator's responsibility is structurally impossible in the loader.
 
 ---
 
