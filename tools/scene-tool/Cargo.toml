@@ -17,3 +17,10 @@ resolver = "3"
 # `derive` builds the parser from type definitions; the alternative is clap's
 # runtime builder API, which scatters the CLI surface across function calls.
 clap = { version = "4", features = ["derive"] }
+
+# The scene model mirrors the JSON schema; `derive` generates the
+# deserializers from those type definitions.
+serde = { version = "1.0.229", features = ["derive"] }
+
+# serde is format-agnostic; this is the JSON backend that feeds it.
+serde_json = "1.0.151"
