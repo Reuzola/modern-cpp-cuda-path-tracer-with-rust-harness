@@ -40,6 +40,10 @@ blur, stratified sampling, anti-aliasing.
 - [vcpkg](https://github.com/microsoft/vcpkg), with `VCPKG_ROOT` pointing at the
   installation — the presets read it to locate the toolchain file
 
+Building the [scene tool](#scene-tool) additionally requires a Rust toolchain.
+Install [rustup](https://rustup.rs); it reads the pinned version from
+`tools/scene-tool/rust-toolchain.toml` and installs it on first use.
+
 Developed on WSL2 (Ubuntu).
 
 ## Building
@@ -69,6 +73,20 @@ Run from the repository root — image textures are resolved by relative path.
 
 The scene is chosen by the `switch` value in `main()`. Resolution, samples
 per pixel and ray depth are set inside each scene function.
+
+## Scene tool
+
+`tools/scene-tool` is a Rust CLI that validates scene files and compares
+renders against reference images. It is a separate cargo workspace with no
+build-time coupling to the CMake project:
+
+```bash
+cd tools/scene-tool
+cargo build
+cargo run -- --help
+```
+
+Currently a skeleton — `validate` is declared but not yet implemented.
 
 ## Roadmap
 

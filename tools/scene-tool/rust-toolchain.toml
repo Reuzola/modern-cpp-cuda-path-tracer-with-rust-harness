@@ -1,0 +1,7 @@
+[toolchain]
+# Pinned exactly, matching the project's existing policy: clang-format 18.1.3
+# and a pinned CI runner image. A floating "stable" would let new
+# clippy lints break CI on rustup's release schedule, not on our commits.
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
