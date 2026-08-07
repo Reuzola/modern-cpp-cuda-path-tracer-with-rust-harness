@@ -1,0 +1,179 @@
+{
+  "$schema": "../schema/scene.schema.json",
+  "version": 1,
+  "camera": {
+    "lookfrom": [0, 175, -420],
+    "lookat": [0, 250, 900],
+    "vup": [0, 1, 0],
+    "vfov": 40,
+    "defocus_angle": 0.55,
+    "focus_dist": 1040
+  },
+  "render": {
+    "width": 480,
+    "height": 270,
+    "samples_per_pixel": 64,
+    "max_depth": 12,
+    "background": [0, 0, 0],
+    "seed": 20260806,
+    "tone_map": { "exposure": 0.8, "operator": "aces" }
+  },
+  "textures": {
+    "concrete": { "type": "solid_color", "albedo": [0.20, 0.21, 0.245] },
+    "vault_stone": { "type": "solid_color", "albedo": [0.13, 0.135, 0.155] },
+    "pillar_stone": { "type": "solid_color", "albedo": [0.155, 0.16, 0.19] },
+    "marble_veins": { "type": "noise", "scale": 0.05, "seed": 7 },
+    "dais_tiles": {
+      "type": "checker",
+      "scale": 58,
+      "even": { "type": "solid_color", "albedo": [0.055, 0.055, 0.068] },
+      "odd": { "type": "solid_color", "albedo": [0.155, 0.155, 0.178] }
+    },
+    "emit_cyan": { "type": "solid_color", "albedo": [0.03, 8.0, 14.0] },
+    "emit_magenta": { "type": "solid_color", "albedo": [14.0, 0.06, 7.5] },
+    "emit_green": { "type": "solid_color", "albedo": [0.08, 12.0, 0.12] },
+    "emit_violet": { "type": "solid_color", "albedo": [0.28, 0.02, 2.3] },
+    "emit_core": { "type": "solid_color", "albedo": [0.7, 20.0, 3.0] },
+    "haze": { "type": "solid_color", "albedo": [0.92, 0.94, 1.0] }
+  },
+  "materials": {
+    "wall": { "type": "lambertian", "texture": "concrete" },
+    "vault": { "type": "lambertian", "texture": "vault_stone" },
+    "pillar": { "type": "lambertian", "texture": "pillar_stone" },
+    "marble": { "type": "lambertian", "texture": "marble_veins" },
+    "dais": { "type": "lambertian", "texture": "dais_tiles" },
+
+    "polished_floor": { "type": "metal", "albedo": [0.45, 0.47, 0.53], "fuzz": 0.03 },
+    "chrome": { "type": "metal", "albedo": [0.94, 0.95, 0.97], "fuzz": 0 },
+    "gold": { "type": "metal", "albedo": [0.98, 0.78, 0.38], "fuzz": 0.16 },
+    "gunmetal": { "type": "metal", "albedo": [0.48, 0.50, 0.56], "fuzz": 0.07 },
+
+    "glass": { "type": "dielectric", "refraction_index": 1.5 },
+    "air_pocket": { "type": "dielectric", "refraction_index": 0.6667 },
+
+    "light_cyan": { "type": "diffuse_light", "texture": "emit_cyan" },
+    "light_magenta": { "type": "diffuse_light", "texture": "emit_magenta" },
+    "light_green": { "type": "diffuse_light", "texture": "emit_green" },
+    "light_violet": { "type": "diffuse_light", "texture": "emit_violet" },
+    "light_core": { "type": "diffuse_light", "texture": "emit_core" },
+
+    "fog": { "type": "isotropic", "texture": "haze" }
+  },
+  "objects": [
+    {
+      "type": "group",
+      "children": [
+        { "type": "quad", "q": [-360, 0, -600], "u": [720, 0, 0], "v": [0, 0, 2200], "material": "polished_floor" },
+        { "type": "quad", "q": [-360, 520, -600], "u": [720, 0, 0], "v": [0, 0, 2200], "material": "vault" },
+        { "type": "quad", "q": [-360, 0, -600], "u": [0, 0, 2200], "v": [0, 520, 0], "material": "wall" },
+        { "type": "quad", "q": [360, 0, -600], "u": [0, 0, 2200], "v": [0, 520, 0], "material": "wall" },
+        { "type": "quad", "q": [-360, 0, 1600], "u": [720, 0, 0], "v": [0, 520, 0], "material": "wall" },
+        { "type": "quad", "q": [-360, 0, -600], "u": [720, 0, 0], "v": [0, 520, 0], "material": "wall" }
+      ]
+    },
+
+    {
+      "type": "group",
+      "children": [
+        { "type": "box", "a": [-366, 0, 62], "b": [-320, 462, 138], "material": "pillar" },
+        { "type": "box", "a": [320, 0, 62], "b": [366, 462, 138], "material": "pillar" },
+        { "type": "box", "a": [-366, 448, 62], "b": [366, 521, 138], "material": "vault" },
+
+        { "type": "box", "a": [-366, 0, 412], "b": [-320, 462, 488], "material": "pillar" },
+        { "type": "box", "a": [320, 0, 412], "b": [366, 462, 488], "material": "pillar" },
+        { "type": "box", "a": [-366, 448, 412], "b": [366, 521, 488], "material": "vault" },
+
+        { "type": "box", "a": [-366, 0, 762], "b": [-320, 462, 838], "material": "pillar" },
+        { "type": "box", "a": [320, 0, 762], "b": [366, 462, 838], "material": "pillar" },
+        { "type": "box", "a": [-366, 448, 762], "b": [366, 521, 838], "material": "vault" },
+
+        { "type": "box", "a": [-366, 0, 1112], "b": [-320, 462, 1188], "material": "pillar" },
+        { "type": "box", "a": [320, 0, 1112], "b": [366, 462, 1188], "material": "pillar" },
+        { "type": "box", "a": [-366, 448, 1112], "b": [366, 521, 1188], "material": "vault" },
+
+        { "type": "box", "a": [-366, 0, 1462], "b": [-320, 462, 1538], "material": "pillar" },
+        { "type": "box", "a": [320, 0, 1462], "b": [366, 462, 1538], "material": "pillar" },
+        { "type": "box", "a": [-366, 448, 1462], "b": [366, 521, 1538], "material": "vault" }
+      ]
+    },
+
+    {
+      "type": "group",
+      "children": [
+        { "type": "quad", "name": "tube_cyan", "q": [-206, 519, -400], "u": [52, 0, 0], "v": [0, 0, 1950], "material": "light_cyan" },
+        { "type": "quad", "name": "tube_magenta", "q": [154, 519, -400], "u": [52, 0, 0], "v": [0, 0, 1950], "material": "light_magenta" },
+
+        { "type": "quad", "name": "slit_left_near", "q": [-359, 70, 280], "u": [0, 360, 0], "v": [0, 0, 32], "material": "light_magenta" },
+        { "type": "quad", "name": "slit_left_far", "q": [-359, 70, 950], "u": [0, 360, 0], "v": [0, 0, 32], "material": "light_magenta" },
+        { "type": "quad", "name": "slit_right_near", "q": [359, 70, 280], "u": [0, 0, 32], "v": [0, 360, 0], "material": "light_cyan" },
+        { "type": "quad", "name": "slit_right_far", "q": [359, 70, 950], "u": [0, 0, 32], "v": [0, 360, 0], "material": "light_cyan" },
+
+        { "type": "quad", "name": "gateway", "q": [-230, 0, 1599], "u": [0, 380, 0], "v": [460, 0, 0], "material": "light_violet" },
+
+        { "type": "quad", "name": "cove_front", "q": [-250, 46, 412], "u": [0, 0, 14], "v": [500, 0, 0], "material": "light_green" },
+        { "type": "quad", "name": "cove_back", "q": [-250, 46, 854], "u": [0, 0, 14], "v": [500, 0, 0], "material": "light_green" }
+      ]
+    },
+
+    {
+      "type": "group",
+      "children": [
+        { "type": "box", "a": [-280, -6, 400], "b": [280, 44, 880], "material": "dais" },
+
+        { "type": "sphere", "center": [0, 212, 640], "radius": 165, "material": "glass" },
+        { "type": "sphere", "center": [0, 212, 640], "radius": 148, "material": "air_pocket" },
+        { "type": "sphere", "name": "reliquary_core", "center": [0, 212, 640], "radius": 56, "material": "light_core" },
+
+        {
+          "type": "translate",
+          "offset": [-214, 44, 530],
+          "object": {
+            "type": "rotate_y",
+            "angle": 34,
+            "object": { "type": "box", "a": [-46, 0, -46], "b": [46, 380, 46], "material": "marble" }
+          }
+        },
+        {
+          "type": "translate",
+          "offset": [216, 44, 715],
+          "object": {
+            "type": "rotate_y",
+            "angle": -27,
+            "object": { "type": "box", "a": [-40, 0, -40], "b": [40, 310, 40], "material": "chrome" }
+          }
+        }
+      ]
+    },
+
+    {
+      "type": "group",
+      "children": [
+        { "type": "sphere", "center": [-256, 330, 300], "radius": 46, "material": "chrome" },
+        { "type": "sphere", "center": [268, 300, 410], "radius": 40, "material": "gold" },
+        { "type": "sphere", "center": [-150, 250, 180], "radius": 34, "material": "glass" },
+        { "type": "sphere", "center": [190, 195, 120], "radius": 28, "material": "gunmetal" },
+        { "type": "sphere", "center": [-124, 118, -150], "radius": 26, "material": "glass" },
+        { "type": "sphere", "center": [138, 172, -100], "radius": 22, "material": "chrome" }
+      ]
+    },
+
+    {
+      "type": "constant_medium",
+      "density": 0.0000000000008,
+      "phase_function": "fog",
+      "boundary": { "type": "box", "a": [-358, 1, -598], "b": [358, 518, 1598], "material": "wall" }
+    }
+  ],
+  "importance_targets": [
+    "tube_cyan",
+    "tube_magenta",
+    "slit_left_near",
+    "slit_left_far",
+    "slit_right_near",
+    "slit_right_far",
+    "gateway",
+    "cove_front",
+    "cove_back",
+    "reliquary_core"
+  ]
+}
