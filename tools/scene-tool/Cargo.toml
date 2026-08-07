@@ -4,23 +4,26 @@ version = "0.1.0"
 edition = "2024"
 description = "Scene validator and golden image harness for the path tracer"
 license = "MIT"
-# Guards against an accidental `cargo publish`: this crate is repo-internal.
+# Prevents accidental `cargo publish`; this crate is repo-internal.
 publish = false
 
-# Workspace root. The package above is the only member today; a second one
-# (an extracted image-diff crate, say) is one line in `members`.
+# Workspace root.
 [workspace]
 members = []
 resolver = "3"
 
 [dependencies]
-# `derive` builds the parser from type definitions; the alternative is clap's
-# runtime builder API, which scatters the CLI surface across function calls.
+# Derive CLI parser from types.
 clap = { version = "4", features = ["derive"] }
 
-# The scene model mirrors the JSON schema; `derive` generates the
-# deserializers from those type definitions.
+# Offline schema validation; default features disabled to block network calls.
+jsonschema = { version = "0.46", default-features = false }
+
+# Deserializes scene model matching JSON schema.
 serde = { version = "1.0.229", features = ["derive"] }
 
-# serde is format-agnostic; this is the JSON backend that feeds it.
+# JSON backend for serde.
 serde_json = "1.0.151"
+
+# Derives Display and Error for custom errors.
+thiserror = "2"

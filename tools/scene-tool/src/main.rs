@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use scene_tool::validate::validate_scene_file;
 use std::{path::PathBuf, process::ExitCode};
 
 #[derive(Parser)]
@@ -21,9 +22,25 @@ enum Commands {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Validate { scene } => {
-            eprintln!("not implemented yet: {scene:?}");
-            ExitCode::from(2)
-        }
+        Commands::Validate { scene } => match validate_scene_file(&scene) {
+            Ok(report) => {
+                if report.is_empty() {
+                    eprintln!("{} is valid", scene.display());
+                } else {
+                    eprintln!("{}:", scene.display());
+                    eprintln!("{report}");
+                }
+
+                if report.has_errors() {
+                    ExitCode::from(1)
+                } else {
+                    ExitCode::SUCCESS
+                }
+            }
+            Err(e) => {
+                eprintln!("scene-tool: {e}");
+                ExitCode::from(2)
+            }
+        },
     }
 }
