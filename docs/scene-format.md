@@ -263,10 +263,10 @@ accepted.
 A name must be defined before the point that refers to it. The loader reads the
 document once, in order, and a name resolves to an object it has already built,
 so a reference that appears earlier than its definition is an error even though
-both are present in the file. One consequence is worth stating: because an
-object enters the name table only after its own children are built, it cannot
-reach itself through a child slot. The reference cycle listed below as the
-validator's responsibility is structurally impossible in the loader.
+both are present in the file. One consequence is worth stating: because an object
+enters the name table only after its own children are built, it cannot reach itself 
+through a child slot. A reference cycle is therefore structurally impossible, and 
+neither the loader nor the validator checks for one.
 
 ---
 
@@ -315,10 +315,11 @@ responsibility, not the schema's:
 - an `importance_targets` entry that names a non-existent object, or one that
   is not a sphere or quad;
 - duplicate `name` values;
-- a reference cycle (an object that reaches itself through a child slot);
 - a degenerate quad, whose `u` and `v` are parallel;
 - an `image` texture whose `filename` cannot be opened;
 - a scene with no emissive material and a black background, which renders black.
+- a name used before the object defining it appears in `objects`;
+- a `phase_function` that resolves to nothing.
 
 Path resolution for `image.filename` is a loader behaviour and is documented
 with the loader.
