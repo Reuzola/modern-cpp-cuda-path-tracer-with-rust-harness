@@ -1,7 +1,8 @@
-//! Orchestrates the validation pipeline: parse, structure, semantics.
+//! Orchestrates the validation pipeline: parse, structure, model, semantics.
 use crate::error::ToolError;
 use crate::report::Report;
 use crate::scene::Scene;
+use crate::semantics::validate_semantics;
 use serde_json::Value;
 use std::path::Path;
 
@@ -31,10 +32,13 @@ pub fn validate_scene_file(path: &Path) -> Result<Report, ToolError> {
         return Ok(report);
     }
 
-    let _scene: Scene = serde_json::from_value(document).map_err(|source| ToolError::Model {
+    let scene: Scene = serde_json::from_value(document).map_err(|source| ToolError::Model {
         path: path.to_path_buf(),
         source,
     })?;
+
+    let base_dir = path.parent().unwrap_or_else(|| Path::new(""));
+    report.extend(validate_semantics(&scene, base_dir));
 
     Ok(report)
 }
