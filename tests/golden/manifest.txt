@@ -1,0 +1,23 @@
+# Golden image reference set.
+#
+# One row per reference render. The renderer's own scene file supplies
+# everything else (max depth, seed, tone map, background) on purpose: the
+# golden then also covers those authored settings.
+#
+# Resolution is the main lever on both render time and file size -- Monte
+# Carlo noise is incompressible, so a PNG here costs ~3 bytes per pixel.
+# spp must be a perfect square: the renderer floors it to sqrt(spp)^2.
+#
+# Regenerate with: scripts/render-goldens.sh
+# Reference renders are only valid from the `release` preset.
+
+# scene                          width  height  spp
+scenes/area_lights.json            240     135   16
+scenes/checkered_spheres.json      240     135   16
+scenes/cornell_box.json            200     200   16
+scenes/cornell_smoke.json          200     200   16
+scenes/earth.json                  240     135   16
+scenes/neon_cathedral.json         240     135   16
+scenes/perlin_spheres.json         240     135   16
+scenes/quads.json                  200     200   16
+scenes/random_spheres.json         240     135   16

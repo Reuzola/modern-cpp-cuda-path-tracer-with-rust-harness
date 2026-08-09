@@ -86,7 +86,8 @@ cargo build
 cargo run -- --help
 ```
 
-Currently a skeleton — `validate` is declared but not yet implemented.
+Reference renders for regression testing live in `tests/golden/`.
+See [docs/golden-images.md](docs/golden-images.md).
 
 ## Roadmap
 
