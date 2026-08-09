@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use scene_tool::compare::compare_images;
 use scene_tool::validate::validate_scene_file;
 use std::{path::PathBuf, process::ExitCode};
 
@@ -16,7 +17,27 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Validate the specified scene file for correctness
-    Validate { scene: PathBuf },
+    Validate {
+        scene: PathBuf
+    },
+
+    /// Compare a rendered image against a reference image
+    Compare {
+        reference: PathBuf,
+        actual: PathBuf,
+
+        /// Maximum RMSE that still counts as a pass
+        #[arg(long, default_value_t = 0.0)]
+        threshold: f64,
+
+        /// Write an amplified difference image here when the comparison fails
+        #[arg(long)]
+        diff: Option<PathBuf>,
+
+        /// Multiplier applied to the difference before it is written
+        #[arg(long, default_value_t = 10.0)]
+        diff_gain: f32,
+    },
 }
 
 fn main() -> ExitCode {
@@ -40,6 +61,32 @@ fn main() -> ExitCode {
             Err(e) => {
                 eprintln!("scene-tool: {e}");
                 ExitCode::from(2)
+            }
+        },
+
+        Commands::Compare { reference, actual, threshold, diff, diff_gain } => {
+            match compare_images(&reference, &actual, threshold, diff.as_deref(), diff_gain) {
+                Ok(outcome) => {
+                    eprintln!("rmse {:.6}, max abs diff {:.6}", outcome.metrics.rmse, outcome.metrics.max_abs_diff);
+
+                    if let Some(db) = outcome.psnr_db {
+                        eprintln!("psnr {db:.2} dB");
+                    }
+
+                    if outcome.diff_written {
+                        eprintln!("wrote diff image");
+                    }
+
+                    if outcome.passed {
+                        ExitCode::SUCCESS
+                    } else {
+                        ExitCode::from(1)
+                    }
+                }
+                Err(e) => {
+                    eprintln!("scene-tool: {e}");
+                    ExitCode::from(2)
+                }
             }
         },
     }

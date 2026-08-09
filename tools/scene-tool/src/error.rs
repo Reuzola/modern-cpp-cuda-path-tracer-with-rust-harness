@@ -67,4 +67,20 @@ pub enum ToolError {
         #[source]
         source: png::EncodingError,
     },
+
+    #[error("image dimensions differ: reference '{reference}' is {reference_width}x{reference_height}, actual '{actual}' is {actual_width}x{actual_height}")]
+    DimensionMismatch {
+        reference: PathBuf,
+        reference_width: u32,
+        reference_height: u32,
+        actual: PathBuf,
+        actual_width: u32,
+        actual_height: u32,
+    },
+
+    #[error("format mismatch: '{reference}' and '{actual}' must have the same image format")]
+    FormatMismatch { reference: PathBuf, actual: PathBuf },
+
+    #[error("'{path}' contains a non-finite value (NaN or infinity) at channel index {index}")]
+    NonFiniteValue { path: PathBuf, index: usize },
 }
