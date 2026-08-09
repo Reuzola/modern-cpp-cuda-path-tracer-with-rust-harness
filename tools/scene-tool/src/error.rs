@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ToolError {
-    #[error("cannot read scene file '{path}': {source}")]
+    #[error("cannot access file '{path}': {source}")]
     Io {
         path: PathBuf,
 
@@ -31,5 +31,40 @@ pub enum ToolError {
 
         #[source]
         source: serde_json::Error,
+    },
+
+    #[error("unsupported image format '{path}': expected .png or .exr")]
+    UnknownImageFormat {
+        path: PathBuf
+    },
+
+    #[error("cannot decode PNG '{path}': {source}")]
+    Png {
+        path: PathBuf,
+
+        #[source]
+        source: png::DecodingError,
+    },
+
+    #[error("cannot decode EXR '{path}': {source}")]
+    Exr {
+        path: PathBuf,
+
+        #[source]
+        source: exr::error::Error,
+    },
+
+    #[error("unsupported PNG in '{path}': {details}")]
+    UnsupportedPng {
+        path: PathBuf,
+        details: String,
+    },
+
+    #[error("cannot write PNG '{path}': {source}")]
+    PngWrite {
+        path: PathBuf,
+
+        #[source]
+        source: png::EncodingError,
     },
 }

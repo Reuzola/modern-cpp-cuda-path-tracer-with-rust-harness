@@ -16,8 +16,14 @@ resolver = "3"
 # Derive CLI parser from types.
 clap = { version = "4", features = ["derive"] }
 
+# Reads the engine's 32-bit float EXR output.
+exr = { version = "1.73", default-features = false }
+
 # Offline schema validation; default features disabled to block network calls.
 jsonschema = { version = "0.46", default-features = false }
+
+# Decodes the engine's 8-bit RGB PNGs and encodes the diff image.
+png = "0.17"
 
 # Deserializes scene model matching JSON schema.
 serde = { version = "1.0.229", features = ["derive"] }
