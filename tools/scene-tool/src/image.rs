@@ -116,3 +116,43 @@ pub fn load_image(path: &Path) -> Result<Image, ToolError> {
         ImageFormat::Exr => load_exr(path),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognises_the_two_supported_extensions() {
+        assert_eq!(format_from_path(Path::new("render.png")), Some(ImageFormat::Png));
+        assert_eq!(format_from_path(Path::new("render.exr")), Some(ImageFormat::Exr));
+    }
+
+    #[test]
+    fn extension_matching_ignores_case() {
+        assert_eq!(format_from_path(Path::new("render.PNG")), Some(ImageFormat::Png));
+        assert_eq!(format_from_path(Path::new("render.ExR")), Some(ImageFormat::Exr));
+    }
+
+    #[test]
+    fn other_extensions_are_rejected() {
+        assert_eq!(format_from_path(Path::new("render.jpg")), None);
+        assert_eq!(format_from_path(Path::new("render.ppm")), None);
+    }
+
+    #[test]
+    fn a_path_without_an_extension_is_rejected() {
+        assert_eq!(format_from_path(Path::new("render")), None);
+    }
+
+    // A leading dot makes a hidden file, not an extension: ".png" is a name.
+    #[test]
+    fn a_dotfile_is_not_an_extension() {
+        assert_eq!(format_from_path(Path::new(".png")), None);
+    }
+
+    #[test]
+    fn only_the_last_component_supplies_the_extension() {
+        assert_eq!(format_from_path(Path::new("out/v1.2/render.png")), Some(ImageFormat::Png));
+        assert_eq!(format_from_path(Path::new("out.png/render")), None);
+    }
+}

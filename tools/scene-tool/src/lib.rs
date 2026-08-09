@@ -9,3 +9,6 @@ pub mod scene;
 pub mod schema;
 pub mod semantics;
 pub mod validate;
+
+#[cfg(test)]
+mod test_support;

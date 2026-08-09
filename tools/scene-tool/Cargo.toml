@@ -33,3 +33,9 @@ serde_json = "1.0.151"
 
 # Derives Display and Error for custom errors.
 thiserror = "2"
+
+# Test-only. Not linked into the shipped binary and not imposed on anything
+# that depends on this crate, so a heavier tree here costs nothing at runtime.
+[dev-dependencies]
+# Self-deleting temp directories for tests.
+tempfile = "3"

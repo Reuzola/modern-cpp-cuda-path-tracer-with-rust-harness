@@ -100,3 +100,122 @@ impl std::fmt::Display for Report {
         write!(f, "{err_text}, {warn_text}")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn error(location: &str, message: &str) -> Diagnostic {
+        Diagnostic::error(location.to_string(), message.to_string())
+    }
+
+    fn warning(location: &str, message: &str) -> Diagnostic {
+        Diagnostic::warning(location.to_string(), message.to_string())
+    }
+
+    #[test]
+    fn severity_prints_in_lower_case() {
+        assert_eq!(Severity::Error.to_string(), "error");
+        assert_eq!(Severity::Warning.to_string(), "warning");
+    }
+
+    #[test]
+    fn the_constructors_set_the_severity() {
+        assert_eq!(error("/a", "boom").severity, Severity::Error);
+        assert_eq!(warning("/a", "hmm").severity, Severity::Warning);
+    }
+
+    #[test]
+    fn a_new_report_is_empty_and_clean() {
+        let report = Report::default();
+
+        assert!(report.is_empty());
+        assert!(!report.has_errors());
+        assert_eq!(report.count(Severity::Error), 0);
+        assert_eq!(report.count(Severity::Warning), 0);
+    }
+
+    // The distinction the CLI's exit code depends on: warnings are findings,
+    // but only errors are failures.
+    #[test]
+    fn a_warning_only_report_is_not_empty_but_has_no_errors() {
+        let mut report = Report::default();
+        report.push(warning("/render/background", "the render will be black"));
+
+        assert!(!report.is_empty());
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn one_error_among_warnings_is_enough_to_fail() {
+        let mut report = Report::default();
+        report.push(warning("/a", "hmm"));
+        report.push(error("/b", "boom"));
+        report.push(warning("/c", "hmm"));
+
+        assert!(report.has_errors());
+        assert_eq!(report.count(Severity::Error), 1);
+        assert_eq!(report.count(Severity::Warning), 2);
+    }
+
+    #[test]
+    fn extend_appends_every_diagnostic() {
+        let mut report = Report::default();
+        report.push(error("/a", "first"));
+        report.extend(vec![error("/b", "second"), warning("/c", "third")]);
+
+        assert_eq!(report.count(Severity::Error), 2);
+        assert_eq!(report.count(Severity::Warning), 1);
+    }
+
+    #[test]
+    fn extending_with_nothing_changes_nothing() {
+        let mut report = Report::default();
+        report.extend(Vec::new());
+
+        assert!(report.is_empty());
+    }
+
+    #[test]
+    fn an_empty_report_prints_only_the_summary() {
+        assert_eq!(Report::default().to_string(), "0 errors, 0 warnings");
+    }
+
+    #[test]
+    fn the_summary_is_singular_for_one() {
+        let mut report = Report::default();
+        report.push(error("/a", "boom"));
+
+        assert!(
+            report.to_string().ends_with("1 error, 0 warnings"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn diagnostics_print_in_insertion_order_above_the_summary() {
+        let mut report = Report::default();
+        report.push(error("/objects/0", "undefined material 'red'"));
+        report.push(warning("/textures/earth", "image file not found"));
+
+        assert_eq!(
+            report.to_string(),
+            "  error: /objects/0: undefined material 'red'\n\
+             \x20 warning: /textures/earth: image file not found\n\
+             1 error, 1 warning"
+        );
+    }
+
+    // An empty location means the whole document; it prints as the root path
+    // rather than as a blank gap between two colons.
+    #[test]
+    fn an_empty_location_prints_as_the_root() {
+        let mut report = Report::default();
+        report.push(error("", "the document is not an object"));
+
+        assert!(
+            report.to_string().starts_with("  error: /: "),
+            "{report}"
+        );
+    }
+}
