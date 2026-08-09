@@ -20,6 +20,12 @@ pub(crate) fn parse_scene(json: &str) -> Scene {
     serde_json::from_str(json).expect("the document must deserialize")
 }
 
+/// The minimal scene under a sky. Most rules are unrelated to lighting, and the
+/// black-scene lint would otherwise fire in every fixture derived from it.
+pub(crate) fn lit_scene() -> String {
+    MINIMAL_SCENE.replace(r#""background": [0, 0, 0]"#, r#""background": [0.7, 0.8, 1.0]"#)
+}
+
 /// Absolute path to the repository's `scenes/` directory. Derived from the
 /// crate root at compile time, so it does not depend on the working directory.
 pub(crate) fn scenes_dir() -> std::path::PathBuf {

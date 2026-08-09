@@ -72,3 +72,142 @@ pub fn compare_images(
         diff_written,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn image(width: u32, height: u32, channels: &[f32]) -> Image {
+        Image { width, height, pixels: channels.to_vec() }
+    }
+
+    /// Writes an image as PNG by diffing it against black, which leaves the
+    /// values untouched. Saves the tests from carrying a second encoder.
+    fn write_png(path: &Path, source: &Image) {
+        let black = image(source.width, source.height, &vec![0.0; source.pixels.len()]);
+        write_diff_png(&black, source, 1.0, path).expect("the fixture must be writable");
+    }
+
+    #[test]
+    fn identical_images_pass_and_write_no_diff() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+        let diff = dir.path().join("diff.png");
+
+        let source = image(1, 1, &[0.25, 0.5, 0.75]);
+        write_png(&reference, &source);
+        write_png(&actual, &source);
+
+        let outcome = compare_images(&reference, &actual, 0.0, Some(&diff), 10.0)
+            .expect("both images must load");
+
+        assert!(outcome.passed);
+        assert!(!outcome.diff_written);
+        assert!(!diff.exists());
+        assert_eq!(outcome.metrics.rmse, 0.0);
+        assert_eq!(outcome.psnr_db, None);
+    }
+
+    #[test]
+    fn a_difference_beyond_the_threshold_fails_and_writes_the_diff() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+        let diff = dir.path().join("diff.png");
+
+        write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
+        write_png(&actual, &image(1, 1, &[1.0, 0.0, 0.0]));
+
+        let outcome = compare_images(&reference, &actual, 0.5, Some(&diff), 1.0)
+            .expect("both images must load");
+
+        assert!(!outcome.passed);
+        assert!(outcome.diff_written);
+        assert!(diff.is_file());
+    }
+
+    // One channel of three differs by 1, so the RMSE is sqrt(1/3): the same
+    // pair passes or fails depending only on where the threshold sits.
+    #[test]
+    fn the_threshold_decides_the_verdict() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
+        write_png(&actual, &image(1, 1, &[1.0, 0.0, 0.0]));
+
+        let lenient = compare_images(&reference, &actual, 0.6, None, 1.0).expect("must load");
+        let strict = compare_images(&reference, &actual, 0.5, None, 1.0).expect("must load");
+
+        assert!(lenient.passed);
+        assert!(!strict.passed);
+        assert!((lenient.metrics.rmse - (1.0f64 / 3.0).sqrt()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_failure_without_a_diff_path_writes_nothing() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
+        write_png(&actual, &image(1, 1, &[1.0, 1.0, 1.0]));
+
+        let outcome = compare_images(&reference, &actual, 0.0, None, 1.0).expect("must load");
+
+        assert!(!outcome.passed);
+        assert!(!outcome.diff_written);
+    }
+
+    #[test]
+    fn psnr_is_reported_for_ldr_images() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
+        write_png(&actual, &image(1, 1, &[1.0, 0.0, 0.0]));
+
+        let outcome = compare_images(&reference, &actual, 1.0, None, 1.0).expect("must load");
+
+        assert!(outcome.psnr_db.is_some());
+    }
+
+    #[test]
+    fn images_of_different_sizes_are_an_error() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        write_png(&reference, &image(2, 1, &[0.0; 6]));
+        write_png(&actual, &image(1, 1, &[0.0; 3]));
+
+        let err = compare_images(&reference, &actual, 0.0, None, 1.0)
+            .expect_err("mismatched dimensions cannot be compared");
+
+        assert!(matches!(err, ToolError::DimensionMismatch { .. }), "{err}");
+    }
+
+    // Rejected before either file is opened: PNG is gamma-encoded and EXR is
+    // linear, so there is no meaningful metric across the two.
+    #[test]
+    fn comparing_a_png_against_an_exr_is_an_error() {
+        let err = compare_images(Path::new("a.png"), Path::new("b.exr"), 0.0, None, 1.0)
+            .expect_err("formats must match");
+
+        assert!(matches!(err, ToolError::FormatMismatch { .. }), "{err}");
+    }
+
+    // Two unknown extensions match each other, so the format check passes and
+    // the loader is the one that refuses.
+    #[test]
+    fn an_unsupported_extension_is_an_error() {
+        let err = compare_images(Path::new("a.jpg"), Path::new("b.jpg"), 0.0, None, 1.0)
+            .expect_err("jpg is not a supported format");
+
+        assert!(matches!(err, ToolError::UnknownImageFormat { .. }), "{err}");
+    }
+}
