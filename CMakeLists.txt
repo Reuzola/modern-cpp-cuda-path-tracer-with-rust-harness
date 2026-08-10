@@ -136,6 +136,7 @@ add_library(pathtracer_core STATIC
   src/geometry/rotate_y.cpp
   src/geometry/sphere.cpp
   src/geometry/translate.cpp
+  src/geometry/triangle.cpp
 
   src/textures/checker_texture.cpp
   src/textures/image_texture.cpp
