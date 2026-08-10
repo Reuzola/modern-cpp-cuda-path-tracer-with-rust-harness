@@ -2,6 +2,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/core/sampleable.hpp"
+#include "pt/geometry/mesh.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
@@ -11,8 +12,10 @@
 #include "pt/textures/texture.hpp"
 #include "pt/util/arena.hpp"
 #include <cstdint>
+#include <memory>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace pt {
 
@@ -67,6 +70,15 @@ public:
         return objects_.create<T>(std::forward<Args>(args)...);
     }
 
+    template <typename... Args>
+    [[nodiscard]] const Mesh* create_mesh(Args&&... args) {
+        auto owned = std::make_unique<Mesh>(std::forward<Args>(args)...);
+        const Mesh* ptr = owned.get();
+
+        meshes_.push_back(std::move(owned));
+        return ptr;
+    }
+
     void add_object(const Hittable* obj);
 
     void add_importance_target(const Sampleable* target);
@@ -77,6 +89,7 @@ private:
     // Order is critical: C++ destroys members in reverse. Arenas (owners) must outlive lists (non-owners).
     Arena<Texture> textures_;
     Arena<Material> materials_;
+    std::vector<std::unique_ptr<Mesh>> meshes_;
     Arena<Hittable> objects_;
     HittableList world_;
     ImportanceTargets importance_targets_;

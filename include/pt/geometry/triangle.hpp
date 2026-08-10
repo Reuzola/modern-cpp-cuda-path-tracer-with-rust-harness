@@ -24,6 +24,10 @@ struct TriangleHit {
 [[nodiscard]] bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
                                       const Point3& v1, const Point3& v2, TriangleHit& out) noexcept;
 
+// Component-wise min/max over all three vertices. Combining pairwise boxes instead would leak an
+// intermediate box's degenerate-axis padding into the result, making the bounds depend on vertex order.
+[[nodiscard]] Aabb triangle_bounds(const Point3& v0, const Point3& v1, const Point3& v2) noexcept;
+
 class Triangle final : public Hittable {
 public:
     Triangle(const Point3& v0, const Point3& v1, const Point3& v2, const Material* mat);

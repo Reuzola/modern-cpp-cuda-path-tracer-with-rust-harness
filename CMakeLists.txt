@@ -132,6 +132,7 @@ add_library(pathtracer_core STATIC
   src/geometry/box.cpp
   src/geometry/bvh.cpp
   src/geometry/constant_medium.cpp
+  src/geometry/mesh.cpp
   src/geometry/quad.cpp
   src/geometry/rotate_y.cpp
   src/geometry/sphere.cpp

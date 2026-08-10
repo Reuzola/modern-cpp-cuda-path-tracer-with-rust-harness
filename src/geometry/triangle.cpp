@@ -45,10 +45,21 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
     return true;
 }
 
-Triangle::Triangle(const Point3& v0, const Point3& v1, const Point3& v2, const Material* mat)
-    : v0_(v0), v1_(v1), v2_(v2), mat_(mat) {
-    bbox_ = Aabb(Aabb(v0_, v1_), Aabb(v1_, v2_));
+Aabb triangle_bounds(const Point3& v0, const Point3& v1, const Point3& v2) noexcept {
+    const Point3 min_corner(
+        std::fmin(v0.x(), std::fmin(v1.x(), v2.x())),
+        std::fmin(v0.y(), std::fmin(v1.y(), v2.y())),
+        std::fmin(v0.z(), std::fmin(v1.z(), v2.z())));
+    const Point3 max_corner(
+        std::fmax(v0.x(), std::fmax(v1.x(), v2.x())),
+        std::fmax(v0.y(), std::fmax(v1.y(), v2.y())),
+        std::fmax(v0.z(), std::fmax(v1.z(), v2.z())));
+
+    return Aabb(min_corner, max_corner);
 }
+
+Triangle::Triangle(const Point3& v0, const Point3& v1, const Point3& v2, const Material* mat)
+    : v0_(v0), v1_(v1), v2_(v2), mat_(mat), bbox_(triangle_bounds(v0, v1, v2)) {}
 
 bool Triangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler&) const {
     TriangleHit tri_hit;
