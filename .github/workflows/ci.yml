@@ -1,53 +1,46 @@
 name: CI
 
-# Trunk-based repo, no pull requests (CONTRIBUTING.md) -> push + manual only.
-# workflow_dispatch gives an "Run workflow" button in the Actions tab.
+# Trunk-based, no PRs -> push + manual dispatch only.
+# workflow_dispatch adds a manual "Run workflow" button.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# GITHUB_TOKEN defaults to broad scopes. This workflow only reads the repo.
+# GITHUB_TOKEN: read-only, this workflow only reads the repo.
 permissions:
   contents: read
 
-# Two pushes in a row: cancel the older run instead of paying for both.
+# Cancel older run on new push instead of running both.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  # MUST stay identical to "builtin-baseline" in vcpkg.json.
+  # MUST match "builtin-baseline" in vcpkg.json.
   VCPKG_BASELINE: 6d9d7df564a1ccdaa994e4ad39ccd4a32360867b
 
 jobs:
   build-and-test:
     name: linux-clang (${{ matrix.preset }})
 
-    # Pinned, not ubuntu-latest: that label moves between Ubuntu releases and
-    # would change the Clang version with no commit of ours. This image ships
-    # Clang 18.1.3, CMake 3.31 and Ninja 1.13 - the same compiler used locally,
-    # which is what makes -Werror in Debug a safe thing to run here.
+    # Pinned image (not ubuntu-latest) for a fixed Clang/CMake/Ninja version,
+    # matching local dev - required for -Werror to be reliable.
     runs-on: ubuntu-24.04
 
     strategy:
-      # A failing dev job must not cancel the release job: both answers are wanted.
+      # Dev failure must not cancel the release job; both results matter.
       fail-fast: false
       matrix:
-        # dev  -> Debug, -Werror, the strictest diagnostics.
-        # release -> the optimizer and ThinLTO path, which dev never exercises.
+        # dev = Debug + -Werror; release = optimizer + ThinLTO path.
         preset: [dev, release]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Why not the vcpkg preinstalled on the runner: the presets look for
-      # $env{VCPKG_ROOT}, but the image exports VCPKG_INSTALLATION_ROOT instead,
-      # and its checkout sits at whatever commit that image was built from -
-      # which may not contain our pinned baseline, in which case vcpkg cannot
-      # resolve it. Checking out the baseline commit itself makes CI resolve the
-      # exact same port versions as this machine, today and in two years.
+      # Runner's vcpkg lacks our pinned baseline; checkout it explicitly
+      # so port versions match, now and later.
       - name: Checkout vcpkg at the pinned baseline
         uses: actions/checkout@v7
         with:
@@ -58,22 +51,19 @@ jobs:
       - name: Bootstrap vcpkg
         run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
-      # $GITHUB_ENV is the only way to hand a variable to *later* steps: every
-      # step is a fresh shell, so a plain `export` would die with its own process.
+      # $GITHUB_ENV persists vars across steps (each step is a new shell).
       - name: Export VCPKG_ROOT
         run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
 
-      # The base preset pins VCPKG_INSTALLED_DIR to the source root, so this one
-      # directory is the whole dependency tree. Keyed on the manifest and the
-      # baseline: change either one and the cache correctly misses.
+      # Whole dependency tree lives here; key includes manifest + baseline
+      # so changes correctly invalidate the cache.
       - name: Cache vcpkg packages
         uses: actions/cache@v6
         with:
           path: vcpkg_installed
           key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_BASELINE }}
 
-      # Recorded deliberately: when a warning appears out of nowhere six months
-      # from now, the first question is always "which compiler produced it".
+      # Logged so a future warning can be traced to its compiler version.
       - name: Toolchain versions
         run: |
           clang++ --version
@@ -83,12 +73,154 @@ jobs:
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
-      # Note: catch_discover_tests runs the test binary at build time to enumerate
-      # cases, so a crash during discovery fails THIS step, not the one below.
+      # catch_discover_tests runs the binary at build time, so discovery
+      # crashes fail Build, not Test.
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
-      # The test presets set noTestsAction=error, so a run that discovers zero
-      # tests fails loudly instead of passing green and empty.
+      # noTestsAction=error: zero discovered tests fails loudly.
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
+
+  scene-tool:
+    name: rust (scene-tool)
+
+    # Same pinned image as the C++ job, same reason.
+    runs-on: ubuntu-24.04
+
+    # Applies to all `run` steps; needed since the toolchain pin is
+    # read from the working directory.
+    defaults:
+      run:
+        working-directory: tools/scene-tool
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # rustup show installs the pinned channel from rust-toolchain.toml.
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      # Logged so a future lint can be traced to its toolchain version.
+      - name: Toolchain versions
+        run: |
+          cargo --version
+          cargo clippy --version
+
+      # Two caches: crate sources (~/.cargo) and build output (target/).
+      # restore-keys allow partial hits - stale target/ just recompiles.
+      - name: Cache cargo registry and build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/scene-tool/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('tools/scene-tool/Cargo.lock', 'tools/scene-tool/rust-toolchain.toml') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # --locked fails if Cargo.lock would change, since it's committed.
+      - name: Build
+        run: cargo build --locked
+
+      - name: Test
+        run: cargo test --locked
+
+      # Clippy runs last: a job stops at first failure, so lint issues
+      # shouldn't hide test failures.
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+  render-regression:
+    name: render regression
+
+    runs-on: ubuntu-24.04
+
+    # Runs renderer and tool together for isolated status check.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Checkout vcpkg at the pinned baseline
+        uses: actions/checkout@v7
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ env.VCPKG_BASELINE }}
+          path: vcpkg
+
+      - name: Bootstrap vcpkg
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Export VCPKG_ROOT
+        run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
+
+      # Key matches release leg to reuse dependency cache.
+      - name: Cache vcpkg packages
+        uses: actions/cache@v6
+        with:
+          path: vcpkg_installed
+          key: vcpkg-${{ runner.os }}-release-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_BASELINE }}
+
+      - name: Install the pinned toolchain
+        run: rustup show
+        working-directory: tools/scene-tool
+
+      - name: Cache cargo registry and build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tools/scene-tool/target
+          key: cargo-release-${{ runner.os }}-${{ hashFiles('tools/scene-tool/Cargo.lock', 'tools/scene-tool/rust-toolchain.toml') }}
+          restore-keys: cargo-release-${{ runner.os }}-
+
+      # Use standard release (release-native alters math via FMA).
+      - name: Build the renderer
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+
+      # Release build required for loop performance.
+      - name: Build scene-tool
+        run: cargo build --locked --release
+        working-directory: tools/scene-tool
+
+      # Validate structural and semantic scene integrity.
+      - name: Validate the scene files
+        run: |
+          for scene in scenes/*.json; do
+            echo "==> ${scene}"
+            tools/scene-tool/target/release/scene-tool validate "${scene}"
+          done
+
+      # Render goldens to temp path without touching references.
+      - name: Render the golden scenes
+        run: scripts/render-goldens.sh "${RUNNER_TEMP}/actual"
+
+      # Compare outputs; run full loop before failing.
+      - name: Compare against the golden set
+        run: |
+          status=0
+          for actual in "${RUNNER_TEMP}"/actual/*.png; do
+            name=$(basename "${actual}")
+            echo "==> ${name}"
+            tools/scene-tool/target/release/scene-tool compare \
+              "tests/golden/${name}" "${actual}" \
+              --threshold "${THRESHOLD}" \
+              --diff "${RUNNER_TEMP}/diff/${name}" || status=1
+          done
+          exit "${status}"
+        env:
+          # Strict bit-identical match threshold.
+          THRESHOLD: "0.0"
+
+      # Upload diffs on job failure.
+      - name: Upload difference images
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-diffs
+          path: ${{ runner.temp }}/diff
+          if-no-files-found: ignore
