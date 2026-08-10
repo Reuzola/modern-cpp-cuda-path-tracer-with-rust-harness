@@ -19,6 +19,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cstdint>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -30,11 +31,14 @@ using pt::Hittable;
 using pt::HittableList;
 using pt::Interval;
 using pt::Mesh;
+using pt::MeshData;
 using pt::MeshTriangle;
 using pt::Point3;
 using pt::Ray;
 using pt::Sampler;
 using pt::Triangle;
+using pt::unit_vector;
+using pt::Uv;
 using pt::Vec3;
 using pt::operator""_f;
 
@@ -50,6 +54,11 @@ void require_vec_near(const Vec3& actual, const Vec3& expected) {
     REQUIRE_THAT(widen(actual.z()), WithinAbs(widen(expected.z()), tolerance));
 }
 
+void require_uv_near(Float actual_u, Float actual_v, Float expected_u, Float expected_v) {
+    REQUIRE_THAT(widen(actual_u), WithinAbs(widen(expected_u), tolerance));
+    REQUIRE_THAT(widen(actual_v), WithinAbs(widen(expected_v), tolerance));
+}
+
 // The unit square in the z = 0 plane, as two triangles sharing the diagonal
 // v0-v2. Four vertices carry six indices: this is what indexing buys.
 [[nodiscard]] std::vector<Point3> quad_positions() {
@@ -60,14 +69,34 @@ void require_vec_near(const Vec3& actual, const Vec3& expected) {
     return {0, 1, 2, 0, 2, 3};
 }
 
+// Deliberately not all equal to the geometric normal (0, 0, 1): an interpolated
+// value can only be told apart from the flat one if the vertices disagree.
+[[nodiscard]] std::vector<Vec3> quad_normals() {
+    return {Vec3(0.0_f, 0.0_f, 1.0_f), Vec3(1.0_f, 0.0_f, 0.0_f), Vec3(0.0_f, 1.0_f, 0.0_f), Vec3(0.0_f, 0.0_f, 1.0_f)};
+}
+
+// Each vertex is given its own (x, y) as texture coordinate, so an interpolated
+// UV must come back as the xy position of the hit point - on either triangle.
+[[nodiscard]] std::vector<Uv> quad_uvs() {
+    return {Uv{.u = 0.0_f, .v = 0.0_f}, Uv{.u = 1.0_f, .v = 0.0_f}, Uv{.u = 1.0_f, .v = 1.0_f}, Uv{.u = 0.0_f, .v = 1.0_f}};
+}
+
 // Mesh is neither copyable nor movable, but guaranteed copy elision (C++17)
 // still lets a prvalue be returned and initialise the caller's object.
 [[nodiscard]] Mesh quad_mesh(const pt::Material* mat) {
-    return Mesh(quad_positions(), quad_indices(), mat);
+    return Mesh(MeshData{.positions = quad_positions(), .indices = quad_indices()}, mat);
+}
+
+[[nodiscard]] Mesh quad_mesh_with(std::vector<Vec3> normals, std::vector<Uv> uvs, const pt::Material* mat) {
+    return Mesh(MeshData{.positions = quad_positions(), .indices = quad_indices(), .normals = std::move(normals), .uvs = std::move(uvs)}, mat);
 }
 
 [[nodiscard]] Ray ray_from_above(Float x, Float y) {
     return Ray(Point3(x, y, 1.0_f), Vec3(0.0_f, 0.0_f, -1.0_f));
+}
+
+[[nodiscard]] Ray ray_from_below(Float x, Float y) {
+    return Ray(Point3(x, y, -1.0_f), Vec3(0.0_f, 0.0_f, 1.0_f));
 }
 
 const Interval visible{0.001_f, pt::infinity};
@@ -98,23 +127,72 @@ TEST_CASE("triangle() addresses the mesh's own storage rather than a copy", "[ge
     require_vec_near(c1, Point3(0.0_f, 1.0_f, 0.0_f));
 }
 
+TEST_CASE("vertex attributes are optional and travel on the position indices", "[geometry][mesh]") {
+    SECTION("a mesh without attributes reports none") {
+        const Mesh mesh = quad_mesh(nullptr);
+
+        REQUIRE_FALSE(mesh.has_normals());
+        REQUIRE_FALSE(mesh.has_uvs());
+        REQUIRE(mesh.normals().empty());
+        REQUIRE(mesh.uvs().empty());
+    }
+    SECTION("attributes can be supplied independently of each other") {
+        const Mesh normals_only = quad_mesh_with(quad_normals(), {}, nullptr);
+        REQUIRE(normals_only.has_normals());
+        REQUIRE_FALSE(normals_only.has_uvs());
+
+        const Mesh uvs_only = quad_mesh_with({}, quad_uvs(), nullptr);
+        REQUIRE_FALSE(uvs_only.has_normals());
+        REQUIRE(uvs_only.has_uvs());
+    }
+    SECTION("attribute accessors follow the same indices as triangle()") {
+        const Mesh mesh = quad_mesh_with(quad_normals(), quad_uvs(), nullptr);
+
+        // Triangle 1 is (v0, v2, v3), so its second vertex attribute is entry 2.
+        const auto [n0, n1, n2] = mesh.triangle_normals(1);
+        REQUIRE(&n1 == &mesh.normals()[2]);
+        require_vec_near(n0, Vec3(0.0_f, 0.0_f, 1.0_f));
+        require_vec_near(n2, Vec3(0.0_f, 0.0_f, 1.0_f));
+
+        const auto [uv0, uv1, uv2] = mesh.triangle_uvs(1);
+        REQUIRE(&uv1 == &mesh.uvs()[2]);
+        require_uv_near(uv0.u, uv0.v, 0.0_f, 0.0_f);
+        require_uv_near(uv2.u, uv2.v, 0.0_f, 1.0_f);
+    }
+}
+
 TEST_CASE("a mesh rejects buffers it cannot index safely", "[geometry][mesh]") {
     const std::vector<Point3> positions = quad_positions();
 
     SECTION("an index count that is not a multiple of three") {
-        const std::vector<std::uint32_t> indices{0, 1};
-        REQUIRE_THROWS_AS(Mesh(positions, indices, nullptr), std::invalid_argument);
+        const MeshData data{.positions = positions, .indices = {0, 1}};
+        REQUIRE_THROWS_AS(Mesh(data, nullptr), std::invalid_argument);
     }
     SECTION("an index past the end of the vertex buffer") {
-        const std::vector<std::uint32_t> indices{0, 1, 9};
-        REQUIRE_THROWS_AS(Mesh(positions, indices, nullptr), std::invalid_argument);
+        const MeshData data{.positions = positions, .indices = {0, 1, 9}};
+        REQUIRE_THROWS_AS(Mesh(data, nullptr), std::invalid_argument);
+    }
+    SECTION("a normal buffer shorter than the vertex buffer") {
+        const MeshData data{.positions = positions, .indices = quad_indices(), .normals = {Vec3(0.0_f, 0.0_f, 1.0_f)}};
+        REQUIRE_THROWS_AS(Mesh(data, nullptr), std::invalid_argument);
+    }
+    SECTION("a UV buffer longer than the vertex buffer") {
+        std::vector<Uv> uvs = quad_uvs();
+        uvs.push_back(Uv{.u = 0.5_f, .v = 0.5_f});
+
+        const MeshData data{.positions = positions, .indices = quad_indices(), .uvs = std::move(uvs)};
+        REQUIRE_THROWS_AS(Mesh(data, nullptr), std::invalid_argument);
     }
     SECTION("empty buffers describe a mesh with no triangles") {
-        const Mesh mesh({}, {}, nullptr);
+        const Mesh mesh(MeshData{}, nullptr);
         REQUIRE(mesh.triangle_count() == 0);
     }
-    SECTION("well-formed buffers are accepted") {
-        REQUIRE_NOTHROW(Mesh(positions, quad_indices(), nullptr));
+    SECTION("well-formed buffers are accepted, with or without attributes") {
+        const MeshData bare{.positions = positions, .indices = quad_indices()};
+        REQUIRE_NOTHROW(Mesh(bare, nullptr));
+
+        const MeshData full{.positions = positions, .indices = quad_indices(), .normals = quad_normals(), .uvs = quad_uvs()};
+        REQUIRE_NOTHROW(Mesh(full, nullptr));
     }
 }
 
@@ -143,6 +221,115 @@ TEST_CASE("a mesh triangle intersects exactly like a standalone triangle", "[geo
 
     // The material comes from the mesh, not from the handle.
     REQUIRE(mesh_rec.mat == &mat);
+}
+
+TEST_CASE("without attributes a hit reports the flat normal and raw barycentrics", "[geometry][mesh]") {
+    Sampler sampler{0};
+    const Mesh mesh = quad_mesh(nullptr);
+    const MeshTriangle tri(&mesh, 0);
+
+    HitRecord rec;
+    REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+
+    require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
+    // Weights of v1 and v2 respectively; v0 carries the remaining 0.25.
+    require_uv_near(rec.u, rec.v, 0.5_f, 0.25_f);
+}
+
+TEST_CASE("vertex normals are interpolated across the triangle", "[geometry][mesh]") {
+    Sampler sampler{0};
+    const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
+    const MeshTriangle tri(&mesh, 0);
+
+    HitRecord rec;
+
+    SECTION("a hit on a vertex reproduces that vertex's normal exactly") {
+        REQUIRE(tri.hit(ray_from_above(1.0_f, 0.0_f), visible, rec, sampler));
+        require_vec_near(rec.normal, Vec3(1.0_f, 0.0_f, 0.0_f));
+    }
+    SECTION("a hit on an edge midpoint blends its two endpoints") {
+        // 0.5 * (0, 0, 1) + 0.5 * (1, 0, 0), normalised.
+        REQUIRE(tri.hit(ray_from_above(0.5_f, 0.0_f), visible, rec, sampler));
+        require_vec_near(rec.normal, unit_vector(Vec3(1.0_f, 0.0_f, 1.0_f)));
+    }
+    SECTION("an interior hit blends all three vertices") {
+        // 0.25 * (0, 0, 1) + 0.5 * (1, 0, 0) + 0.25 * (0, 1, 0), normalised.
+        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        require_vec_near(rec.normal, unit_vector(Vec3(2.0_f, 1.0_f, 1.0_f)));
+    }
+    SECTION("the result is a unit vector even though the inputs blend to a shorter one") {
+        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE_THAT(widen(rec.normal.length()), WithinAbs(1.0, tolerance));
+    }
+}
+
+TEST_CASE("orientation follows the geometric normal, not the shading normal", "[geometry][mesh]") {
+    Sampler sampler{0};
+    HitRecord rec;
+
+    SECTION("a back-face hit flips the interpolated normal") {
+        const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
+        const MeshTriangle tri(&mesh, 0);
+
+        REQUIRE(tri.hit(ray_from_below(0.75_f, 0.25_f), visible, rec, sampler));
+
+        REQUIRE_FALSE(rec.front_face);
+        require_vec_near(rec.normal, -unit_vector(Vec3(2.0_f, 1.0_f, 1.0_f)));
+    }
+    SECTION("shading normals pointing away from the ray do not make the hit a back face") {
+        // Every vertex normal is inverted, so the shading normal faces along the
+        // ray while the geometry still faces it. front_face must follow geometry.
+        const std::vector<Vec3> inverted(4, Vec3(0.0_f, 0.0_f, -1.0_f));
+        const Mesh mesh = quad_mesh_with(inverted, {}, nullptr);
+        const MeshTriangle tri(&mesh, 0);
+
+        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+
+        REQUIRE(rec.front_face);
+        require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, -1.0_f));
+    }
+    SECTION("vertex normals that cancel out fall back to the geometric normal") {
+        std::vector<Vec3> opposing = quad_normals();
+        opposing[0] = Vec3(0.0_f, 0.0_f, 1.0_f);
+        opposing[1] = Vec3(0.0_f, 0.0_f, -1.0_f);
+
+        const Mesh mesh = quad_mesh_with(std::move(opposing), {}, nullptr);
+        const MeshTriangle tri(&mesh, 0);
+
+        // The edge midpoint weights v0 and v1 equally, summing to the zero vector.
+        REQUIRE(tri.hit(ray_from_above(0.5_f, 0.0_f), visible, rec, sampler));
+
+        REQUIRE(rec.front_face);
+        require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
+    }
+}
+
+TEST_CASE("vertex UVs are interpolated across the triangle", "[geometry][mesh]") {
+    Sampler sampler{0};
+    const Mesh mesh = quad_mesh_with({}, quad_uvs(), nullptr);
+    Arena<Hittable> arena;
+    const HittableList* triangles = pt::mesh_triangles(arena, mesh);
+
+    HitRecord rec;
+
+    // Each vertex's UV equals its xy position, so an interpolated UV must equal
+    // the xy of the hit point - and must agree across the shared diagonal.
+    SECTION("on the first triangle") {
+        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        require_uv_near(rec.u, rec.v, 0.75_f, 0.25_f);
+    }
+    SECTION("on the second triangle") {
+        REQUIRE(triangles->hit(ray_from_above(0.25_f, 0.75_f), visible, rec, sampler));
+        require_uv_near(rec.u, rec.v, 0.25_f, 0.75_f);
+    }
+    SECTION("at a vertex the UV is that vertex's own") {
+        REQUIRE(triangles->hit(ray_from_above(1.0_f, 1.0_f), visible, rec, sampler));
+        require_uv_near(rec.u, rec.v, 1.0_f, 1.0_f);
+    }
+    SECTION("UVs do not disturb the geometric normal") {
+        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
+    }
 }
 
 TEST_CASE("a mesh triangle's bounding box encloses its three vertices", "[geometry][mesh]") {

@@ -16,9 +16,16 @@ struct HitRecord {
     bool front_face{};
     const Material* mat = nullptr;
 
+    // Orientation is decided by the geometric normal, but the stored normal is the
+    // shading one, flipped to match: an interpolated normal near a silhouette can
+    // face the ray even where the surface itself does not.
+    void set_face_normal(const Ray& r, const Vec3& geometric_normal, const Vec3& shading_normal) {
+        front_face = dot(r.direction(), geometric_normal) < 0;
+        normal = front_face ? shading_normal : -shading_normal;
+    }
+
     void set_face_normal(const Ray& r, const Vec3& outward_normal) {
-        front_face = dot(r.direction(), outward_normal) < 0;
-        normal = front_face ? outward_normal : -outward_normal;
+        set_face_normal(r, outward_normal, outward_normal);
     }
 };
 
