@@ -109,6 +109,11 @@ find_package(OpenEXR CONFIG REQUIRED)
 # REQUIRED: a renderer that can't read a scene file has nothing to render.
 find_package(nlohmann_json CONFIG REQUIRED)
 
+# tinyobjloader - Wavefront OBJ parsing.
+# CONFIG: same reasoning as above.
+# REQUIRED: mesh loading is a compiled-in feature, not an optional one.
+find_package(tinyobjloader CONFIG REQUIRED)
+
 # pathtracer_core - the engine.
 # Sources listed directly in add_library() (not target_sources()) so the list
 # stays in one place and is trivially greppable.
@@ -159,6 +164,7 @@ add_library(pathtracer_core STATIC
   src/sampling/sampleable_pdf.cpp
   src/sampling/sphere_pdf.cpp
 
+  src/scene/obj_loader.cpp
   src/scene/scene.cpp
   src/scene/scene_error.cpp
   src/scene/scene_loader.cpp
@@ -198,13 +204,13 @@ endif()
 
 message(STATUS "Scalar precision: ${CMAKE_PROJECT_NAME} Float = ${PT_SCALAR_TYPE}")
 
-# pt::stb, pt::warnings, OpenEXR::OpenEXR, nlohmann_json::nlohmann_json: all PRIVATE.
+# pt::stb, pt::warnings, OpenEXR::OpenEXR, nlohmann_json::nlohmann_json, tinyobjloader::tinyobjloader: all PRIVATE.
 # None of their types appear in this library's public headers (include/), so
 # none of these dependencies should leak to consumers. CMake still propagates
 # a static library's PRIVATE link deps via $<LINK_ONLY:>, so the link edge
 # reaches consumers even though the usage requirements don't.
 target_link_libraries(pathtracer_core
-  PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR nlohmann_json::nlohmann_json
+  PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR nlohmann_json::nlohmann_json tinyobjloader::tinyobjloader
 )
 
 # CLI11 - command-line argument parsing, found here next to its consumer
