@@ -1,5 +1,5 @@
-#include "pt/geometry/triangle.hpp"
 #include "pt/core/hit_record.hpp"
+#include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/color.hpp"
@@ -10,6 +10,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
+#include "test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -26,20 +27,12 @@ using pt::Triangle;
 using pt::TriangleHit;
 using pt::Vec3;
 using pt::operator""_f;
+using pt_test::require_vec_near;
+using pt_test::tolerance;
+using pt_test::widen;
 
 using Catch::Matchers::WithinAbs;
 
-// Catch2's floating-point matchers operate on double. Float may be float, so
-// widen explicitly - an implicit promotion would trip -Wdouble-promotion.
-[[nodiscard]] double widen(Float v) noexcept { return static_cast<double>(v); }
-
-constexpr double tolerance = 1e-6;
-
-void require_vec_near(const Vec3& actual, const Vec3& expected) {
-    REQUIRE_THAT(widen(actual.x()), WithinAbs(widen(expected.x()), tolerance));
-    REQUIRE_THAT(widen(actual.y()), WithinAbs(widen(expected.y()), tolerance));
-    REQUIRE_THAT(widen(actual.z()), WithinAbs(widen(expected.z()), tolerance));
-}
 
 // Reference triangle: the unit right triangle in the z = 0 plane, wound so that
 // cross(v1 - v0, v2 - v0) points towards +z.

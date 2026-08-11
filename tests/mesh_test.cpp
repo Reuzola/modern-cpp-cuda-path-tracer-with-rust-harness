@@ -1,7 +1,7 @@
-#include "pt/geometry/mesh.hpp"
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
+#include "pt/geometry/mesh.hpp"
 #include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/math/aabb.hpp"
@@ -14,6 +14,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
+#include "test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -41,23 +42,12 @@ using pt::unit_vector;
 using pt::Uv;
 using pt::Vec3;
 using pt::operator""_f;
+using pt_test::require_uv_near;
+using pt_test::require_vec_near;
+using pt_test::tolerance;
+using pt_test::widen;
 
 using Catch::Matchers::WithinAbs;
-
-[[nodiscard]] double widen(Float v) noexcept { return static_cast<double>(v); }
-
-constexpr double tolerance = 1e-6;
-
-void require_vec_near(const Vec3& actual, const Vec3& expected) {
-    REQUIRE_THAT(widen(actual.x()), WithinAbs(widen(expected.x()), tolerance));
-    REQUIRE_THAT(widen(actual.y()), WithinAbs(widen(expected.y()), tolerance));
-    REQUIRE_THAT(widen(actual.z()), WithinAbs(widen(expected.z()), tolerance));
-}
-
-void require_uv_near(Float actual_u, Float actual_v, Float expected_u, Float expected_v) {
-    REQUIRE_THAT(widen(actual_u), WithinAbs(widen(expected_u), tolerance));
-    REQUIRE_THAT(widen(actual_v), WithinAbs(widen(expected_v), tolerance));
-}
 
 // The unit square in the z = 0 plane, as two triangles sharing the diagonal
 // v0-v2. Four vertices carry six indices: this is what indexing buys.
