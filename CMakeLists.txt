@@ -160,6 +160,7 @@ add_library(pathtracer_core STATIC
   src/sampling/sphere_pdf.cpp
 
   src/scene/scene.cpp
+  src/scene/scene_error.cpp
   src/scene/scene_loader.cpp
 
   src/render/camera.cpp

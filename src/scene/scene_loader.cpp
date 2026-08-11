@@ -21,6 +21,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/post/tonemap.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/scene/scene_error.hpp"
 #include "pt/textures/checker_texture.hpp"
 #include "pt/textures/image_texture.hpp"
 #include "pt/textures/noise_texture.hpp"
@@ -34,7 +35,6 @@
 #include <map>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -496,27 +496,6 @@ void parse_render(const Json& doc, LoadContext& ctx) {
 }
 
 } // namespace
-
-SceneError::SceneError(std::string message) : std::runtime_error(message), message_(std::move(message)), composed_(message_) {}
-
-SceneError::~SceneError() = default;
-
-void SceneError::prepend(std::string_view segment) {
-    path_.insert(0, segment);
-
-    if (path_.empty())
-        composed_ = message_;
-    else
-        composed_ = std::format("{}: {}", path_, message_);
-}
-
-const std::string& SceneError::location() const noexcept {
-    return path_;
-}
-
-const char* SceneError::what() const noexcept {
-    return composed_.c_str();
-}
 
 Scene load_scene(const std::filesystem::path& path) {
     std::ifstream stream(path);

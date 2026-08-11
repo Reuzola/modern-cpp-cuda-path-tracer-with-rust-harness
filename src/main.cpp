@@ -8,6 +8,7 @@
 #include "pt/render/progress.hpp"
 #include "pt/render/renderer.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/scene/scene_error.hpp"
 #include "pt/scene/scene_loader.hpp"
 #include "pt/util/log.hpp"
 #include <chrono>

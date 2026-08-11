@@ -6,6 +6,7 @@
 #include "pt/post/tonemap.hpp"
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/scene/scene_error.hpp"
 #include "pt/scene/scene_loader.hpp"
 #include "pt/util/log.hpp"
 #include <catch2/catch_approx.hpp>
