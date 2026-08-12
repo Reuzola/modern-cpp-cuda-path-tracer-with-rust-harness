@@ -18,7 +18,7 @@
       "description": "Optional editor hint; not read by the loader."
     },
     "version": {
-      "const": 1,
+      "const": 2,
       "description": "Scene format version. Bumped only on a breaking change."
     },
     "camera": {
@@ -60,6 +60,16 @@
       },
       "minItems": 3,
       "maxItems": 3
+    },
+    "scale_vec3": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "not": { "const": 0 }
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Per-axis scale factors. A zero factor collapses the object into a plane and has no inverse."
     },
     "color": {
       "type": "array",
@@ -377,8 +387,7 @@
             "box",
             "mesh",
             "group",
-            "translate",
-            "rotate_y",
+            "transform",
             "constant_medium"
           ]
         },
@@ -545,7 +554,7 @@
           "if": {
             "properties": {
               "type": {
-                "const": "translate"
+                "const": "transform"
               }
             },
             "required": [
@@ -554,42 +563,26 @@
           },
           "then": {
             "required": [
-              "object",
-              "offset"
+              "object"
             ],
             "properties": {
               "object": {
                 "$ref": "#/$defs/object_or_ref"
               },
-              "offset": {
-                "$ref": "#/$defs/vec3"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
-                "const": "rotate_y"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          },
-          "then": {
-            "required": [
-              "object",
-              "angle"
-            ],
-            "properties": {
-              "object": {
-                "$ref": "#/$defs/object_or_ref"
+              "translate": {
+                "$ref": "#/$defs/vec3",
+                "default": [0, 0, 0],
+                "description": "Offset, applied last."
               },
-              "angle": {
-                "type": "number",
-                "description": "Degrees, counter-clockwise about the Y axis."
+              "rotate": {
+                "$ref": "#/$defs/vec3",
+                "default": [0, 0, 0],
+                "description": "Euler angles in degrees about X, Y and Z, applied in that order."
+              },
+              "scale": {
+                "$ref": "#/$defs/scale_vec3",
+                "default": [1, 1, 1],
+                "description": "Per-axis factors, applied first, about the object-space origin."
               }
             }
           }

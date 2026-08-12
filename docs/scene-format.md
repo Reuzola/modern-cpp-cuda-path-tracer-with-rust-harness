@@ -13,7 +13,7 @@ disagree about what a scene means, the schema decides.
 inline errors in any editor with JSON Schema support:
 
 ```json
-{ "$schema": "../schema/scene.schema.json", "version": 1 }
+{ "$schema": "../schema/scene.schema.json", "version": 2 }
 ```
 
 The key is optional and the loader ignores it.
@@ -24,7 +24,7 @@ The key is optional and the loader ignores it.
 
 | Key | Required | Description |
 | --- | --- | --- |
-| `version` | yes | Format version. Currently `1`. |
+| `version` | yes | Format version. Currently `2`. |
 | `camera` | yes | Ray generation parameters. |
 | `render` | yes | Image dimensions, sampling, background, post-processing. |
 | `textures` | no | Named texture definitions. |
@@ -40,7 +40,7 @@ field is an error, not a silently ignored one.
 ```json
 {
   "$schema": "../schema/scene.schema.json",
-  "version": 1,
+  "version": 2,
   "camera": {
     "lookfrom": [0, 2, 12],
     "lookat": [0, 1, 0],
@@ -242,18 +242,52 @@ asset rather than a switch in the scene. Polygons with more than three corners
 are triangulated on load.
 
 The mesh's triangles are organised into a bounding volume hierarchy, for the
-same reason a `group`'s children are. Writing the same file in two objects
-produces two independent copies of the geometry; sharing one mesh between
-several placements is instancing, which the format does not express yet.
+same reason a `group`'s children are. Writing the same `filename` with the same
+`material` in two places loads the file once: the loader keeps one copy of the
+geometry and both places refer to it. Putting that shared geometry in several
+positions is what `transform` is for.
 
 ### Composite nodes
 
 | `type` | Fields |
 | --- | --- |
 | `group` | `children` (array of objects or names) |
-| `translate` | `object`, `offset` (vec3) |
-| `rotate_y` | `object`, `angle` (degrees, counter-clockwise) |
+| `transform` | `object`, and any of `translate`, `rotate`, `scale` |
 | `constant_medium` | `boundary`, `density` (> 0), `phase_function` (material name) |
+
+A `transform` places another object somewhere else in the scene. The three
+fields are applied in a fixed order — **scale, then rotate, then translate** —
+and the rotations within `rotate` are applied about X, then Y, then Z. Every
+field is optional; an omitted one is the identity.
+
+```json
+{ "type": "transform", "translate": [265, 0, 295], "rotate": [0, 15, 0],
+  "object": { "type": "box", "a": [0,0,0], "b": [165,330,165], "material": "white" } }
+```
+
+Scale is applied about the object-space origin, not about the object's centre:
+scaling a sphere centred at `[5, 0, 0]` by `[2, 2, 2]` also moves it to
+`[10, 0, 0]`. To scale in place, scale first and translate afterwards — which is
+what a single `transform` already does, so nest a second one only when you need
+a different order.
+
+A scale factor of `0` is rejected: it collapses the object into a plane, and the
+transform would have no inverse to carry rays into.
+
+**Instancing.** Because a `transform` refers to its child rather than copying
+it, naming an object once and referring to it from several transforms puts one
+piece of geometry in many places at no extra memory cost. This is the cheapest
+way to fill a scene with a heavy mesh:
+
+```json
+{ "type": "mesh", "name": "bunny", "filename": "bunny.obj", "material": "white" },
+{ "type": "transform", "translate": [ 2, 0, 0], "object": "bunny" },
+{ "type": "transform", "translate": [-2, 0, 0], "rotate": [0, 90, 0], "object": "bunny" }
+```
+
+Note that the named object is itself part of the scene, at its original
+position. To place only the instances, define the mesh inside the first
+transform and name that transform's child instead.
 
 Children of a `group` are organised into a bounding volume hierarchy when the scene is loaded. This is an implementation detail of the renderer: the scene format deliberately does not expose or name an acceleration structure.
 
@@ -263,12 +297,11 @@ name it, list it among `objects`, and refer to it by name here.
 
 ### Inline objects and references
 
-Wherever a child object is expected — `group.children`, `translate.object`,
-`rotate_y.object`, `constant_medium.boundary` — you may write either the object
-inline or the name of an object defined elsewhere:
+Wherever a child object is expected — `group.children`, `transform.object`, `constant_medium.boundary` — you
+may writeeither the object inline or the name of an object defined elsewhere:
 
 ```json
-{ "type": "rotate_y", "angle": 15, "object": { "type": "box", "a": [0,0,0], "b": [1,1,1], "material": "white" } }
+{ "type": "transform", "rotate": [0, 15, 0], "object": { "type": "box", "a": [0,0,0], "b": [1,1,1], "material": "white" } }
 { "type": "constant_medium", "boundary": "fog_volume", "density": 0.01, "phase_function": "fog" }
 ```
 
@@ -320,6 +353,9 @@ them. **This table is what the loader implements.**
 | `<texture>.seed` (noise) | `0` |
 | `<material>.fuzz` (metal) | `0` |
 | `<object>.name` | none |
+| `transform.translate` | `[0, 0, 0]` |
+| `transform.rotate` | `[0, 0, 0]` |
+| `transform.scale` | `[1, 1, 1]` |
 | `sphere.center_end` | absent — the sphere is static |
 | `importance_targets` | empty |
 
@@ -349,9 +385,32 @@ with the loader.
 
 ## Not supported yet
 
-General transforms beyond `translate` and `rotate_y`, including instancing of a
-mesh or of a transformed object; per-face materials and `.mtl` material
-libraries; sharing a named texture as a `checker` child.
+Arbitrary transform matrices, shear, and transforms that change over the shutter
+interval (only `sphere.center_end` produces motion blur); per-face materials and
+`.mtl` material libraries; sharing a named texture as a `checker` child.
+
+Adding a primitive or a material type is a backwards-compatible change and does
+not bump `version`. `version` changes only when an existing scene stops being
+valid.
+
+### Version 2
+
+`translate` and `rotate_y` were replaced by a single `transform` node, which
+also carries `scale`. A v1 scene is converted by rewriting
+
+```json
+{ "type": "translate", "offset": [1, 0, 0],
+  "object": { "type": "rotate_y", "angle": 15, "object": ... } }
+```
+
+as
+
+```json
+{ "type": "transform", "translate": [1, 0, 0], "rotate": [0, 15, 0], "object": ... }
+```
+
+The nesting collapses because a single `transform` already applies rotation
+before translation.
 
 Adding a primitive or a material type is a backwards-compatible change and does
 not bump `version`. `version` changes only when an existing scene stops being

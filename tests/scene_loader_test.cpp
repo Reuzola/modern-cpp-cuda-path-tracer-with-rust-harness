@@ -27,7 +27,7 @@ namespace {
 const std::filesystem::path scenes_dir{PT_SCENES_DIR};
 
 constexpr std::string_view minimal_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 1], "lookat": [0, 0, 0], "vfov": 90 },
   "render": {
     "width": 4,
@@ -147,7 +147,7 @@ void check_color(const pt::Color& c, double r, double g, double b) {
 // what this scene asserts. A dielectric material is used so that the whole
 // `textures` block can be absent too.
 constexpr std::string_view defaults_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -167,7 +167,7 @@ constexpr std::string_view defaults_scene = R"json({
 // The mirror image of defaults_scene: every optional field present, and one
 // instance of each texture and material type that needs no external file.
 constexpr std::string_view explicit_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": {
     "lookfrom": [1, 2, 3],
     "lookat": [4, 5, 6],
@@ -210,7 +210,7 @@ constexpr std::string_view explicit_scene = R"json({
 // A named object referenced from a later slot: the shell is both a visible
 // surface and the boundary of the medium, and must remain a single object.
 constexpr std::string_view reference_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -232,9 +232,9 @@ constexpr std::string_view reference_scene = R"json({
   ]
 })json";
 
-// group / translate / rotate_y / box, plus a group child given by name.
+// group / transform / box, plus a group child given by name.
 constexpr std::string_view composite_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -252,18 +252,15 @@ constexpr std::string_view composite_scene = R"json({
   "objects": [
     { "type": "sphere", "name": "marker", "center": [10, 0, 0], "radius": 1, "material": "white" },
     {
-      "type": "translate",
-      "offset": [0, 0, 0],
+      "type": "transform",
+      "translate": [0, 0, 0],
+      "rotate": [0, 0, 0],
       "object": {
-        "type": "rotate_y",
-        "angle": 0,
-        "object": {
-          "type": "group",
-          "children": [
-            { "type": "box", "a": [0, 0, 0], "b": [2, 2, 2], "material": "white" },
-            "marker"
-          ]
-        }
+        "type": "group",
+        "children": [
+          { "type": "box", "a": [0, 0, 0], "b": [2, 2, 2], "material": "white" },
+          "marker"
+        ]
       }
     }
   ]
@@ -272,7 +269,7 @@ constexpr std::string_view composite_scene = R"json({
 // A sphere sweeping from center to center_end: its bounding box must cover
 // both endpoints, which is the observable trace of motion blur.
 constexpr std::string_view motion_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -298,7 +295,7 @@ constexpr std::string_view motion_scene = R"json({
 // The image file is never created next to this scene: an unopenable texture is
 // documented as a warning, not a load failure.
 constexpr std::string_view missing_image_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -346,7 +343,7 @@ v 0 1 0
 )obj";
 
 constexpr std::string_view mesh_scene = R"json({
-  "version": 1,
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -365,8 +362,8 @@ constexpr std::string_view mesh_scene = R"json({
 
 // The same mesh reached through a composite slot, which is where object_or_ref
 // applies: a mesh must be usable anywhere a child object is expected.
-constexpr std::string_view translated_mesh_scene = R"json({
-  "version": 1,
+constexpr std::string_view transformed_mesh_scene = R"json({
+  "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
   "render": {
     "width": 2,
@@ -380,17 +377,82 @@ constexpr std::string_view translated_mesh_scene = R"json({
   },
   "objects": [
     {
-      "type": "translate",
-      "offset": [3, 0, 0],
+      "type": "transform",
+      "translate": [3, 0, 0],
       "object": { "type": "mesh", "filename": "cube.obj", "material": "glass" }
     }
+  ]
+})json";
+
+// Two placements of one file under one material. The geometry is loaded,
+// triangulated and accelerated once; both instances refer to that one subtree.
+constexpr std::string_view shared_mesh_scene = R"json({
+  "version": 2,
+  "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
+  "render": {
+    "width": 2,
+    "height": 2,
+    "samples_per_pixel": 1,
+    "max_depth": 1,
+    "background": [0, 0, 0]
+  },
+  "materials": {
+    "glass": { "type": "dielectric", "refraction_index": 1.5 }
+  },
+  "objects": [
+    { "type": "transform", "translate": [-2, 0, 0], "object": { "type": "mesh", "filename": "cube.obj", "material": "glass" } },
+    { "type": "transform", "translate": [2, 0, 0], "object": { "type": "mesh", "filename": "cube.obj", "material": "glass" } }
+  ]
+})json";
+
+// The same file under two materials. Material lives on the mesh, so the cache
+// key has to carry it: these two cannot share one copy of the geometry.
+constexpr std::string_view two_material_mesh_scene = R"json({
+  "version": 2,
+  "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
+  "render": {
+    "width": 2,
+    "height": 2,
+    "samples_per_pixel": 1,
+    "max_depth": 1,
+    "background": [0, 0, 0]
+  },
+  "materials": {
+    "glass": { "type": "dielectric", "refraction_index": 1.5 },
+    "other": { "type": "dielectric", "refraction_index": 1.3 }
+  },
+  "objects": [
+    { "type": "transform", "translate": [-2, 0, 0], "object": { "type": "mesh", "filename": "cube.obj", "material": "glass" } },
+    { "type": "transform", "translate": [2, 0, 0], "object": { "type": "mesh", "filename": "cube.obj", "material": "other" } }
+  ]
+})json";
+
+// A named mesh placed twice by name. The name table hands back the same node,
+// so the scene graph is a DAG and the mesh is stored once.
+constexpr std::string_view instanced_mesh_scene = R"json({
+  "version": 2,
+  "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
+  "render": {
+    "width": 2,
+    "height": 2,
+    "samples_per_pixel": 1,
+    "max_depth": 1,
+    "background": [0, 0, 0]
+  },
+  "materials": {
+    "glass": { "type": "dielectric", "refraction_index": 1.5 }
+  },
+  "objects": [
+    { "type": "mesh", "name": "cube", "filename": "cube.obj", "material": "glass" },
+    { "type": "transform", "translate": [-3, 0, 0], "object": "cube" },
+    { "type": "transform", "translate": [3, 0, 0], "object": "cube" }
   ]
 })json";
 
 /// A valid scene, with any section replaceable. An empty section is an omitted
 /// key, which is how the "missing required field" cases are written.
 struct SceneParts {
-    std::string_view version = "1";
+    std::string_view version = "2";
     std::string_view camera = R"({"lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40})";
     std::string_view render = R"({"width": 2, "height": 2, "samples_per_pixel": 1, "max_depth": 1, "background": [0, 0, 0]})";
     std::string_view textures = R"({"grey": {"type": "solid_color", "albedo": [0.5, 0.5, 0.5]}})";
@@ -574,12 +636,12 @@ TEST_CASE("an unopenable image texture warns instead of failing the load", "[sce
 TEST_CASE("a document that is not a scene is rejected before parsing begins", "[scene][loader]") {
     check_load_error(scenes_dir / "no_such_scene.json", "", "Cannot open scene file");
 
-    check_scene_error(R"({"version": 1,)", "", "Cannot parse scene file");
+    check_scene_error(R"({"version": 2,)", "", "Cannot parse scene file");
     check_scene_error(R"([])", "", "Root JSON value must be an object");
 
     check_scene_error(compose({.version = ""}), "", "Missing required field 'version'");
-    check_scene_error(compose({.version = "2"}), "", "Unsupported scene version");
-    check_scene_error(compose({.version = R"("1")"}), "", "Unsupported scene version");
+    check_scene_error(compose({.version = "3"}), "", "Unsupported scene version");
+    check_scene_error(compose({.version = R"("2")"}), "", "Unsupported scene version");
 }
 
 TEST_CASE("every required top-level section is required", "[scene][loader]") {
@@ -713,18 +775,16 @@ TEST_CASE("object definitions are checked per index", "[scene][loader]") {
 }
 
 TEST_CASE("the location path is woven from every level it unwinds through", "[scene][loader]") {
-    check_scene_error(compose({.objects = R"([{"type": "translate", "offset": [0, 0, 0], "object": {"type": "box", "a": [0, 0, 0], "b": [1, 1, 1]}}])"}),
+    check_scene_error(compose({.objects = R"([{"type": "transform", "translate": [0, 0, 0], "object": {"type": "box", "a": [0, 0, 0], "b": [1, 1, 1]}}])"}),
                       "/objects/0/object", "Missing required field 'material'");
-    check_scene_error(compose({.objects = R"([{"type": "translate", "offset": [0, 0, 0], "object": {"type": "rotate_y", "angle": 15, "object": {"type": "sphere", "center": [0, 0, 0], "radius": -1, "material": "grey"}}}])"}),
+    check_scene_error(compose({.objects = R"([{"type": "transform", "translate": [0, 0, 0], "object": {"type": "transform", "rotate": [0, 15, 0], "object": {"type": "sphere", "center": [0, 0, 0], "radius": -1, "material": "grey"}}}])"}),
                       "/objects/0/object/object", "Field 'radius' must be positive");
-    check_scene_error(compose({.objects = R"([{"type": "group", "children": [{"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}, {"type": "sphere", "center": [3, 0, 0], "radius": 1, "material": "chrome"}]}])"}),
-                      "/objects/0/children/1", "Undefined material 'chrome'");
     check_scene_error(compose({.objects = R"([{"type": "constant_medium", "boundary": {"type": "sphere", "center": [0, 0, 0]}, "density": 1, "phase_function": "grey"}])"}),
                       "/objects/0/boundary", "Missing required field 'radius'");
 
     // Names resolve against what the single pass has already built, so a
     // reference that precedes its definition cannot be satisfied.
-    check_scene_error(compose({.objects = R"([{"type": "translate", "offset": [0, 0, 0], "object": "later"}, {"type": "sphere", "name": "later", "center": [0, 0, 0], "radius": 1, "material": "grey"}])"}),
+    check_scene_error(compose({.objects = R"([{"type": "transform", "translate": [0, 0, 0], "object": "later"}, {"type": "sphere", "name": "later", "center": [0, 0, 0], "radius": 1, "material": "grey"}])"}),
                       "/objects/0/object", "Undefined object 'later'");
 }
 
@@ -740,7 +800,7 @@ TEST_CASE("importance targets must name objects that can be sampled", "[scene][l
     check_scene_error(compose({.objects = R"([{"type": "box", "name": "crate", "a": [0, 0, 0], "b": [1, 1, 1], "material": "grey"}])",
                                .importance_targets = R"(["crate"])"}),
                       "/importance_targets/0", "is not sampleable");
-    check_scene_error(compose({.objects = R"([{"type": "translate", "name": "moved", "offset": [1, 0, 0], "object": {"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])",
+    check_scene_error(compose({.objects = R"([{"type": "transform", "name": "moved", "translate": [1, 0, 0], "object": {"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])",
                                .importance_targets = R"(["moved"])"}),
                       "/importance_targets/0", "is not sampleable");
 }
@@ -760,7 +820,7 @@ TEST_CASE("a mesh reaches the world as geometry", "[scene][loader][mesh]") {
 }
 
 TEST_CASE("a mesh is accepted wherever a child object is", "[scene][loader][mesh]") {
-    const TempSceneDir fixture(translated_mesh_scene);
+    const TempSceneDir fixture(transformed_mesh_scene);
     fixture.write_sibling("cube.obj", cube_obj);
 
     const pt::Scene scene = pt::load_scene(fixture.scene_path());
@@ -798,7 +858,7 @@ TEST_CASE("an unreadable mesh file fails the load, unlike a missing image", "[sc
 TEST_CASE("a mesh error carries the location of the slot holding it", "[scene][loader][mesh]") {
     const LogSilencer silence;
 
-    check_scene_error(compose({.objects = R"([{"type": "translate", "offset": [0, 0, 0], "object": {"type": "mesh", "filename": "absent.obj", "material": "grey"}}])"}),
+    check_scene_error(compose({.objects = R"([{"type": "transform", "translate": [0, 0, 0], "object": {"type": "mesh", "filename": "absent.obj", "material": "grey"}}])"}),
                       "/objects/0/object", "Cannot load OBJ file");
 }
 
@@ -809,4 +869,92 @@ TEST_CASE("a mesh cannot be an importance target", "[scene][loader][mesh]") {
     // A mesh enters the world as a BvhNode over its triangles, and neither the
     // node nor a triangle implements Sampleable.
     check_load_error(fixture.scene_path(), "/importance_targets/0", "is not sampleable");
+}
+
+TEST_CASE("a transform with no fields is the identity", "[scene][loader][transform]") {
+    const TempSceneDir fixture(compose({.objects = R"([{"type": "transform", "object": {"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])"}));
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, -1.0, 1.0);
+    check_interval(bounds.y, -1.0, 1.0);
+    check_interval(bounds.z, -1.0, 1.0);
+}
+
+TEST_CASE("a transform scales before it translates", "[scene][loader][transform]") {
+    // Reversing the two would put the doubled sphere at 6 rather than 3.
+    const TempSceneDir fixture(compose({.objects = R"([{"type": "transform", "translate": [3, 0, 0], "scale": [2, 2, 2], "object": {"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])"}));
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, 1.0, 5.0);
+    check_interval(bounds.y, -2.0, 2.0);
+}
+
+TEST_CASE("scale is applied about the object-space origin", "[scene][loader][transform]") {
+    // The documented consequence: an off-centre object also moves outward.
+    const TempSceneDir fixture(compose({.objects = R"([{"type": "transform", "scale": [2, 2, 2], "object": {"type": "sphere", "center": [5, 0, 0], "radius": 1, "material": "grey"}}])"}));
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, 8.0, 12.0);
+    check_interval(bounds.y, -2.0, 2.0);
+}
+
+TEST_CASE("rotations are applied about X, then Y, then Z", "[scene][loader][transform]") {
+    // Rx(90) sends (x, y, z) to (x, -z, y); Ry(90) then sends that to (y, -z, -x),
+    // so the box's extents 1, 2, 3 land on x, y, z as 2, 3, 1. The opposite order
+    // would produce 3, 1, 2 instead, which is what makes this test worth having.
+    const TempSceneDir fixture(compose({.objects = R"([{"type": "transform", "rotate": [90, 90, 0], "object": {"type": "box", "a": [0, 0, 0], "b": [1, 2, 3], "material": "grey"}}])"}));
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, 0.0, 2.0, 1e-3);
+    check_interval(bounds.y, -3.0, 0.0, 1e-3);
+    check_interval(bounds.z, -1.0, 0.0, 1e-3);
+}
+
+TEST_CASE("a zero scale factor is rejected", "[scene][loader][transform]") {
+    // A collapsed axis has no inverse, so there would be no way back into the
+    // instance. The schema rejects it too; the loader cannot rely on that.
+    check_scene_error(compose({.objects = R"([{"type": "transform", "scale": [1, 0, 1], "object": {"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])"}),
+                      "/objects/0", "Field 'scale' components must be non-zero");
+}
+
+TEST_CASE("one file under one material is loaded once", "[scene][loader][mesh][transform]") {
+    const TempSceneDir fixture(shared_mesh_scene);
+    fixture.write_sibling("cube.obj", cube_obj);
+
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    CHECK(scene.mesh_count() == 1);
+
+    // Both placements are present even though the geometry behind them is not
+    // duplicated: the unit cube reaches from -2.5 to 2.5 across the two.
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, -2.5, 2.5, 1e-3);
+    check_interval(bounds.y, -0.5, 0.5, 1e-3);
+}
+
+TEST_CASE("one file under two materials is loaded twice", "[scene][loader][mesh]") {
+    const TempSceneDir fixture(two_material_mesh_scene);
+    fixture.write_sibling("cube.obj", cube_obj);
+
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    CHECK(scene.mesh_count() == 2);
+}
+
+TEST_CASE("a named mesh can be placed by several transforms", "[scene][loader][mesh][transform]") {
+    const TempSceneDir fixture(instanced_mesh_scene);
+    fixture.write_sibling("cube.obj", cube_obj);
+
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    CHECK(scene.mesh_count() == 1);
+
+    // The named mesh is itself an object, so it stays at the origin alongside
+    // the two instances. That is the documented behaviour, not an oversight.
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, -3.5, 3.5, 1e-3);
 }

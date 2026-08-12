@@ -1,6 +1,6 @@
 {
   "$schema": "../schema/scene.schema.json",
-  "version": 1,
+  "version": 2,
   "camera": {
     "lookfrom": [278, 278, -800],
     "lookat": [278, 278, 0],
@@ -44,13 +44,10 @@
       "density": 0.01,
       "phase_function": "smoke",
       "boundary": {
-        "type": "translate",
-        "offset": [265, 0, 295],
-        "object": {
-          "type": "rotate_y",
-          "angle": 15,
-          "object": { "type": "box", "a": [0, 0, 0], "b": [165, 330, 165], "material": "white" }
-        }
+        "type": "transform",
+        "translate": [265, 0, 295],
+        "rotate": [0, 15, 0],
+        "object": { "type": "box", "a": [0, 0, 0], "b": [165, 330, 165], "material": "white" }
       }
     },
     {
@@ -58,13 +55,10 @@
       "density": 0.01,
       "phase_function": "fog",
       "boundary": {
-        "type": "translate",
-        "offset": [130, 0, 65],
-        "object": {
-          "type": "rotate_y",
-          "angle": -18,
-          "object": { "type": "box", "a": [0, 0, 0], "b": [165, 165, 165], "material": "white" }
-        }
+        "type": "transform",
+        "translate": [130, 0, 65],
+        "rotate": [0, -18, 0],
+        "object": { "type": "box", "a": [0, 0, 0], "b": [165, 165, 165], "material": "white" }
       }
     }
   ]

@@ -11,6 +11,7 @@
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/textures/texture.hpp"
 #include "pt/util/arena.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <type_traits>
@@ -78,6 +79,8 @@ public:
         meshes_.push_back(std::move(owned));
         return ptr;
     }
+
+    [[nodiscard]] std::size_t mesh_count() const noexcept { return meshes_.size(); }
 
     void add_object(const Hittable* obj);
 

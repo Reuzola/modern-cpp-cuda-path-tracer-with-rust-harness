@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn structural_errors_stop_the_pipeline_before_the_semantic_rules() {
         let json = lit_scene()
-            .replace(r#""version": 1"#, r#""version": 2"#)
+            .replace(r#""version": 2"#, r#""version": 3"#)
             .replace(r#""material": "grey" }"#, r#""material": "gold" }"#);
         let (_dir, path) = scene_file(&json);
 

@@ -1,6 +1,6 @@
 {
   "$schema": "../schema/scene.schema.json",
-  "version": 1,
+  "version": 2,
   "camera": {
     "lookfrom": [278, 278, -800],
     "lookat": [278, 278, 0],
@@ -37,13 +37,10 @@
     { "type": "quad", "q": [555, 555, 555], "u": [-555, 0, 0], "v": [0, 0, -555], "material": "white" },
     { "type": "quad", "q": [0, 0, 555], "u": [555, 0, 0], "v": [0, 555, 0], "material": "white" },
     {
-      "type": "translate",
-      "offset": [265, 0, 295],
-      "object": {
-        "type": "rotate_y",
-        "angle": 15,
-        "object": { "type": "box", "a": [0, 0, 0], "b": [165, 330, 165], "material": "white" }
-      }
+      "type": "transform",
+      "translate": [265, 0, 295],
+      "rotate": [0, 15, 0],
+      "object": { "type": "box", "a": [0, 0, 0], "b": [165, 330, 165], "material": "white" }
     },
     { "type": "sphere", "name": "glass_sphere", "center": [190, 90, 190], "radius": 90, "material": "glass" }
   ],

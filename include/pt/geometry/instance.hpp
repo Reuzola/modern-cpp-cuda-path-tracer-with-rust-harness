@@ -3,7 +3,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
-#include "pt/math/scalar.hpp"
+#include "pt/math/transform.hpp"
 
 namespace pt {
 
@@ -11,18 +11,19 @@ class Interval;
 
 class Sampler;
 
-class RotateY final : public Hittable {
+// A transformed reference to another hittable. The child is shared rather than
+// owned, so the same geometry can appear under any number of instances.
+class Instance final : public Hittable {
 public:
-    RotateY(const Hittable* object, Float angle);
-
-    [[nodiscard]] Aabb bounding_box() const override;
+    Instance(const Hittable* object, const Transform& transform);
 
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
 
+    [[nodiscard]] Aabb bounding_box() const override;
+
 private:
     const Hittable* object_;
-    Float sin_theta_{};
-    Float cos_theta_{};
+    Transform transform_;
     Aabb bbox_;
 };
 

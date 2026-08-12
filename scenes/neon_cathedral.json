@@ -1,6 +1,6 @@
 {
   "$schema": "../schema/scene.schema.json",
-  "version": 1,
+  "version": 2,
   "camera": {
     "lookfrom": [0, 175, -420],
     "lookat": [0, 250, 900],
@@ -125,22 +125,16 @@
         { "type": "sphere", "name": "reliquary_core", "center": [0, 212, 640], "radius": 56, "material": "light_core" },
 
         {
-          "type": "translate",
-          "offset": [-214, 44, 530],
-          "object": {
-            "type": "rotate_y",
-            "angle": 34,
-            "object": { "type": "box", "a": [-46, 0, -46], "b": [46, 380, 46], "material": "marble" }
-          }
+          "type": "transform",
+          "translate": [-214, 44, 530],
+          "rotate": [0, 34, 0],
+          "object": { "type": "box", "a": [-46, 0, -46], "b": [46, 380, 46], "material": "marble" }
         },
         {
-          "type": "translate",
-          "offset": [216, 44, 715],
-          "object": {
-            "type": "rotate_y",
-            "angle": -27,
-            "object": { "type": "box", "a": [-40, 0, -40], "b": [40, 310, 40], "material": "chrome" }
-          }
+          "type": "transform",
+          "translate": [216, 44, 715],
+          "rotate": [0, -27, 0],
+          "object": { "type": "box", "a": [-40, 0, -40], "b": [40, 310, 40], "material": "chrome" }
         }
       ]
     },

@@ -1,6 +1,6 @@
 {
   "$schema": "../schema/scene.schema.json",
-  "version": 1,
+  "version": 2,
   "camera": {
     "lookfrom": [0, 0, 12],
     "lookat": [0, 0, 0],

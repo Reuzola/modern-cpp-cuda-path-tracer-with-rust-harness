@@ -5,11 +5,10 @@
 #include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/instance.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
-#include "pt/geometry/rotate_y.hpp"
 #include "pt/geometry/sphere.hpp"
-#include "pt/geometry/translate.hpp"
 #include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
@@ -19,6 +18,7 @@
 #include "pt/math/color.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
+#include "pt/math/transform.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/post/tonemap.hpp"
 #include "pt/scene/obj_loader.hpp"
@@ -40,6 +40,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 namespace pt {
@@ -54,6 +55,10 @@ struct LoadContext {
     std::map<std::string, const Texture*> textures;
     std::map<std::string, const Material*> materials;
     std::map<std::string, const Hittable*> objects;
+
+    // Keyed by resolved path and material, so the same OBJ under the same
+    // material is read, triangulated and accelerated exactly once.
+    std::map<std::pair<std::string, const Material*>, const Hittable*> meshes;
 };
 
 template <typename T>
@@ -247,14 +252,27 @@ template <typename T>
 
         const Material* mat = find_material(ctx, j, "material");
         const std::filesystem::path resolved = ctx.base_dir / filename;
-        const Mesh* mesh = build_mesh(ctx, resolved, mat);
 
-        // The triangles are organised into a BVH for the same reason a group's children
-        // are: a mesh is thousands of primitives, and acceleration is the renderer's
-        // decision rather than the scene author's, so the format does not name it.
-        const HittableList* triangles = mesh_triangles(ctx.scene.object_arena(), *mesh);
+        std::error_code ec;
+        const std::filesystem::path canonical = std::filesystem::weakly_canonical(resolved, ec);
+        const std::string key_path = (ec ? resolved.lexically_normal() : canonical).string();
 
-        result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), *triangles);
+        const auto key = std::pair{key_path, mat};
+        // A cache hit yields the same node the first placement got: the scene graph is
+        // a DAG, so one subtree can sit under any number of parents.
+        const auto it = ctx.meshes.find(key);
+        if (it != ctx.meshes.end()) {
+            result = it->second;
+        } else {
+            const Mesh* mesh = build_mesh(ctx, resolved, mat);
+
+            // The triangles are organised into a BVH for the same reason a group's children
+            // are: a mesh is thousands of primitives, and acceleration is the renderer's
+            // decision rather than the scene author's, so the format does not name it.
+            const HittableList* triangles = mesh_triangles(ctx.scene.object_arena(), *mesh);
+            result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), *triangles);
+            ctx.meshes.emplace(key, result);
+        }
     } else if (type == "group") {
         const Json& children = field(j, "children");
         if (!children.is_array() || children.empty()) throw SceneError("Field 'children' must be a non-empty array");
@@ -274,16 +292,24 @@ template <typename T>
         // The children are organised into a BVH: acceleration is the renderer's
         // decision, not the scene author's, so the format does not name it.
         result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), list);
-    } else if (type == "translate") {
+    } else if (type == "transform") {
         const Hittable* child = child_at(j, ctx, "object");
-        const Vec3 offset = read_vec3(field(j, "offset"));
+        const Vec3 offset = j.contains("translate") ? read_vec3(j.at("translate")) : Vec3(0, 0, 0);
+        const Vec3 rotation = j.contains("rotate") ? read_vec3(j.at("rotate")) : Vec3(0, 0, 0);
+        const Vec3 scale = j.contains("scale") ? read_vec3(j.at("scale")) : Vec3(1, 1, 1);
 
-        result = ctx.scene.create_object<Translate>(child, offset);
-    } else if (type == "rotate_y") {
-        const Hittable* child = child_at(j, ctx, "object");
-        const Float angle = read_number(field(j, "angle"));
+        if (scale.x() == 0 || scale.y() == 0 || scale.z() == 0)
+            throw SceneError(std::format("Field 'scale' components must be non-zero, got [{}, {}, {}]", scale.x(), scale.y(), scale.z()));
 
-        result = ctx.scene.create_object<RotateY>(child, angle);
+        // Read right to left: scale first, then X, Y, Z rotation, then translation.
+        // This is the order docs/scene-format.md states and every DCC tool applies.
+        const Transform transform = Transform::translation(offset) *
+                                    Transform::rotation_z(rotation.z()) *
+                                    Transform::rotation_y(rotation.y()) *
+                                    Transform::rotation_x(rotation.x()) *
+                                    Transform::scaling(scale);
+
+        result = ctx.scene.create_object<Instance>(child, transform);
     } else if (type == "constant_medium") {
         const Hittable* boundary = child_at(j, ctx, "boundary");
         const Float density = read_number(field(j, "density"));
@@ -539,11 +565,11 @@ Scene load_scene(const std::filesystem::path& path) {
     if (!parsed.is_object()) throw SceneError(std::format("Root JSON value must be an object, got {}", parsed.type_name()));
 
     const Json& version = field(parsed, "version");
-    if (!version.is_number_integer() || version.get<std::int64_t>() != 1)
-        throw SceneError(std::format("Unsupported scene version: expected 1, got {}", version.dump()));
+    if (!version.is_number_integer() || version.get<std::int64_t>() != 2)
+        throw SceneError(std::format("Unsupported scene version: expected 2, got {}", version.dump()));
 
     Scene scene;
-    LoadContext ctx{scene, path.parent_path(), {}, {}, {}};
+    LoadContext ctx{scene, path.parent_path(), {}, {}, {}, {}};
 
     // Safety net: every at() and get<>() below is guarded by a preceding type
     // check, so nothing should reach this handler today. It exists so that a

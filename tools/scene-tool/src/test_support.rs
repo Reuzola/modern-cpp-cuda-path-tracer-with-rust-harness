@@ -4,7 +4,7 @@ use crate::scene::Scene;
 /// The smallest scene the schema and the model both accept. Tests derive their own documents
 /// from it with `str::replace`, so each one states only the field it is actually about.
 pub(crate) const MINIMAL_SCENE: &str = r#"{
-    "version": 1,
+    "version": 2,
     "camera": { "lookfrom": [0, 0, 1], "lookat": [0, 0, 0], "vfov": 40 },
     "render": {
         "width": 4, "height": 4, "samples_per_pixel": 1,

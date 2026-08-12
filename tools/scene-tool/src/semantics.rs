@@ -91,8 +91,7 @@ fn object_name(obj: &Object) -> Option<&String> {
         | Object::Box { name, .. }
         | Object::Mesh { name, .. }
         | Object::Group { name, .. }
-        | Object::Translate { name, .. }
-        | Object::RotateY { name, .. }
+        | Object::Transform { name, .. }
         | Object::ConstantMedium { name, .. } => {
             name.as_ref()
         }
@@ -152,8 +151,7 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             }
         }
 
-        Object::Translate { object, .. }
-        | Object::RotateY { object, .. } => {
+        Object::Transform { object, .. } => {
             let child_location = format!("{location}/object");
             walk_child(object, &child_location, scene, names, base_dir, diagnostics);
         }
@@ -393,6 +391,24 @@ mod tests {
         assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
     }
 
+    // A transform wraps its child but is not itself sampleable, so a light that
+    // has been moved cannot be sampled directly. The C++ loader refuses the same
+    // scene through a failed dynamic_cast; this keeps the two answers together.
+    #[test]
+    fn a_transform_cannot_be_an_importance_target() {
+        let json = with_objects(
+            r#"{ "type": "transform", "name": "moved", "translate": [1, 0, 0],
+                 "object": { "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" } }"#,
+        )
+        .replace(r#""objects": ["#, r#""importance_targets": ["moved"], "objects": ["#);
+
+        let found = analyse(&json);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.location, "/importance_targets/0");
+        assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
+    }
+
     #[test]
     fn a_missing_texture_file_is_a_warning_not_an_error() {
         let dir = TempDir::new().expect("a temp dir must be creatable");
@@ -503,7 +519,7 @@ mod tests {
     // a mesh nested inside a transform is checked, and at its own location.
     #[test]
     fn a_nested_mesh_is_checked_at_the_location_holding_it() {
-        let json = with_objects(&format!(r#"{{ "type": "translate", "offset": [0, 0, 0], "object": {MESH} }}"#));
+        let json = with_objects(&format!(r#"{{ "type": "transform", "translate": [0, 0, 0], "object": {MESH} }}"#));
 
         let found = analyse_in(&json, &[]);
 

@@ -91,15 +91,18 @@ pub enum Object {
         name: Option<String>,
         children: Vec<ObjectOrRef>,
     },
-    Translate {
+    Transform {
         name: Option<String>,
         object: ObjectOrRef,
-        offset: [f64; 3],
-    },
-    RotateY {
-        name: Option<String>,
-        object: ObjectOrRef,
-        angle: f64,
+
+        #[serde(default)]
+        translate: Option<[f64; 3]>,
+
+        #[serde(default)]
+        rotate: Option<[f64; 3]>,
+
+        #[serde(default)]
+        scale: Option<[f64; 3]>,
     },
     ConstantMedium {
         name: Option<String>,
@@ -355,14 +358,14 @@ mod tests {
         let json = MINIMAL.replace(
             r#""objects": ["#,
             r#""objects": [
-                { "type": "translate", "offset": [0, 1, 0],
+                { "type": "transform", "translate": [0, 1, 0],
                   "object": { "type": "mesh", "filename": "bunny.obj", "material": "grey" } },"#,
         );
 
         let scene = parse(&json);
 
-        let Object::Translate { object, .. } = &scene.objects[0] else {
-            panic!("the first object must be a translate");
+        let Object::Transform { object, .. } = &scene.objects[0] else {
+            panic!("the first object must be a transform");
         };
 
         let ObjectOrRef::Inline(child) = object else {
@@ -370,5 +373,28 @@ mod tests {
         };
 
         assert!(matches!(**child, Object::Mesh { .. }));
+    }
+
+    // Every transform field is optional, and the model keeps "absent" distinct
+    // from "present and zero": filling in the defaults is the loader's job, and
+    // a validator that guessed them could not report what the file actually says.
+    #[test]
+    fn a_transform_keeps_its_absent_fields_absent() {
+        let json = MINIMAL.replace(
+            r#""objects": ["#,
+            r#""objects": [
+                { "type": "transform", "rotate": [0, 15, 0],
+                  "object": { "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" } },"#,
+        );
+
+        let scene = parse(&json);
+
+        let Object::Transform { translate, rotate, scale, .. } = &scene.objects[0] else {
+            panic!("the first object must be a transform");
+        };
+
+        assert!(translate.is_none());
+        assert_eq!(*rotate, Some([0.0, 15.0, 0.0]));
+        assert!(scale.is_none());
     }
 }

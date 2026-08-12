@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn a_wrong_version_is_reported_at_its_own_location() {
-        let found = diagnostics(&MINIMAL_SCENE.replace(r#""version": 1"#, r#""version": 2"#));
+        let found = diagnostics(&MINIMAL_SCENE.replace(r#""version": 2"#, r#""version": 3"#));
 
         assert_eq!(locations(&found), ["/version"]);
     }
@@ -107,6 +107,18 @@ mod tests {
         let found = diagnostics(&MINIMAL_SCENE.replace(r#""radius": 1"#, r#""radius": -1"#));
 
         assert_eq!(locations(&found), ["/objects/0/radius"]);
+    }
+
+    // The scale factors get their own $def instead of reusing vec3: zero is the
+    // one value with no inverse, while [0, 0, 0] is a perfectly good offset.
+    #[test]
+    fn a_zero_scale_factor_is_rejected_at_its_own_index() {
+        let found = diagnostics(&with_object(
+            r#"{ "type": "transform", "scale": [1, 0, 1],
+                 "object": { "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" } }"#,
+        ));
+
+        assert_eq!(locations(&found), ["/objects/0/scale/1"]);
     }
 
     #[test]
