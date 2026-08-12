@@ -375,6 +375,7 @@
             "sphere",
             "quad",
             "box",
+            "mesh",
             "group",
             "translate",
             "rotate_y",
@@ -479,6 +480,34 @@
               },
               "b": {
                 "$ref": "#/$defs/vec3"
+              },
+              "material": {
+                "$ref": "#/$defs/name"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "mesh"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "filename",
+              "material"
+            ],
+            "properties": {
+              "filename": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Path to a Wavefront OBJ file, resolved relative to the scene file."
               },
               "material": {
                 "$ref": "#/$defs/name"

@@ -89,6 +89,7 @@ fn object_name(obj: &Object) -> Option<&String> {
         Object::Sphere { name, .. }
         | Object::Quad { name, .. }
         | Object::Box { name, .. }
+        | Object::Mesh { name, .. }
         | Object::Group { name, .. }
         | Object::Translate { name, .. }
         | Object::RotateY { name, .. }
@@ -98,7 +99,7 @@ fn object_name(obj: &Object) -> Option<&String> {
     }
 }
 
-fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut NameTable, diagnostics: &mut Vec<Diagnostic>) {
+fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) {
     match child {
         ObjectOrRef::Ref(name) => {
             if !names.defined.contains(name) {
@@ -107,12 +108,12 @@ fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut Na
         }
 
         ObjectOrRef::Inline(object) => {
-            walk_object(object, location, scene, names, diagnostics);
+            walk_object(object, location, scene, names, base_dir, diagnostics);
         }
     }
 }
 
-fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTable, diagnostics: &mut Vec<Diagnostic>) {
+fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) {
     match obj {
         Object::Sphere { material, .. }
         | Object::Box { material, .. } => {
@@ -132,24 +133,36 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             }
         }
 
+        // An error rather than the warning a missing image texture gets: the loader
+        // substitutes a placeholder for an unreadable image, but a mesh that fails to
+        // load leaves no geometry behind, so the render stops.
+        Object::Mesh { filename, material, .. } => {
+            check_material(material, location, scene, names, diagnostics);
+
+            let resolved = base_dir.join(filename);
+            if !resolved.is_file() {
+                diagnostics.push(Diagnostic::error(location.to_string(), format!("mesh file not found: '{}'", resolved.display())));
+            }
+        }
+
         Object::Group { children, .. } => {
             for (index, child) in children.iter().enumerate() {
                 let child_location = format!("{location}/children/{index}");
-                walk_child(child, &child_location, scene, names, diagnostics);
+                walk_child(child, &child_location, scene, names, base_dir, diagnostics);
             }
         }
 
         Object::Translate { object, .. }
         | Object::RotateY { object, .. } => {
             let child_location = format!("{location}/object");
-            walk_child(object, &child_location, scene, names, diagnostics);
+            walk_child(object, &child_location, scene, names, base_dir, diagnostics);
         }
 
         Object::ConstantMedium { boundary, phase_function, .. } => {
             check_material(phase_function, location, scene, names, diagnostics);
 
             let child_location = format!("{location}/boundary");
-            walk_child(boundary, &child_location, scene, names, diagnostics);
+            walk_child(boundary, &child_location, scene, names, base_dir, diagnostics);
         }
     }
 
@@ -163,12 +176,12 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
     }
 }
 
-fn check_object_refs(scene: &Scene, diagnostics: &mut Vec<Diagnostic>) -> NameTable {
+fn check_object_refs(scene: &Scene, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> NameTable {
     let mut names = NameTable::default();
 
     for (index, object) in scene.objects.iter().enumerate() {
         let location = format!("/objects/{index}");
-        walk_object(object, &location, scene, &mut names, diagnostics);
+        walk_object(object, &location, scene, &mut names, base_dir, diagnostics);
     }
     names
 }
@@ -195,7 +208,7 @@ pub fn validate_semantics(scene: &Scene, base_dir: &Path) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
     check_texture_refs(scene, &mut diagnostics);
-    let names = check_object_refs(scene, &mut diagnostics);
+    let names = check_object_refs(scene, base_dir, &mut diagnostics);
     check_importance_targets(scene, &names, &mut diagnostics);
     check_texture_files(scene, base_dir, &mut diagnostics);
     check_black_scene(scene, &names, &mut diagnostics);
@@ -212,6 +225,23 @@ mod tests {
 
     /// The one object in the minimal scene, as it appears in the fixture.
     const SPHERE: &str = r#"{ "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" }"#;
+
+    /// A mesh referring to a file the fixture may or may not create.
+    const MESH: &str = r#"{ "type": "mesh", "filename": "bunny.obj", "material": "grey" }"#;
+
+    /// Runs the rules against a directory containing `files`, for the rules that
+    /// read the filesystem. The directory is removed when the call returns; the
+    /// diagnostics own their strings, so nothing outlives it.
+    fn analyse_in(json: &str, files: &[&str]) -> Vec<Diagnostic> {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+
+        for name in files {
+            std::fs::write(dir.path().join(name), b"# not really an OBJ")
+                .expect("the fixture must be writable");
+        }
+
+        validate_semantics(&parse_scene(json), dir.path())
+    }
 
     fn with_objects(objects: &str) -> String {
         lit_scene().replace(SPHERE, objects)
@@ -433,5 +463,65 @@ mod tests {
         let found = analyse(&json);
 
         assert_eq!(only(&found).location, "/render/background");
+    }
+
+    // The severity is the whole point of this rule: the loader substitutes a
+    // placeholder for a missing image but stops on a missing mesh, so reporting
+    // this as a warning would let `validate` pass a scene that cannot render.
+    #[test]
+    fn a_missing_mesh_file_is_an_error_not_a_warning() {
+        let found = analyse_in(&with_objects(MESH), &[]);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.severity, Severity::Error);
+        assert_eq!(diagnostic.location, "/objects/0");
+    }
+
+    // As with image textures, the rule asks whether the path resolves to a file
+    // and stops there: parsing OBJ is the renderer's job, so a file of garbage
+    // is enough to satisfy it.
+    #[test]
+    fn a_mesh_file_that_exists_produces_no_finding() {
+        assert_eq!(locations(&analyse_in(&with_objects(MESH), &["bunny.obj"])), Vec::<&str>::new());
+    }
+
+    // A mesh goes through check_material like every other primitive, which also
+    // registers it in used_materials and so feeds the black-scene lint. The file
+    // is created so that the material error is the only finding.
+    #[test]
+    fn an_undefined_material_on_a_mesh_is_reported_at_the_object() {
+        let json = with_objects(&MESH.replace(r#""material": "grey""#, r#""material": "gold""#));
+
+        let found = analyse_in(&json, &["bunny.obj"]);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.location, "/objects/0");
+        assert!(diagnostic.message.contains("gold"), "{}", diagnostic.message);
+    }
+
+    // base_dir now has to reach the recursive walk, not just the top-level pass:
+    // a mesh nested inside a transform is checked, and at its own location.
+    #[test]
+    fn a_nested_mesh_is_checked_at_the_location_holding_it() {
+        let json = with_objects(&format!(r#"{{ "type": "translate", "offset": [0, 0, 0], "object": {MESH} }}"#));
+
+        let found = analyse_in(&json, &[]);
+
+        assert_eq!(only(&found).location, "/objects/0/object");
+    }
+
+    // A mesh enters the renderer as a BVH over its triangles, and neither the
+    // node nor a triangle implements Sampleable. The C++ loader rejects the same
+    // scene; this keeps the two from drifting apart.
+    #[test]
+    fn a_mesh_cannot_be_an_importance_target() {
+        let json = with_objects(&MESH.replace(r#""type": "mesh""#, r#""type": "mesh", "name": "bunny""#))
+            .replace(r#""objects": ["#, r#""importance_targets": ["bunny"], "objects": ["#);
+
+        let found = analyse_in(&json, &["bunny.obj"]);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.location, "/importance_targets/0");
+        assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
     }
 }

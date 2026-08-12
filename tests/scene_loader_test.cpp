@@ -92,6 +92,16 @@ public:
         std::filesystem::remove_all(dir_, ec);
     }
 
+    /// Writes `content` to a file beside the scene. A mesh's `filename` is
+    /// resolved against the scene file's directory, so an OBJ fixture has to
+    /// share that directory rather than live in the working directory.
+    void write_sibling(std::string_view name, std::string_view content) const {
+        std::ofstream stream(dir_ / name, std::ofstream::binary);
+        stream << content;
+        stream.close();
+        REQUIRE(stream.good());
+    }
+
     [[nodiscard]] const std::filesystem::path& scene_path() const noexcept { return path_; }
 
 private:
@@ -305,6 +315,75 @@ constexpr std::string_view missing_image_scene = R"json({
   },
   "objects": [
     { "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "surface" }
+  ]
+})json";
+
+// The shape of assets/unit_cube.obj, duplicated here so that the loader tests
+// do not depend on the repository's asset directory. Faces are quads, which
+// the loader triangulates into twelve triangles.
+constexpr std::string_view cube_obj = R"obj(
+v -0.5 -0.5  0.5
+v  0.5 -0.5  0.5
+v  0.5  0.5  0.5
+v -0.5  0.5  0.5
+v -0.5 -0.5 -0.5
+v  0.5 -0.5 -0.5
+v  0.5  0.5 -0.5
+v -0.5  0.5 -0.5
+f 1 2 3 4
+f 6 5 8 7
+f 5 1 4 8
+f 2 6 7 3
+f 4 3 7 8
+f 5 6 2 1
+)obj";
+
+// Vertices but no faces: the loader rejects a mesh with nothing to intersect.
+constexpr std::string_view faceless_obj = R"obj(
+v 0 0 0
+v 1 0 0
+v 0 1 0
+)obj";
+
+constexpr std::string_view mesh_scene = R"json({
+  "version": 1,
+  "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
+  "render": {
+    "width": 2,
+    "height": 2,
+    "samples_per_pixel": 1,
+    "max_depth": 1,
+    "background": [0, 0, 0]
+  },
+  "materials": {
+    "glass": { "type": "dielectric", "refraction_index": 1.5 }
+  },
+  "objects": [
+    { "type": "mesh", "name": "cube", "filename": "cube.obj", "material": "glass" }
+  ]
+})json";
+
+// The same mesh reached through a composite slot, which is where object_or_ref
+// applies: a mesh must be usable anywhere a child object is expected.
+constexpr std::string_view translated_mesh_scene = R"json({
+  "version": 1,
+  "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
+  "render": {
+    "width": 2,
+    "height": 2,
+    "samples_per_pixel": 1,
+    "max_depth": 1,
+    "background": [0, 0, 0]
+  },
+  "materials": {
+    "glass": { "type": "dielectric", "refraction_index": 1.5 }
+  },
+  "objects": [
+    {
+      "type": "translate",
+      "offset": [3, 0, 0],
+      "object": { "type": "mesh", "filename": "cube.obj", "material": "glass" }
+    }
   ]
 })json";
 
@@ -664,4 +743,70 @@ TEST_CASE("importance targets must name objects that can be sampled", "[scene][l
     check_scene_error(compose({.objects = R"([{"type": "translate", "name": "moved", "offset": [1, 0, 0], "object": {"type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])",
                                .importance_targets = R"(["moved"])"}),
                       "/importance_targets/0", "is not sampleable");
+}
+
+TEST_CASE("a mesh reaches the world as geometry", "[scene][loader][mesh]") {
+    const TempSceneDir fixture(mesh_scene);
+    fixture.write_sibling("cube.obj", cube_obj);
+
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    // The unit cube spans [-0.5, 0.5] on every axis. The margin absorbs the
+    // padding Aabb applies to each flat face triangle.
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, -0.5, 0.5, 1e-3);
+    check_interval(bounds.y, -0.5, 0.5, 1e-3);
+    check_interval(bounds.z, -0.5, 0.5, 1e-3);
+}
+
+TEST_CASE("a mesh is accepted wherever a child object is", "[scene][loader][mesh]") {
+    const TempSceneDir fixture(translated_mesh_scene);
+    fixture.write_sibling("cube.obj", cube_obj);
+
+    const pt::Scene scene = pt::load_scene(fixture.scene_path());
+
+    const pt::Aabb bounds = scene.world().bounding_box();
+    check_interval(bounds.x, 2.5, 3.5, 1e-3);
+    check_interval(bounds.y, -0.5, 0.5, 1e-3);
+}
+
+TEST_CASE("a mesh's own fields are checked before its file is read", "[scene][loader][mesh]") {
+    check_scene_error(compose({.objects = R"([{"type": "mesh", "material": "grey"}])"}),
+                      "/objects/0", "Missing required field 'filename'");
+    check_scene_error(compose({.objects = R"([{"type": "mesh", "filename": "cube.obj"}])"}),
+                      "/objects/0", "Missing required field 'material'");
+    check_scene_error(compose({.objects = R"([{"type": "mesh", "filename": "", "material": "grey"}])"}),
+                      "/objects/0", "Field 'filename' must not be empty");
+
+    // No cube.obj is ever written for this fixture: the material is resolved
+    // first, so an undefined name fails without touching the filesystem.
+    check_scene_error(compose({.objects = R"([{"type": "mesh", "filename": "cube.obj", "material": "gold"}])"}),
+                      "/objects/0", "Undefined material 'gold'");
+}
+
+TEST_CASE("an unreadable mesh file fails the load, unlike a missing image", "[scene][loader][mesh]") {
+    const LogSilencer silence;
+
+    check_scene_error(compose({.objects = R"([{"type": "mesh", "filename": "no_such_mesh.obj", "material": "grey"}])"}),
+                      "/objects/0", "Cannot load OBJ file");
+
+    const TempSceneDir fixture(mesh_scene);
+    fixture.write_sibling("cube.obj", faceless_obj);
+    check_load_error(fixture.scene_path(), "/objects/0", "contains no triangles");
+}
+
+TEST_CASE("a mesh error carries the location of the slot holding it", "[scene][loader][mesh]") {
+    const LogSilencer silence;
+
+    check_scene_error(compose({.objects = R"([{"type": "translate", "offset": [0, 0, 0], "object": {"type": "mesh", "filename": "absent.obj", "material": "grey"}}])"}),
+                      "/objects/0/object", "Cannot load OBJ file");
+}
+
+TEST_CASE("a mesh cannot be an importance target", "[scene][loader][mesh]") {
+    const TempSceneDir fixture(std::string(mesh_scene).insert(mesh_scene.size() - 1, R"(,"importance_targets": ["cube"])"));
+    fixture.write_sibling("cube.obj", cube_obj);
+
+    // A mesh enters the world as a BvhNode over its triangles, and neither the
+    // node nor a triangle implements Sampleable.
+    check_load_error(fixture.scene_path(), "/importance_targets/0", "is not sampleable");
 }

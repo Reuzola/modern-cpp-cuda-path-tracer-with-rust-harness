@@ -219,6 +219,7 @@ something refers to it.
 | `sphere` | `center` (vec3), `radius` (> 0), `material` (name), `center_end` (vec3, optional) |
 | `quad` | `q` (corner), `u` and `v` (edge vectors), `material` (name) |
 | `box` | `a` and `b` (opposite corners), `material` (name) |
+| `mesh` | `filename` (path to an OBJ file), `material` (name) |
 
 A `sphere` with `center_end` moves linearly from `center` to `center_end` over
 the shutter interval, producing motion blur. Without it the sphere is static,
@@ -226,6 +227,24 @@ which is exactly the case `center_end == center`.
 
 For `box`, the two corners may be given in any order; the engine normalizes
 them. They are named `a` and `b` rather than `min` and `max` for that reason.
+
+A `mesh` is a triangle mesh loaded from a Wavefront OBJ file. `filename` is
+resolved relative to the directory holding the scene file, exactly as
+`image.filename` is. Unlike a missing image, an OBJ file that cannot be read is
+a load error: an image texture falls back to a solid placeholder, whereas a mesh
+that fails to load has no geometry to stand in for it.
+
+One `material` applies to the whole mesh. Material libraries (`.mtl`), per-face
+materials and the `o`/`g` grouping in the file are ignored: one file is one
+mesh. Vertex normals and texture coordinates are read when every corner of every
+face carries them and dropped otherwise, so smooth shading is a property of the
+asset rather than a switch in the scene. Polygons with more than three corners
+are triangulated on load.
+
+The mesh's triangles are organised into a bounding volume hierarchy, for the
+same reason a `group`'s children are. Writing the same file in two objects
+produces two independent copies of the geometry; sharing one mesh between
+several placements is instancing, which the format does not express yet.
 
 ### Composite nodes
 
@@ -317,6 +336,8 @@ responsibility, not the schema's:
 - duplicate `name` values;
 - a degenerate quad, whose `u` and `v` are parallel;
 - an `image` texture whose `filename` cannot be opened;
+- a `mesh` whose `filename` cannot be opened, which is an error rather than a
+  warning because the loader also treats it as one;
 - a scene with no emissive material and a black background, which renders black.
 - a name used before the object defining it appears in `objects`;
 - a `phase_function` that resolves to nothing.
@@ -328,9 +349,9 @@ with the loader.
 
 ## Not supported yet
 
-Triangle meshes and OBJ references; general transforms beyond `translate` and
-`rotate_y`, including instancing of a transformed object; sharing a named
-texture as a `checker` child.
+General transforms beyond `translate` and `rotate_y`, including instancing of a
+mesh or of a transformed object; per-face materials and `.mtl` material
+libraries; sharing a named texture as a `checker` child.
 
 Adding a primitive or a material type is a backwards-compatible change and does
 not bump `version`. `version` changes only when an existing scene stops being

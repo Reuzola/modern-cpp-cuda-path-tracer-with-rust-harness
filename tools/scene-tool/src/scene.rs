@@ -82,6 +82,11 @@ pub enum Object {
         b: [f64; 3],
         material: String,
     },
+    Mesh {
+        name: Option<String>,
+        filename: String,
+        material: String,
+    },
     Group {
         name: Option<String>,
         children: Vec<ObjectOrRef>,
@@ -319,5 +324,51 @@ mod tests {
         let json = MINIMAL.replace(r#""vfov": 40"#, r#""vfov_typo": 40"#);
 
         assert!(serde_json::from_str::<Scene>(&json).is_err());
+    }
+
+    // The serde model must read what the schema accepts. The assertions are on
+    // the fields rather than only the variant: a typo in a field name would
+    // still match `Object::Mesh { .. }` while deserialising nothing useful.
+    #[test]
+    fn a_mesh_carries_its_file_and_its_material() {
+        let json = MINIMAL.replace(
+            r#""objects": ["#,
+            r#""objects": [
+                { "type": "mesh", "filename": "bunny.obj", "material": "grey" },"#,
+        );
+
+        let scene = parse(&json);
+
+        let Object::Mesh { filename, material, name } = &scene.objects[0] else {
+            panic!("the first object must be a mesh");
+        };
+
+        assert_eq!(filename, "bunny.obj");
+        assert_eq!(material, "grey");
+        assert!(name.is_none());
+    }
+
+    // A mesh has to pass through the untagged ObjectOrRef the same way every
+    // other primitive does, since the schema allows it in every child slot.
+    #[test]
+    fn a_mesh_is_accepted_wherever_a_child_object_is() {
+        let json = MINIMAL.replace(
+            r#""objects": ["#,
+            r#""objects": [
+                { "type": "translate", "offset": [0, 1, 0],
+                  "object": { "type": "mesh", "filename": "bunny.obj", "material": "grey" } },"#,
+        );
+
+        let scene = parse(&json);
+
+        let Object::Translate { object, .. } = &scene.objects[0] else {
+            panic!("the first object must be a translate");
+        };
+
+        let ObjectOrRef::Inline(child) = object else {
+            panic!("the child must be an inline object");
+        };
+
+        assert!(matches!(**child, Object::Mesh { .. }));
     }
 }

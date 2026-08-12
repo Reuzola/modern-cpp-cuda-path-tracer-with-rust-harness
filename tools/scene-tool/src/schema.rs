@@ -54,6 +54,13 @@ mod tests {
     use super::*;
     use crate::test_support::{MINIMAL_SCENE, shipped_scene_files};
 
+    /// The one object in the minimal scene, replaced by fixtures that need a different primitive.
+    const SPHERE: &str = r#"{ "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" }"#;
+
+    fn with_object(object: &str) -> String {
+        MINIMAL_SCENE.replace(SPHERE, object)
+    }
+
     fn diagnostics(json: &str) -> Vec<Diagnostic> {
         let document: Value = serde_json::from_str(json).expect("the fixture must be valid JSON");
         validate_structure(&document).expect("the embedded schema must compile")
@@ -185,5 +192,36 @@ mod tests {
         assert!(found.contains(&"/materials/grey"), "{found:?}");
         assert!(found.contains(&"/materials/rough/fuzz"), "{found:?}");
         assert!(!found.contains(&"/materials/rough"), "{found:?}");
+    }
+
+    // The mesh branch of the object schema: `filename` and `material` are both
+    // required, and the failure has to land on the object rather than on the
+    // whole `objects` array, which is what makes the CLI's location useful.
+    #[test]
+    fn a_mesh_without_a_filename_is_rejected_at_the_object() {
+        let found = diagnostics(&with_object(r#"{ "type": "mesh", "material": "grey" }"#));
+
+        assert_eq!(locations(&found), ["/objects/0"]);
+    }
+
+    // minLength on the path: a present but empty field is the schema's problem,
+    // not something the loader should have to defend against at runtime.
+    #[test]
+    fn an_empty_mesh_filename_is_rejected() {
+        let found = diagnostics(&with_object(r#"{ "type": "mesh", "filename": "", "material": "grey" }"#));
+
+        assert_eq!(locations(&found), ["/objects/0/filename"]);
+    }
+
+    // unevaluatedProperties reaches the new branch too: the mesh `then` block
+    // names only `filename` and `material`, so a sphere's field on a mesh is
+    // unevaluated and therefore rejected.
+    #[test]
+    fn a_field_from_another_primitive_is_rejected_on_a_mesh() {
+        let found = diagnostics(&with_object(
+            r#"{ "type": "mesh", "filename": "bunny.obj", "material": "grey", "radius": 1 }"#,
+        ));
+
+        assert_eq!(locations(&found), ["/objects/0"]);
     }
 }

@@ -5,6 +5,7 @@
 #include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/rotate_y.hpp"
 #include "pt/geometry/sphere.hpp"
@@ -20,6 +21,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/post/tonemap.hpp"
+#include "pt/scene/obj_loader.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/scene/scene_error.hpp"
 #include "pt/textures/checker_texture.hpp"
@@ -35,6 +37,7 @@
 #include <map>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -198,6 +201,17 @@ template <typename T>
     }
 }
 
+[[nodiscard]] const Mesh* build_mesh(LoadContext& ctx, const std::filesystem::path& path, const Material* mat) {
+    // load_obj reports its own failures as SceneError; the Mesh constructor
+    // signals a broken invariant with invalid_argument, which is translated here
+    // so that every scene-loading failure leaves this file as one error type.
+    try {
+        return ctx.scene.create_mesh(load_obj(path), mat);
+    } catch (const std::invalid_argument& e) {
+        throw SceneError(std::format("OBJ file '{}' produced invalid mesh data: {}", path.string(), e.what()));
+    }
+}
+
 [[nodiscard]] const Hittable* build_object(const Json& j, LoadContext& ctx) {
     const std::string& type = read_string(field(j, "type"));
     const Hittable* result = nullptr;
@@ -227,6 +241,20 @@ template <typename T>
         const Material* mat = find_material(ctx, j, "material");
 
         result = box(ctx.scene.object_arena(), a, b, mat);
+    } else if (type == "mesh") {
+        const std::string& filename = read_string(field(j, "filename"));
+        if (filename.empty()) throw SceneError("Field 'filename' must not be empty");
+
+        const Material* mat = find_material(ctx, j, "material");
+        const std::filesystem::path resolved = ctx.base_dir / filename;
+        const Mesh* mesh = build_mesh(ctx, resolved, mat);
+
+        // The triangles are organised into a BVH for the same reason a group's children
+        // are: a mesh is thousands of primitives, and acceleration is the renderer's
+        // decision rather than the scene author's, so the format does not name it.
+        const HittableList* triangles = mesh_triangles(ctx.scene.object_arena(), *mesh);
+
+        result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), *triangles);
     } else if (type == "group") {
         const Json& children = field(j, "children");
         if (!children.is_array() || children.empty()) throw SceneError("Field 'children' must be a non-empty array");

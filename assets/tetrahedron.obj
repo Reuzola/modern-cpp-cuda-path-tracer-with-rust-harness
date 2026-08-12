@@ -1,0 +1,24 @@
+# A tetrahedron with explicit vertex normals and texture coordinates on every
+# corner, which is the case the loader requires before it keeps them: normals
+# and UVs are all-or-nothing per file. Triangular faces, so no triangulation.
+# Negative indices on the last face are relative to the end of the vertex list,
+# and are here to keep that path of the parser covered.
+
+v  0.0  1.0  0.0
+v -1.0 -1.0  1.0
+v  1.0 -1.0  1.0
+v  0.0 -1.0 -1.0
+
+vn  0.0000  0.3333  0.9428
+vn  0.8165  0.3333 -0.4714
+vn -0.8165  0.3333 -0.4714
+vn  0.0000 -1.0000  0.0000
+
+vt 0.5 1.0
+vt 0.0 0.0
+vt 1.0 0.0
+
+f 1/1/1 2/2/1 3/3/1
+f 1/1/2 3/2/2 4/3/2
+f 1/1/3 4/2/3 2/3/3
+f -1/1/4 -2/2/4 -3/3/4
