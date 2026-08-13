@@ -8,6 +8,7 @@
 #include "pt/math/sampler.hpp"
 #include "pt/util/arena.hpp"
 #include <algorithm>
+#include <chrono>
 #include <span>
 #include <vector>
 
@@ -54,7 +55,26 @@ void BvhNode::build(Arena<Hittable>& arena, std::span<const Hittable*> objects) 
 
         left_ = arena.create<BvhNode>(arena, objects.subspan(0, mid));
         right_ = arena.create<BvhNode>(arena, objects.subspan(mid));
+
+        left_is_node_ = true;
+        right_is_node_ = true;
     }
+}
+
+void BvhNode::accumulate_stats(BvhStats& stats, int depth) const {
+    ++stats.node_count;
+    stats.max_depth = std::max(stats.max_depth, depth);
+
+    // Safe static_cast: flags set by build() guarantee the child is a BvhNode, avoiding dynamic_cast overhead
+    if (left_is_node_)
+        static_cast<const BvhNode*>(left_)->accumulate_stats(stats, depth + 1);
+    else
+        ++stats.leaf_count;
+
+    if (right_is_node_)
+        static_cast<const BvhNode*>(right_)->accumulate_stats(stats, depth + 1);
+    else
+        ++stats.leaf_count;
 }
 
 bool BvhNode::box_compare(const Hittable* a, const Hittable* b, int axis_index) {
@@ -66,5 +86,19 @@ bool BvhNode::box_compare(const Hittable* a, const Hittable* b, int axis_index) 
 bool BvhNode::box_x_compare(const Hittable* a, const Hittable* b) { return box_compare(a, b, 0); }
 bool BvhNode::box_y_compare(const Hittable* a, const Hittable* b) { return box_compare(a, b, 1); }
 bool BvhNode::box_z_compare(const Hittable* a, const Hittable* b) { return box_compare(a, b, 2); }
+
+const BvhNode* make_bvh(Arena<Hittable>& arena, const HittableList& list, BvhStats* stats) {
+    const auto start = std::chrono::steady_clock::now();
+    const BvhNode* root = arena.create<BvhNode>(arena, list);
+    const auto end = std::chrono::steady_clock::now();
+
+    if (stats != nullptr) {
+        stats->build_time += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        ++stats->bvh_count;
+        root->accumulate_stats(*stats, 0);
+    }
+
+    return root;
+}
 
 } // namespace pt

@@ -1,4 +1,5 @@
 #include "app/cli.hpp"
+#include "pt/geometry/bvh.hpp"
 #include "pt/io/image_format.hpp"
 #include "pt/io/image_writer.hpp"
 #include "pt/post/tonemap.hpp"
@@ -17,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <ratio>
 #include <system_error>
 #include <variant>
 
@@ -39,6 +41,15 @@ int main(int argc, char** argv) {
     }
 
     pt::apply_overrides(*scene, opts);
+
+    const pt::BvhStats& stats = scene->bvh_stats();
+    pt::log_info(
+        "BVH: {} trees, {} nodes, {} leaves, max depth {}, built in {:.3f} ms",
+        stats.bvh_count,
+        stats.node_count,
+        stats.leaf_count,
+        stats.max_depth,
+        std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(stats.build_time).count());
 
     return render_scene(*scene, opts);
 }

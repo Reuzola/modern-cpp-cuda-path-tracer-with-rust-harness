@@ -2,6 +2,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/core/sampleable.hpp"
+#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
@@ -88,6 +89,9 @@ public:
 
     void build_bvh();
 
+    [[nodiscard]] const BvhStats& bvh_stats() const noexcept { return bvh_stats_; }
+    [[nodiscard]] BvhStats& bvh_stats() noexcept { return bvh_stats_; }
+
 private:
     // Order is critical: C++ destroys members in reverse. Arenas (owners) must outlive lists (non-owners).
     Arena<Texture> textures_;
@@ -96,6 +100,7 @@ private:
     Arena<Hittable> objects_;
     HittableList world_;
     ImportanceTargets importance_targets_;
+    BvhStats bvh_stats_{};
 };
 
 static_assert(!std::is_copy_constructible_v<Scene>);

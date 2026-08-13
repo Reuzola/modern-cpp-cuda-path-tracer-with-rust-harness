@@ -270,7 +270,7 @@ template <typename T>
             // are: a mesh is thousands of primitives, and acceleration is the renderer's
             // decision rather than the scene author's, so the format does not name it.
             const HittableList* triangles = mesh_triangles(ctx.scene.object_arena(), *mesh);
-            result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), *triangles);
+            result = make_bvh(ctx.scene.object_arena(), *triangles, &ctx.scene.bvh_stats());
             ctx.meshes.emplace(key, result);
         }
     } else if (type == "group") {
@@ -291,7 +291,7 @@ template <typename T>
 
         // The children are organised into a BVH: acceleration is the renderer's
         // decision, not the scene author's, so the format does not name it.
-        result = ctx.scene.create_object<BvhNode>(ctx.scene.object_arena(), list);
+        result = make_bvh(ctx.scene.object_arena(), list, &ctx.scene.bvh_stats());
     } else if (type == "transform") {
         const Hittable* child = child_at(j, ctx, "object");
         const Vec3 offset = j.contains("translate") ? read_vec3(j.at("translate")) : Vec3(0, 0, 0);
