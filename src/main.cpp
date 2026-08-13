@@ -12,6 +12,7 @@
 #include "pt/scene/scene_error.hpp"
 #include "pt/scene/scene_loader.hpp"
 #include "pt/util/log.hpp"
+#include "pt/util/stats.hpp"
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -93,6 +94,18 @@ int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     const std::chrono::duration<double> elapsed = end - start;
 
     pt::log_info("Render time: {:.2f}s", elapsed.count());
+
+    if constexpr (pt::stats_enabled) {
+        const pt::TraversalStats& stats = pt::traversal_stats;
+
+        if (stats.ray_queries > 0) {
+
+            const double node_ratio = static_cast<double>(stats.node_tests) / static_cast<double>(stats.ray_queries);
+            const double leaf_ratio = static_cast<double>(stats.leaf_tests) / static_cast<double>(stats.ray_queries);
+
+            pt::log_info("BVH traversal: {:.1f} node tests/ray, {:.1f} leaf tests/ray ({} ray queries)", node_ratio, leaf_ratio, stats.ray_queries);
+        }
+    }
 
     return EXIT_SUCCESS;
 }

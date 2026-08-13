@@ -14,6 +14,7 @@
 #include "pt/sampling/pdf_variant.hpp"
 #include "pt/sampling/sampleable_pdf.hpp"
 #include "pt/util/overloaded.hpp"
+#include "pt/util/stats.hpp"
 #include <variant>
 
 namespace pt {
@@ -27,6 +28,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
 
     HitRecord rec;
 
+    count_ray_query();
     if (!world_.hit(r, Interval(0.001_f, infinity), rec, sampler)) return background_;
 
     const Color color_from_emission = rec.mat->emitted(r, rec);

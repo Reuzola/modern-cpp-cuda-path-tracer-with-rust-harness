@@ -6,26 +6,28 @@ project(PathTracer
   LANGUAGES CXX
 )
 
-# GNU extensions off: -std=c++20, never -std=gnu++20.
+# No GNU extensions: -std=c++20, never gnu++20.
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Standard bin/lib/include layout.
 include(GNUInstallDirs)
 
-# Enables CTest so test presets have something to run.
+# Needed for test presets.
 enable_testing()
 
-# Warnings-as-errors in Debug only. Off by default escape hatch:
+# Debug-only warnings-as-errors. Escape hatch:
 #   cmake --preset dev -DPT_WARNINGS_AS_ERRORS=OFF
 option(PT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in Debug builds" ON)
 
 option(PT_ENABLE_IPO "Enable interprocedural optimization (LTO) in Release builds" ON)
 
-# Scalar precision behind pt::Float.
-# ON  -> double (correctness-first default; golden images use this).
-# OFF -> float (half memory traffic, wider SIMD; used for perf/GPU work).
+# pt::Float precision. ON=double (default, golden images), OFF=float (perf/GPU).
 #   cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
 option(PT_DOUBLE_PRECISION "Use double as the engine's scalar type (OFF selects float)" ON)
+
+# BVH traversal counters; off by default (hot-loop cost).
+#   cmake --preset release-stats
+option(PT_ENABLE_STATS "Collect BVH traversal statistics" OFF)
 
 if(PT_ENABLE_IPO)
   include(CheckIPOSupported)
@@ -35,24 +37,23 @@ if(PT_ENABLE_IPO)
   endif()
 endif()
 
-# pt_warnings - project warning policy, as an INTERFACE library so targets
-# can opt in/out by linking (unlike CMAKE_CXX_FLAGS, which is global)
+# INTERFACE lib so targets opt in/out via linking, unlike global CMAKE_CXX_FLAGS.
 add_library(pt_warnings INTERFACE)
 add_library(pt::warnings ALIAS pt_warnings)
 
-# GCC/Clang warning flags, tuned against this codebase.
+# GCC/Clang warnings, tuned for this codebase.
 set(pt_gnu_like_warnings
   # Baseline.
   -Wall
   -Wextra
 
-  # Standard-required diagnostics; reject GNU extensions.
+  # Reject GNU extensions.
   -Wpedantic
 
   # Shadowed declarations.
   -Wshadow
 
-  # Implicit conversions that lose value or change signedness.
+  # Value/sign-losing conversions.
   -Wconversion
   -Wsign-conversion
 
@@ -73,24 +74,22 @@ set(pt_gnu_like_warnings
   -Wformat=2
 )
 
-# MSVC dialect skeleton; project only targets WSL/Linux + Clang for now.
+# MSVC skeleton; project currently targets WSL/Linux + Clang only.
 set(pt_msvc_warnings
   /W4
 )
 
-# COMPILE_LANG_AND_ID also filters by language, so C++ flags never leak to other languages.
+# COMPILE_LANG_AND_ID filters by language too, so C++ flags don't leak elsewhere.
 target_compile_options(pt_warnings INTERFACE
   $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:${pt_gnu_like_warnings}>
   $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:${pt_msvc_warnings}>
 
-  # $<CONFIG:Debug> is generate-time, so this stays correct under multi-config generators.
+  # Generate-time check; stays correct under multi-config generators.
   $<$<AND:$<BOOL:${PT_WARNINGS_AS_ERRORS}>,$<CONFIG:Debug>,$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>>:-Werror>
   $<$<AND:$<BOOL:${PT_WARNINGS_AS_ERRORS}>,$<CONFIG:Debug>,$<COMPILE_LANG_AND_ID:CXX,MSVC>>:/WX>
 )
 
-# pt_stb - vendored third-party headers, as their own target so the isolation
-# is structural (SYSTEM include, -isystem suppresses diagnostics) rather than
-# buried inside pathtracer_core's own include call.
+# Vendored headers, isolated via SYSTEM include (-isystem suppresses diagnostics).
 add_library(pt_stb INTERFACE)
 add_library(pt::stb ALIAS pt_stb)
 
@@ -98,25 +97,16 @@ target_include_directories(pt_stb SYSTEM INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external>
 )
 
-# OpenEXR - HDR image output.
-# CONFIG: only accept OpenEXR's own config file, never a stray FindOpenEXR.cmake.
-# REQUIRED: not an optional feature, must succeed at configure time.
+# OpenEXR - HDR output. CONFIG only (no stray FindOpenEXR.cmake). REQUIRED.
 find_package(OpenEXR CONFIG REQUIRED)
 
-# nlohmann_json - JSON scene file parsing.
-# Package name has an underscore (vcpkg port name uses a hyphen).
-# CONFIG: same reasoning as OpenEXR above.
-# REQUIRED: a renderer that can't read a scene file has nothing to render.
+# nlohmann_json - scene JSON parsing (vcpkg port uses a hyphen). REQUIRED.
 find_package(nlohmann_json CONFIG REQUIRED)
 
-# tinyobjloader - Wavefront OBJ parsing.
-# CONFIG: same reasoning as above.
-# REQUIRED: mesh loading is a compiled-in feature, not an optional one.
+# tinyobjloader - OBJ parsing. REQUIRED: mesh loading is compiled-in.
 find_package(tinyobjloader CONFIG REQUIRED)
 
-# pathtracer_core - the engine.
-# Sources listed directly in add_library() (not target_sources()) so the list
-# stays in one place and is trivially greppable.
+# pathtracer_core - the engine. Sources listed inline for greppability.
 add_library(pathtracer_core STATIC
   src/util/log.cpp
 
@@ -179,23 +169,23 @@ add_library(pathtracer_core STATIC
 )
 add_library(pt::core ALIAS pathtracer_core)
 
-# PUBLIC: this is the engine's own include root, used by its sources and its consumers.
+# Engine's own include root, used by its sources and consumers.
 target_include_directories(pathtracer_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-# PUBLIC: the library and everything linking it compile as C++20.
+# PUBLIC: consumers also compile as C++20.
 target_compile_features(pathtracer_core PUBLIC cxx_std_20)
 
-# PUBLIC and load-bearing: pt/math/scalar.hpp reads this macro to define Float,
-# and that header is compiled into this library, main.cpp, and every test TU.
-# A mismatch here is an ODR violation the compiler won't catch.
+# Load-bearing: PT_FLOAT_AS_DOUBLE sets Float, PT_STATS gates inline bodies.
+# Must match across all TUs or it's an undetected ODR violation.
 target_compile_definitions(pathtracer_core PUBLIC
   $<$<BOOL:${PT_DOUBLE_PRECISION}>:PT_FLOAT_AS_DOUBLE>
+  $<$<BOOL:${PT_ENABLE_STATS}>:PT_STATS>
 )
 
-# Configure-time echo of the scalar type, since it silently affects every pixel.
+# Echo scalar type at configure time (it affects every pixel).
 if(PT_DOUBLE_PRECISION)
   set(PT_SCALAR_TYPE "double")
 else()
@@ -204,57 +194,46 @@ endif()
 
 message(STATUS "Scalar precision: ${CMAKE_PROJECT_NAME} Float = ${PT_SCALAR_TYPE}")
 
-# pt::stb, pt::warnings, OpenEXR::OpenEXR, nlohmann_json::nlohmann_json, tinyobjloader::tinyobjloader: all PRIVATE.
-# None of their types appear in this library's public headers (include/), so
-# none of these dependencies should leak to consumers. CMake still propagates
-# a static library's PRIVATE link deps via $<LINK_ONLY:>, so the link edge
-# reaches consumers even though the usage requirements don't.
+# All PRIVATE: none of these types appear in public headers. Note that a
+# static lib's PRIVATE deps still reach consumers via $<LINK_ONLY:>.
 target_link_libraries(pathtracer_core
   PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR nlohmann_json::nlohmann_json tinyobjloader::tinyobjloader
 )
 
-# CLI11 - command-line argument parsing, found here next to its consumer
-# (the driver) rather than up with OpenEXR/nlohmann_json (the engine's deps).
-# CONFIG: same reasoning as above. Header-only, so linking just carries usage requirements.
+# CLI11 - kept near its consumer (the driver), not with the engine's deps.
 find_package(CLI11 CONFIG REQUIRED)
 
-# pathtracer - the driver executable. Deliberately thin: owns main() and the CLI only.
+# pathtracer - driver executable. Deliberately thin: main() + CLI only.
 add_executable(pathtracer
   src/main.cpp
   src/app/cli.cpp
 )
 
-# IPO/LTO, Release only, set on both targets since LTO needs both sides of a
-# TU boundary compiled with it. pathtracer_tests needs it too and sets it in
-# tests/CMakeLists.txt, where the target exists.
+# Release-only IPO/LTO; set on both sides of the TU boundary.
+# pathtracer_tests sets it too, in tests/CMakeLists.txt.
 if(PT_ENABLE_IPO AND pt_ipo_supported)
   set_property(TARGET pathtracer_core PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
   set_property(TARGET pathtracer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
-# Private include root for src/, so app/cli.hpp is reachable without living in
-# include/ (which is public and installed).
+# Private src/ include root, so app/cli.hpp needn't live in public include/.
 target_include_directories(pathtracer PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# pt::core brings the engine (and transitively stb's include path).
-# CLI11::CLI11 is PRIVATE: an executable has no consumers to propagate to.
-# Its include dir arrives as SYSTEM automatically, keeping it out from under
-# -Wconversion/-Wold-style-cast and -Werror.
+# pt::core brings the engine (+ stb path). CLI11 is PRIVATE (no consumers);
+# its include dir is SYSTEM, so -Wconversion/-Werror skip it.
 target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11)
 
-# Tests get their own directory scope so Catch2 (and the CMAKE_MODULE_PATH it
-# adds) stays contained there. Must come after enable_testing() above.
+# Own scope so Catch2 stays contained. Must follow enable_testing() above.
 add_subdirectory(tests)
 
-# Installation: executable + public headers only. pathtracer_core is not
-# installed - it's an implementation detail of the binary.
+# Install executable + public headers only; pathtracer_core stays internal.
 install(TARGETS pathtracer
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-# Trailing slash on "include/" installs the directory's *contents*.
+# Trailing slash installs the directory's *contents*.
 install(DIRECTORY include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp"

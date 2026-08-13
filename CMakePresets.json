@@ -54,6 +54,14 @@
       "cacheVariables": {
         "CMAKE_CXX_FLAGS": "-march=native"
       }
+    },
+    {
+      "name": "release-stats",
+      "displayName": "Release + BVH statistics (measurement only)",
+      "inherits": "release",
+      "cacheVariables": {
+        "PT_ENABLE_STATS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -76,6 +84,10 @@
     {
       "name": "release-native",
       "configurePreset": "release-native"
+    },
+    {
+      "name": "release-stats",
+      "configurePreset": "release-stats"
     }
   ],
   "testPresets": [
