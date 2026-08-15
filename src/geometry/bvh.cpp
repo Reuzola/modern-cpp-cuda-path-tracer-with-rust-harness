@@ -4,103 +4,119 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
-#include "pt/math/ray.hpp"
-#include "pt/math/sampler.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/util/arena.hpp"
 #include "pt/util/stats.hpp"
 #include <algorithm>
+#include <cassert>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <limits>
 #include <span>
 #include <vector>
 
 namespace pt {
 
-BvhNode::BvhNode(Arena<Hittable>& arena, const HittableList& list) {
-    std::vector<const Hittable*> objects(list.objects().begin(), list.objects().end());
-    build(arena, objects);
+namespace {
+
+// One primitive per leaf for now; the threshold becomes a build parameter in the SAH work.
+constexpr std::size_t max_leaf_size = 1;
+
+// Sorts by the lower bound of the box on the split axis, matching the pointer-based build.
+[[nodiscard]] bool box_compare(const Hittable* a, const Hittable* b, int axis_index) {
+    return a->bounding_box().axis_interval(axis_index).min < b->bounding_box().axis_interval(axis_index).min;
 }
 
-BvhNode::BvhNode(Arena<Hittable>& arena, std::span<const Hittable*> objects) { build(arena, objects); }
+} // namespace
 
-bool BvhNode::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
+Bvh::Bvh(std::span<const Hittable* const> objects) : primitives_(objects.begin(), objects.end()) {
+    if (primitives_.empty()) return;
+    assert(primitives_.size() <= std::numeric_limits<std::uint32_t>::max());
+
+    // A binary tree with one primitive per leaf has exactly 2N-1 nodes; one allocation covers the build.
+    nodes_.reserve(2 * primitives_.size() - 1);
+    build(0, primitives_.size(), 0);
+}
+
+bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
+    if (nodes_.empty()) return false;
+    return hit_node(0, r, ray_t, rec, sampler);
+}
+
+Aabb Bvh::bounding_box() const { return nodes_.empty() ? Aabb() : nodes_[0].bbox; }
+
+std::uint32_t Bvh::build(std::size_t first, std::size_t count, int depth) {
+    const std::uint32_t index = static_cast<std::uint32_t>(nodes_.size());
+    nodes_.emplace_back();
+    max_depth_ = std::max(max_depth_, depth);
+
+    Aabb bbox;
+    for (std::size_t i = first; i < first + count; ++i) {
+        bbox = Aabb(bbox, primitives_[i]->bounding_box());
+    }
+
+    if (count <= max_leaf_size) {
+        nodes_[index].bbox = bbox;
+        nodes_[index].offset = static_cast<std::uint32_t>(first);
+        nodes_[index].count = static_cast<std::uint16_t>(count);
+        ++leaf_count_;
+        return index;
+    }
+
+    const int axis = bbox.longest_axis();
+    const auto begin = std::next(primitives_.begin(), static_cast<std::ptrdiff_t>(first));
+    std::sort(begin, std::next(begin, static_cast<std::ptrdiff_t>(count)),
+              [axis](const Hittable* a, const Hittable* b) { return box_compare(a, b, axis); });
+    const std::size_t mid = count / 2;
+
+    build(first, mid, depth + 1); // lands at index + 1
+    const std::uint32_t right = build(first + mid, count - mid, depth + 1);
+
+    // Written through the index, not a reference: the recursive calls above may have reallocated nodes_.
+    nodes_[index].bbox = bbox;
+    nodes_[index].offset = right;
+    return index;
+}
+
+bool Bvh::hit_node(std::uint32_t index, const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
+    const BvhNode& node = nodes_[index];
     count_node_test();
-    if (!bbox_.hit(r, ray_t)) return false;
 
-    if (!left_is_node_) count_leaf_test();
-    const bool hit_left = left_->hit(r, ray_t, rec, sampler);
+    if (!node.bbox.hit(r, ray_t)) return false;
 
-    if (!right_is_node_) count_leaf_test();
-    const bool hit_right = right_->hit(r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec, sampler);
+    if (node.is_leaf()) {
+        bool is_hit = false;
+        Float closest = ray_t.max;
+        for (std::uint32_t i = node.offset; i < node.offset + node.count; ++i) {
+            count_leaf_test();
 
+            if (primitives_[i]->hit(r, Interval(ray_t.min, closest), rec, sampler)) {
+                is_hit = true;
+                closest = rec.t;
+            }
+        }
+        return is_hit;
+    }
+
+    // Left child is implicit at index + 1; the right subtree is only entered inside the narrowed interval.
+    const bool hit_left = hit_node(index + 1, r, ray_t, rec, sampler);
+    const bool hit_right = hit_node(node.offset, r, Interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec, sampler);
     return hit_left || hit_right;
 }
 
-Aabb BvhNode::bounding_box() const { return bbox_; }
-
-void BvhNode::build(Arena<Hittable>& arena, std::span<const Hittable*> objects) {
-    bbox_ = Aabb();
-    for (const Hittable* object : objects) {
-        bbox_ = Aabb(bbox_, object->bounding_box());
-    }
-
-    int axis = bbox_.longest_axis();
-
-    auto comparator = (axis == 0) ? box_x_compare : (axis == 1) ? box_y_compare
-                                                                : box_z_compare;
-    const auto count = objects.size();
-
-    if (count == 1) {
-        left_ = right_ = objects[0];
-    } else if (count == 2) {
-        left_ = objects[0];
-        right_ = objects[1];
-    } else {
-        std::sort(objects.begin(), objects.end(), comparator);
-        const auto mid = count / 2;
-
-        left_ = arena.create<BvhNode>(arena, objects.subspan(0, mid));
-        right_ = arena.create<BvhNode>(arena, objects.subspan(mid));
-
-        left_is_node_ = true;
-        right_is_node_ = true;
-    }
-}
-
-void BvhNode::accumulate_stats(BvhStats& stats, int depth) const {
-    ++stats.node_count;
-    stats.max_depth = std::max(stats.max_depth, depth);
-
-    // Safe static_cast: flags set by build() guarantee the child is a BvhNode, avoiding dynamic_cast overhead
-    if (left_is_node_)
-        static_cast<const BvhNode*>(left_)->accumulate_stats(stats, depth + 1);
-    else
-        ++stats.leaf_count;
-
-    if (right_is_node_)
-        static_cast<const BvhNode*>(right_)->accumulate_stats(stats, depth + 1);
-    else
-        ++stats.leaf_count;
-}
-
-bool BvhNode::box_compare(const Hittable* a, const Hittable* b, int axis_index) {
-    const auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
-    const auto b_axis_interval = b->bounding_box().axis_interval(axis_index);
-    return a_axis_interval.min < b_axis_interval.min;
-}
-
-bool BvhNode::box_x_compare(const Hittable* a, const Hittable* b) { return box_compare(a, b, 0); }
-bool BvhNode::box_y_compare(const Hittable* a, const Hittable* b) { return box_compare(a, b, 1); }
-bool BvhNode::box_z_compare(const Hittable* a, const Hittable* b) { return box_compare(a, b, 2); }
-
-const BvhNode* make_bvh(Arena<Hittable>& arena, const HittableList& list, BvhStats* stats) {
+const Bvh* make_bvh(Arena<Hittable>& arena, const HittableList& list, BvhStats* stats) {
     const auto start = std::chrono::steady_clock::now();
-    const BvhNode* root = arena.create<BvhNode>(arena, list);
+    const Bvh* root = arena.create<Bvh>(list.objects());
     const auto end = std::chrono::steady_clock::now();
 
     if (stats != nullptr) {
         stats->build_time += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         ++stats->bvh_count;
-        root->accumulate_stats(*stats, 0);
+        stats->node_count += root->node_count();
+        stats->leaf_count += root->leaf_count();
+        stats->max_depth = std::max(stats->max_depth, root->max_depth());
     }
 
     return root;
