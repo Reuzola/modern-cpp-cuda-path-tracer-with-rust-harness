@@ -45,6 +45,11 @@ Reference renders are only valid from `release`. `release-native` adds
 `-march=native`, which enables FMA contraction and changes floating-point
 results.
 
+The same drift appears on AArch64 with the plain `release` preset — identical
+scenes, identical magnitude — because `fmadd` is baseline there, so Clang
+contracts without being asked. Reference images are generated on x86-64; on an
+ARM machine, compare with `--threshold 5e-4` instead of regenerating them.
+
 ## Threshold
 
 The comparison threshold defaults to 0.0, and the whole set reproduces
