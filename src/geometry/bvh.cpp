@@ -21,8 +21,8 @@ namespace pt {
 
 namespace {
 
-// One primitive per leaf for now; the threshold becomes a build parameter in the SAH work.
-constexpr std::size_t max_leaf_size = 1;
+// Leaf threshold, chosen by measurement; becomes a build parameter in the SAH work.
+constexpr std::size_t max_leaf_size = 4;
 
 // Sorts by the lower bound of the box on the split axis, matching the pointer-based build.
 [[nodiscard]] bool box_compare(const Hittable* a, const Hittable* b, int axis_index) {
@@ -36,6 +36,7 @@ Bvh::Bvh(std::span<const Hittable* const> objects) : primitives_(objects.begin()
     assert(primitives_.size() <= std::numeric_limits<std::uint32_t>::max());
 
     // A binary tree with one primitive per leaf has exactly 2N-1 nodes; one allocation covers the build.
+    // Upper bound: with larger leaves the tree holds fewer nodes, so this over-reserves a little.
     nodes_.reserve(2 * primitives_.size() - 1);
     build(0, primitives_.size(), 0);
 }
