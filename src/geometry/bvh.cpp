@@ -5,6 +5,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/scalar.hpp"
+#include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
 #include "pt/util/stats.hpp"
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include <iterator>
 #include <limits>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace pt {
@@ -24,21 +26,107 @@ namespace {
 // Leaf threshold, chosen by measurement; becomes a build parameter in the SAH work.
 constexpr std::size_t max_leaf_size = 4;
 
-// Sorts by the lower bound of the box on the split axis, matching the pointer-based build.
-[[nodiscard]] bool box_compare(const Hittable* a, const Hittable* b, int axis_index) {
-    return a->bounding_box().axis_interval(axis_index).min < b->bounding_box().axis_interval(axis_index).min;
-}
+// Per-primitive build data, computed once up front. Hittable::bounding_box() is virtual and
+// MeshTriangle recomputes it from vertices on every call, so the build must not ask twice.
+struct PrimitiveInfo {
+    const Hittable* primitive = nullptr;
+    Aabb bbox;
+    Point3 centroid;
+};
+
+// What the builder hands back to Bvh. Build-time scratch state stays inside the builder.
+struct BvhBuildResult {
+    std::vector<BvhNode> nodes;
+    std::vector<const Hittable*> primitives;
+    std::size_t leaf_count{};
+    int max_depth{};
+};
+
+// Top-down BVH builder. Owns the scratch state a build needs and nothing else: the finished
+// Bvh carries no build-time data. A separate type also keeps that state out of the public header.
+class BvhBuilder {
+public:
+    explicit BvhBuilder(std::span<const Hittable* const> objects) {
+        info_.reserve(objects.size());
+        for (const Hittable* obj : objects) {
+            const Aabb box = obj->bounding_box();
+            info_.push_back(PrimitiveInfo{.primitive = obj, .bbox = box, .centroid = box.centroid()});
+        }
+
+        // A binary tree with one primitive per leaf has exactly 2N-1 nodes; one allocation covers the build.
+        // Upper bound: with larger leaves the tree holds fewer nodes, so this over-reserves a little.
+        if (!info_.empty()) nodes_.reserve(2 * info_.size() - 1);
+    }
+
+    // Consumes the builder to construct and return the BVH.
+    [[nodiscard]] BvhBuildResult build() && {
+        if (info_.empty()) return {};
+        assert(info_.size() <= std::numeric_limits<std::uint32_t>::max());
+
+        build_recursive(0, info_.size(), 0);
+
+        std::vector<const Hittable*> primitives;
+        primitives.reserve(info_.size());
+        for (const PrimitiveInfo& entry : info_) {
+            primitives.push_back(entry.primitive);
+        }
+
+        return BvhBuildResult{
+            .nodes = std::move(nodes_), .primitives = std::move(primitives), .leaf_count = leaf_count_, .max_depth = max_depth_};
+    }
+
+private:
+    std::vector<PrimitiveInfo> info_;
+    std::vector<BvhNode> nodes_;
+    std::size_t leaf_count_{};
+    int max_depth_{};
+
+    std::uint32_t build_recursive(std::size_t first, std::size_t count, int depth) {
+        const std::uint32_t index = static_cast<std::uint32_t>(nodes_.size());
+        nodes_.emplace_back();
+        max_depth_ = std::max(max_depth_, depth);
+
+        Aabb bbox;
+        for (std::size_t i = first; i < first + count; ++i) {
+            bbox = Aabb(bbox, info_[i].bbox);
+        }
+
+        if (count <= max_leaf_size) {
+            nodes_[index].bbox = bbox;
+            nodes_[index].offset = static_cast<std::uint32_t>(first);
+            nodes_[index].count = static_cast<std::uint16_t>(count);
+            ++leaf_count_;
+            return index;
+        }
+
+        const int axis = bbox.longest_axis();
+        const auto begin = std::next(info_.begin(), static_cast<std::ptrdiff_t>(first));
+        std::sort(begin, std::next(begin, static_cast<std::ptrdiff_t>(count)),
+                  [axis](const PrimitiveInfo& a, const PrimitiveInfo& b) {
+                      return a.bbox.axis_interval(axis).min < b.bbox.axis_interval(axis).min;
+                  });
+        const std::size_t mid = count / 2;
+
+        build_recursive(first, mid, depth + 1); // lands at index + 1
+        const std::uint32_t right = build_recursive(first + mid, count - mid, depth + 1);
+
+        // Written through the index, not a reference: the recursive calls above may have reallocated nodes_.
+        nodes_[index].bbox = bbox;
+        nodes_[index].offset = right;
+        return index;
+    }
+};
 
 } // namespace
 
-Bvh::Bvh(std::span<const Hittable* const> objects) : primitives_(objects.begin(), objects.end()) {
-    if (primitives_.empty()) return;
-    assert(primitives_.size() <= std::numeric_limits<std::uint32_t>::max());
+Bvh::Bvh(std::span<const Hittable* const> objects) {
+    // Assigned in the body rather than the init list: all four members come out of a single build pass.
+    BvhBuildResult result = BvhBuilder(objects).build();
 
-    // A binary tree with one primitive per leaf has exactly 2N-1 nodes; one allocation covers the build.
-    // Upper bound: with larger leaves the tree holds fewer nodes, so this over-reserves a little.
-    nodes_.reserve(2 * primitives_.size() - 1);
-    build(0, primitives_.size(), 0);
+    nodes_ = std::move(result.nodes);
+    primitives_ = std::move(result.primitives);
+    leaf_count_ = result.leaf_count;
+    max_depth_ = result.max_depth;
 }
 
 bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
@@ -47,39 +135,6 @@ bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& samp
 }
 
 Aabb Bvh::bounding_box() const { return nodes_.empty() ? Aabb() : nodes_[0].bbox; }
-
-std::uint32_t Bvh::build(std::size_t first, std::size_t count, int depth) {
-    const std::uint32_t index = static_cast<std::uint32_t>(nodes_.size());
-    nodes_.emplace_back();
-    max_depth_ = std::max(max_depth_, depth);
-
-    Aabb bbox;
-    for (std::size_t i = first; i < first + count; ++i) {
-        bbox = Aabb(bbox, primitives_[i]->bounding_box());
-    }
-
-    if (count <= max_leaf_size) {
-        nodes_[index].bbox = bbox;
-        nodes_[index].offset = static_cast<std::uint32_t>(first);
-        nodes_[index].count = static_cast<std::uint16_t>(count);
-        ++leaf_count_;
-        return index;
-    }
-
-    const int axis = bbox.longest_axis();
-    const auto begin = std::next(primitives_.begin(), static_cast<std::ptrdiff_t>(first));
-    std::sort(begin, std::next(begin, static_cast<std::ptrdiff_t>(count)),
-              [axis](const Hittable* a, const Hittable* b) { return box_compare(a, b, axis); });
-    const std::size_t mid = count / 2;
-
-    build(first, mid, depth + 1); // lands at index + 1
-    const std::uint32_t right = build(first + mid, count - mid, depth + 1);
-
-    // Written through the index, not a reference: the recursive calls above may have reallocated nodes_.
-    nodes_[index].bbox = bbox;
-    nodes_[index].offset = right;
-    return index;
-}
 
 bool Bvh::hit_node(std::uint32_t index, const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
     const BvhNode& node = nodes_[index];

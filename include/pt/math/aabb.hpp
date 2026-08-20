@@ -3,6 +3,7 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <algorithm>
 
 namespace pt {
 
@@ -29,6 +30,20 @@ public:
     [[nodiscard]] constexpr int longest_axis() const {
         if (x.size() > y.size()) return x.size() > z.size() ? 0 : 2;
         return y.size() > z.size() ? 1 : 2;
+    }
+
+    // Surface area of the box, the geometric term in the SAH cost function: the probability that a random ray hitting
+    // a node also hits a child is the ratio of their areas. Returns 0 for the default-constructed (empty) box.
+    [[nodiscard]] constexpr Float surface_area() const {
+        const Float dx = std::max(Float{0}, x.size());
+        const Float dy = std::max(Float{0}, y.size());
+        const Float dz = std::max(Float{0}, z.size());
+        return 2.0_f * (dx * dy + dy * dz + dz * dx);
+    }
+
+    // Midpoint of the box. Undefined for the empty box: the SAH builder only asks for centroids of real primitive bounds.
+    [[nodiscard]] Point3 centroid() const {
+        return Point3((x.min + x.max) / 2.0_f, (y.min + y.max) / 2.0_f, (z.min + z.max) / 2.0_f);
     }
 
     [[nodiscard]] bool hit(const Ray& r, Interval ray_t) const {

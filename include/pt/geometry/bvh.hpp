@@ -58,8 +58,6 @@ private:
     std::size_t leaf_count_{};
     int max_depth_{};
 
-    std::uint32_t build(std::size_t first, std::size_t count, int depth);
-
     [[nodiscard]] bool hit_node(std::uint32_t index, const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const;
 };
 
