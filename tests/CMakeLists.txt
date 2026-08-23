@@ -9,6 +9,7 @@ add_executable(pathtracer_tests
   triangle_test.cpp
   mesh_test.cpp
   obj_loader_test.cpp
+  bvh_test.cpp
 )
 
 # PRIVATE: executables have no consumers.
