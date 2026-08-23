@@ -73,9 +73,6 @@ private:
     std::vector<const Hittable*> primitives_; // Permuted by the build; leaves index into this
     std::size_t leaf_count_{};
     int max_depth_{};
-
-    // Tests the subtree rooted at `index`. Recursive, with depth bounded by max_depth_.
-    [[nodiscard]] bool hit_node(std::uint32_t index, const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const;
 };
 
 /// Builds a BVH over `list` and stores it in `arena`.
@@ -83,6 +80,6 @@ private:
 /// retained, but the primitives it points at must outlive the arena.
 /// @param stats If non-null, this tree's counts and build time are folded into it.
 [[nodiscard]] const Bvh* make_bvh(Arena<Hittable>& arena, const HittableList& list,
-BvhStats* stats = nullptr, const BvhBuildSettings& settings = {});
+                                  BvhStats* stats = nullptr, const BvhBuildSettings& settings = {});
 
 } // namespace pt

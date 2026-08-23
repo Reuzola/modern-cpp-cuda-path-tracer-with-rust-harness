@@ -1,9 +1,9 @@
 #pragma once
 #include "pt/math/interval.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
+#include <optional>
 
 namespace pt {
 
@@ -46,17 +46,19 @@ public:
         return Point3((x.min + x.max) / 2.0_f, (y.min + y.max) / 2.0_f, (z.min + z.max) / 2.0_f);
     }
 
-    [[nodiscard]] bool hit(const Ray& r, Interval ray_t) const {
-        const auto& ray_orig = r.origin();
-        const auto& ray_dir = r.direction();
-
+    // Slab test against a precomputed reciprocal direction: the caller divides once per ray, not once
+    // per node. Returns the entry distance, which the BVH stores as a sort key and as a cheap
+    // re-rejection test after `ray_t.max` has narrowed.
+    [[nodiscard]] std::optional<Float> intersect(const Point3& origin, const Vec3& inv_dir, Interval ray_t) const {
         for (int axis = 0; axis < 3; axis++) {
             const Interval& ax = axis_interval(axis);
-            const Float adinv = 1.0_f / ray_dir[axis];
 
-            Float t0 = (ax.min - ray_orig[axis]) * adinv;
-            Float t1 = (ax.max - ray_orig[axis]) * adinv;
+            Float t0 = (ax.min - origin[axis]) * inv_dir[axis];
+            Float t1 = (ax.max - origin[axis]) * inv_dir[axis];
 
+            // Branch structure is load-bearing: a zero direction component yields an infinite reciprocal, and
+            // an origin exactly on a slab boundary then yields NaN. These comparisons resolve that case; a
+            // branchless fmin/fmax rewrite does not.
             if (t0 < t1) {
                 if (t0 > ray_t.min) ray_t.min = t0;
                 if (t1 < ray_t.max) ray_t.max = t1;
@@ -64,9 +66,9 @@ public:
                 if (t1 > ray_t.min) ray_t.min = t1;
                 if (t0 < ray_t.max) ray_t.max = t0;
             }
-            if (ray_t.max <= ray_t.min) return false;
+            if (ray_t.max <= ray_t.min) return std::nullopt;
         }
-        return true;
+        return ray_t.min;
     }
 
 private:
