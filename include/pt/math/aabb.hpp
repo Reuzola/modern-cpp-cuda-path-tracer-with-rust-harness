@@ -4,6 +4,7 @@
 #include "pt/math/vec3.hpp"
 #include <algorithm>
 #include <optional>
+#include <utility>
 
 namespace pt {
 
@@ -46,26 +47,27 @@ public:
         return Point3((x.min + x.max) / 2.0_f, (y.min + y.max) / 2.0_f, (z.min + z.max) / 2.0_f);
     }
 
-    // Slab test against a precomputed reciprocal direction: the caller divides once per ray, not once
-    // per node. Returns the entry distance, which the BVH stores as a sort key and as a cheap
-    // re-rejection test after `ray_t.max` has narrowed.
+    // Slab test using precomputed `inv_dir`. Returns the entry distance on hit
+    // (clamped to `ray_t.min` if starting inside) for BVH sorting, or nullopt on miss.
+    // Conservative by design: edge cases may yield false accepts, never false rejects.
     [[nodiscard]] std::optional<Float> intersect(const Point3& origin, const Vec3& inv_dir, Interval ray_t) const {
         for (int axis = 0; axis < 3; axis++) {
             const Interval& ax = axis_interval(axis);
+            const Float inv = inv_dir[axis];
 
-            Float t0 = (ax.min - origin[axis]) * inv_dir[axis];
-            Float t1 = (ax.max - origin[axis]) * inv_dir[axis];
+            Float t_near = (ax.min - origin[axis]) * inv;
+            Float t_far = (ax.max - origin[axis]) * inv;
 
-            // Branch structure is load-bearing: a zero direction component yields an infinite reciprocal, and
-            // an origin exactly on a slab boundary then yields NaN. These comparisons resolve that case; a
-            // branchless fmin/fmax rewrite does not.
-            if (t0 < t1) {
-                if (t0 > ray_t.min) ray_t.min = t0;
-                if (t1 < ray_t.max) ray_t.max = t1;
-            } else {
-                if (t1 > ray_t.min) ray_t.min = t1;
-                if (t0 < ray_t.max) ray_t.max = t0;
-            }
+            // Ordered by the sign of the reciprocal rather than by comparing the two distances. A
+            // zero direction component makes one of them NaN, and NaN loses every comparison, so a
+            // distance-based test takes the wrong branch and rejects a box the ray actually touches.
+            // The sign is never NaN, so ordering by it leaves any NaN in t_far, where
+            // `t_far < ray_t.max` is false and the bound is simply left alone: the box stays
+            // conservatively accepted and the primitive test decides.
+            if (inv < 0) std::swap(t_near, t_far);
+            if (t_near > ray_t.min) ray_t.min = t_near;
+            if (t_far < ray_t.max) ray_t.max = t_far;
+
             if (ray_t.max <= ray_t.min) return std::nullopt;
         }
         return ray_t.min;
