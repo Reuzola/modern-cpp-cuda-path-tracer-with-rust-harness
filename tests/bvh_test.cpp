@@ -2,6 +2,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
+#include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/triangle.hpp"
@@ -15,6 +16,7 @@
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/scene/obj_loader.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
 #include <algorithm>
@@ -23,7 +25,10 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
+#include <filesystem>
 #include <span>
+#include <string>
 
 namespace {
 
@@ -159,6 +164,43 @@ void fill_separated_spheres(TestScene& scene, int per_axis, std::uint64_t seed) 
         }
     }
 }
+
+// Mesh geometry is a class of its own here: neighbouring triangles share edges and
+// vertices, so leaf bounds genuinely interpenetrate. The randomly placed triangles above
+// never touch each other, which leaves that case untested.
+//
+// Meshes are held by the scene rather than the arena: Mesh is neither copyable nor
+// movable and MeshTriangle handles are bound to its address, so it must be built in place
+// and outlive the handles. A deque never relocates its elements, unlike a vector.
+class MeshScene {
+public:
+    MeshScene() = default;
+    MeshScene(const MeshScene&) = delete;
+    MeshScene& operator=(const MeshScene&) = delete;
+
+    void add_obj(const std::string& filename) {
+        const std::filesystem::path path = std::filesystem::path(PT_ASSETS_DIR) / filename;
+
+        meshes_.emplace_back(pt::load_obj(path), materials_.create<pt::Lambertian>(&albedo_));
+
+        for (const Hittable* triangle : pt::mesh_triangles(objects_, meshes_.back())->objects()) {
+            list_.add(triangle);
+        }
+    }
+
+    [[nodiscard]] const HittableList& list() const noexcept { return list_; }
+
+    [[nodiscard]] std::span<const Hittable* const> objects() const noexcept { return list_.objects(); }
+
+    [[nodiscard]] Aabb bounds() const { return list_.bounding_box(); }
+
+private:
+    const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
+    pt::Arena<pt::Material> materials_;
+    pt::Arena<Hittable> objects_;
+    std::deque<pt::Mesh> meshes_;
+    HittableList list_;
+};
 
 [[nodiscard]] Float bounding_radius(const Aabb& bounds) {
     return 0.5_f * Vec3(bounds.x.size(), bounds.y.size(), bounds.z.size()).length();
@@ -505,4 +547,32 @@ TEST_CASE("make_bvh folds each tree's counts into the shared stats", "[geometry]
 
     // The default argument is the path a caller that wants no statistics takes.
     REQUIRE(pt::make_bvh(arena, scene.list()) != nullptr);
+}
+
+TEST_CASE("a bvh over loaded mesh geometry answers exactly like a brute-force list", "[geometry][bvh][mesh]") {
+    const std::string filename = GENERATE("unit_cube.obj", "tetrahedron.obj");
+
+    // Leaf size one puts every triangle in its own leaf, so sibling leaves overlap wherever
+    // triangles share an edge; the default groups them and hides that overlap inside a leaf.
+    const BvhBuildSettings settings = GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1});
+
+    MeshScene scene;
+    scene.add_obj(filename);
+
+    const Bvh bvh(scene.objects(), settings);
+    Sampler sampler{pt::sampler_seed(23, 0, 0)};
+
+    // Rays are aimed at interior points, never at edges. A ray hitting a shared edge meets
+    // two triangles at exactly the same distance, where the winner is decided by visiting
+    // order and the two paths legitimately disagree - a documented limit of this comparison,
+    // not a defect to assert against.
+    for (int i = 0; i < ray_count; ++i) {
+        require_same_hit(bvh, scene.list(), ray_into_scene(sampler, scene.bounds()), visible);
+    }
+
+    SECTION("and from inside the mesh, where rays leave through its own faces") {
+        for (int i = 0; i < ray_count; ++i) {
+            require_same_hit(bvh, scene.list(), ray_inside_scene(sampler, scene.bounds()), visible);
+        }
+    }
 }

@@ -27,9 +27,10 @@ if(PT_ENABLE_IPO AND pt_ipo_supported)
   set_property(TARGET pathtracer_tests PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
-# Baked-in path avoids WORKING_DIRECTORY issues under `ctest -j`/IDEs.
+# Baked-in paths avoid WORKING_DIRECTORY issues under `ctest -j`/IDEs.
 target_compile_definitions(pathtracer_tests PRIVATE
   PT_SCENES_DIR="${PROJECT_SOURCE_DIR}/scenes"
+  PT_ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets"
 )
 
 # From Catch2 via CMAKE_MODULE_PATH above.
