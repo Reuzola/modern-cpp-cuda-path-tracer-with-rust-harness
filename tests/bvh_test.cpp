@@ -239,17 +239,11 @@ void require_same_vec(const Vec3& actual, const Vec3& expected) {
 
 // Runs one query through both paths and requires them to agree exactly.
 void require_same_hit(const Bvh& bvh, const HittableList& reference, const Ray& r, const Interval& ray_t) {
-    // Two samplers in identical states. No primitive used in this file draws from one, but
-    // ConstantMedium samples a free-flight distance inside hit(); separate samplers make
-    // that assumption explicit rather than something the test silently depends on.
-    Sampler bvh_sampler{1};
-    Sampler reference_sampler{1};
-
     HitRecord bvh_rec;
     HitRecord reference_rec;
 
-    const bool bvh_hit = bvh.hit(r, ray_t, bvh_rec, bvh_sampler);
-    const bool reference_hit = reference.hit(r, ray_t, reference_rec, reference_sampler);
+    const bool bvh_hit = bvh.hit(r, ray_t, bvh_rec);
+    const bool reference_hit = reference.hit(r, ray_t, reference_rec);
 
     INFO("origin (" << r.origin().x() << ", " << r.origin().y() << ", " << r.origin().z() << ")  direction ("
                     << r.direction().x() << ", " << r.direction().y() << ", " << r.direction().z() << ")");
@@ -373,8 +367,7 @@ TEST_CASE("an empty bvh is a valid empty tree", "[geometry][bvh]") {
     REQUIRE(bvh.bounding_box().x.size() < 0.0_f);
 
     HitRecord rec;
-    Sampler sampler{1};
-    REQUIRE_FALSE(bvh.hit(Ray(Point3(0.0_f, 0.0_f, 0.0_f), Vec3(1.0_f, 0.0_f, 0.0_f)), visible, rec, sampler));
+    REQUIRE_FALSE(bvh.hit(Ray(Point3(0.0_f, 0.0_f, 0.0_f), Vec3(1.0_f, 0.0_f, 0.0_f)), visible, rec));
 }
 
 TEST_CASE("a single-primitive bvh is one leaf and still finds it", "[geometry][bvh]") {
@@ -477,13 +470,11 @@ TEST_CASE("every primitive in the scene is reachable through the tree", "[geomet
     for (const Hittable* primitive : scene.objects()) {
         const Ray r(primitive->bounding_box().centroid(), pt::random_unit_vector(direction_sampler));
 
-        Sampler direct_sampler{1};
         HitRecord direct;
-        REQUIRE(primitive->hit(r, visible, direct, direct_sampler));
+        REQUIRE(primitive->hit(r, visible, direct));
 
-        Sampler tree_sampler{1};
         HitRecord through_tree;
-        REQUIRE(bvh.hit(r, visible, through_tree, tree_sampler));
+        REQUIRE(bvh.hit(r, visible, through_tree));
 
         REQUIRE(through_tree.mat == direct.mat);
         REQUIRE(through_tree.t == direct.t);

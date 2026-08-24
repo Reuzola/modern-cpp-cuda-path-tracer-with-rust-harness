@@ -7,7 +7,6 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
-#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/sampling/mixture_pdf.hpp"
@@ -38,7 +37,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     HitRecord rec;
 
     count_ray_query();
-    const bool hit_surface = world_.hit(r, Interval(ray_epsilon, infinity), rec, sampler);
+    const bool hit_surface = world_.hit(r, Interval(ray_epsilon, infinity), rec);
     Float t_limit = hit_surface ? rec.t : infinity;
     bool hit_medium{false};
 

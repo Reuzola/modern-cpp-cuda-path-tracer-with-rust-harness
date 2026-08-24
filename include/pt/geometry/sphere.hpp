@@ -12,8 +12,6 @@ namespace pt {
 
 class Material;
 
-class Sampler;
-
 class Sphere final : public Hittable, public Sampleable {
 public:
     Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat);
@@ -22,7 +20,7 @@ public:
 
     [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     [[nodiscard]] Float pdf_direction(const Point3& origin, const Vec3& direction) const override;
 

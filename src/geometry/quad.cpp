@@ -21,7 +21,7 @@ Quad::Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat) :
     set_bounding_box();
 }
 
-bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler&) const {
+bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     return intersect(r, ray_t, rec);
 }
 

@@ -23,7 +23,7 @@ Sphere::Sphere(const Point3& static_center, Float radius, const Material* mat) :
 
 Aabb Sphere::bounding_box() const { return bbox_; }
 
-bool Sphere::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler&) const {
+bool Sphere::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     return intersect(r, ray_t, rec);
 }
 

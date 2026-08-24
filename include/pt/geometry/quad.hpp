@@ -12,13 +12,11 @@ namespace pt {
 
 class Material;
 
-class Sampler;
-
 class Quad final : public Hittable, public Sampleable {
 public:
     Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat);
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     [[nodiscard]] Aabb bounding_box() const override;
 

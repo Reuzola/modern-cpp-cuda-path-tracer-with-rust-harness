@@ -11,8 +11,6 @@ namespace pt {
 
 class Material;
 
-class Sampler;
-
 // Pure geometric result of a ray-triangle test. Barycentrics are relative to v0: the weight of v0 is 1 - b1 - b2.
 struct TriangleHit {
     Float t{};
@@ -32,7 +30,7 @@ class Triangle final : public Hittable {
 public:
     Triangle(const Point3& v0, const Point3& v1, const Point3& v2, const Material* mat);
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     [[nodiscard]] Aabb bounding_box() const override;
 

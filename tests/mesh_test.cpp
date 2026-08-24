@@ -9,7 +9,6 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
-#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
@@ -36,7 +35,6 @@ using pt::MeshData;
 using pt::MeshTriangle;
 using pt::Point3;
 using pt::Ray;
-using pt::Sampler;
 using pt::Triangle;
 using pt::unit_vector;
 using pt::Uv;
@@ -187,7 +185,6 @@ TEST_CASE("a mesh rejects buffers it cannot index safely", "[geometry][mesh]") {
 }
 
 TEST_CASE("a mesh triangle intersects exactly like a standalone triangle", "[geometry][mesh]") {
-    Sampler sampler{0};
     const pt::SolidColor albedo{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     const pt::Lambertian mat{&albedo};
 
@@ -199,8 +196,8 @@ TEST_CASE("a mesh triangle intersects exactly like a standalone triangle", "[geo
 
     HitRecord mesh_rec;
     HitRecord standalone_rec;
-    REQUIRE(from_mesh.hit(r, visible, mesh_rec, sampler));
-    REQUIRE(standalone.hit(r, visible, standalone_rec, sampler));
+    REQUIRE(from_mesh.hit(r, visible, mesh_rec));
+    REQUIRE(standalone.hit(r, visible, standalone_rec));
 
     REQUIRE_THAT(widen(mesh_rec.t), WithinAbs(widen(standalone_rec.t), tolerance));
     REQUIRE_THAT(widen(mesh_rec.u), WithinAbs(widen(standalone_rec.u), tolerance));
@@ -214,12 +211,11 @@ TEST_CASE("a mesh triangle intersects exactly like a standalone triangle", "[geo
 }
 
 TEST_CASE("without attributes a hit reports the flat normal and raw barycentrics", "[geometry][mesh]") {
-    Sampler sampler{0};
     const Mesh mesh = quad_mesh(nullptr);
     const MeshTriangle tri(&mesh, 0);
 
     HitRecord rec;
-    REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+    REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
 
     require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
     // Weights of v1 and v2 respectively; v0 carries the remaining 0.25.
@@ -227,41 +223,39 @@ TEST_CASE("without attributes a hit reports the flat normal and raw barycentrics
 }
 
 TEST_CASE("vertex normals are interpolated across the triangle", "[geometry][mesh]") {
-    Sampler sampler{0};
     const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
     const MeshTriangle tri(&mesh, 0);
 
     HitRecord rec;
 
     SECTION("a hit on a vertex reproduces that vertex's normal exactly") {
-        REQUIRE(tri.hit(ray_from_above(1.0_f, 0.0_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_above(1.0_f, 0.0_f), visible, rec));
         require_vec_near(rec.normal, Vec3(1.0_f, 0.0_f, 0.0_f));
     }
     SECTION("a hit on an edge midpoint blends its two endpoints") {
         // 0.5 * (0, 0, 1) + 0.5 * (1, 0, 0), normalised.
-        REQUIRE(tri.hit(ray_from_above(0.5_f, 0.0_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_above(0.5_f, 0.0_f), visible, rec));
         require_vec_near(rec.normal, unit_vector(Vec3(1.0_f, 0.0_f, 1.0_f)));
     }
     SECTION("an interior hit blends all three vertices") {
         // 0.25 * (0, 0, 1) + 0.5 * (1, 0, 0) + 0.25 * (0, 1, 0), normalised.
-        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
         require_vec_near(rec.normal, unit_vector(Vec3(2.0_f, 1.0_f, 1.0_f)));
     }
     SECTION("the result is a unit vector even though the inputs blend to a shorter one") {
-        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
         REQUIRE_THAT(widen(rec.normal.length()), WithinAbs(1.0, tolerance));
     }
 }
 
 TEST_CASE("orientation follows the geometric normal, not the shading normal", "[geometry][mesh]") {
-    Sampler sampler{0};
     HitRecord rec;
 
     SECTION("a back-face hit flips the interpolated normal") {
         const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
         const MeshTriangle tri(&mesh, 0);
 
-        REQUIRE(tri.hit(ray_from_below(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_below(0.75_f, 0.25_f), visible, rec));
 
         REQUIRE_FALSE(rec.front_face);
         require_vec_near(rec.normal, -unit_vector(Vec3(2.0_f, 1.0_f, 1.0_f)));
@@ -273,7 +267,7 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
         const Mesh mesh = quad_mesh_with(inverted, {}, nullptr);
         const MeshTriangle tri(&mesh, 0);
 
-        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
 
         REQUIRE(rec.front_face);
         require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, -1.0_f));
@@ -287,7 +281,7 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
         const MeshTriangle tri(&mesh, 0);
 
         // The edge midpoint weights v0 and v1 equally, summing to the zero vector.
-        REQUIRE(tri.hit(ray_from_above(0.5_f, 0.0_f), visible, rec, sampler));
+        REQUIRE(tri.hit(ray_from_above(0.5_f, 0.0_f), visible, rec));
 
         REQUIRE(rec.front_face);
         require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
@@ -295,7 +289,6 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
 }
 
 TEST_CASE("vertex UVs are interpolated across the triangle", "[geometry][mesh]") {
-    Sampler sampler{0};
     const Mesh mesh = quad_mesh_with({}, quad_uvs(), nullptr);
     Arena<Hittable> arena;
     const HittableList* triangles = pt::mesh_triangles(arena, mesh);
@@ -305,19 +298,19 @@ TEST_CASE("vertex UVs are interpolated across the triangle", "[geometry][mesh]")
     // Each vertex's UV equals its xy position, so an interpolated UV must equal
     // the xy of the hit point - and must agree across the shared diagonal.
     SECTION("on the first triangle") {
-        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
         require_uv_near(rec.u, rec.v, 0.75_f, 0.25_f);
     }
     SECTION("on the second triangle") {
-        REQUIRE(triangles->hit(ray_from_above(0.25_f, 0.75_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(0.25_f, 0.75_f), visible, rec));
         require_uv_near(rec.u, rec.v, 0.25_f, 0.75_f);
     }
     SECTION("at a vertex the UV is that vertex's own") {
-        REQUIRE(triangles->hit(ray_from_above(1.0_f, 1.0_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(1.0_f, 1.0_f), visible, rec));
         require_uv_near(rec.u, rec.v, 1.0_f, 1.0_f);
     }
     SECTION("UVs do not disturb the geometric normal") {
-        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
         require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
     }
 }
@@ -349,7 +342,6 @@ TEST_CASE("mesh_triangles produces one hittable per triangle", "[geometry][mesh]
 }
 
 TEST_CASE("both halves of a two-triangle quad are reachable through the list", "[geometry][mesh]") {
-    Sampler sampler{0};
     const Mesh mesh = quad_mesh(nullptr);
     Arena<Hittable> arena;
     const HittableList* triangles = pt::mesh_triangles(arena, mesh);
@@ -357,17 +349,17 @@ TEST_CASE("both halves of a two-triangle quad are reachable through the list", "
     HitRecord rec;
 
     SECTION("a point below the shared diagonal lands on the first triangle") {
-        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
         require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
     }
     SECTION("a point above the shared diagonal lands on the second triangle") {
-        REQUIRE(triangles->hit(ray_from_above(0.25_f, 0.75_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(0.25_f, 0.75_f), visible, rec));
         require_vec_near(rec.normal, Vec3(0.0_f, 0.0_f, 1.0_f));
     }
     SECTION("a point on the shared diagonal is still covered") {
-        REQUIRE(triangles->hit(ray_from_above(0.5_f, 0.5_f), visible, rec, sampler));
+        REQUIRE(triangles->hit(ray_from_above(0.5_f, 0.5_f), visible, rec));
     }
     SECTION("a point outside the quad misses every triangle") {
-        REQUIRE_FALSE(triangles->hit(ray_from_above(1.5_f, 1.5_f), visible, rec, sampler));
+        REQUIRE_FALSE(triangles->hit(ray_from_above(1.5_f, 1.5_f), visible, rec));
     }
 }

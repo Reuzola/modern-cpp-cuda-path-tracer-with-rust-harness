@@ -353,13 +353,13 @@ struct TraversalEntry {
 // Tests one leaf. A leaf is a contiguous run of primitives, which is what (offset, count) encodes.
 // The interval narrows as closer hits are found, so later primitives are rejected earlier.
 [[nodiscard]] bool hit_leaf(std::span<const Hittable* const> prims, const Ray& r,
-                            const Interval& ray_t, HitRecord& rec, Sampler& sampler) {
+                            const Interval& ray_t, HitRecord& rec) {
     bool is_hit = false;
     Float closest = ray_t.max;
 
     for (const Hittable* prim : prims) {
         count_leaf_test();
-        if (prim->hit(r, Interval(ray_t.min, closest), rec, sampler)) {
+        if (prim->hit(r, Interval(ray_t.min, closest), rec)) {
             is_hit = true;
             closest = rec.t;
         }
@@ -387,7 +387,7 @@ Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& setti
 // Iterative, distance-ordered traversal. The near child is descended into directly and the far one
 // is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
 // single comparison instead of a repeated slab test.
-bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
+bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     if (nodes_.empty()) return false;
 
     // Divided once per query, not once per node. It must live here rather than in Ray: Instance builds a
@@ -412,7 +412,7 @@ bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& samp
         if (node.is_leaf()) {
             // A leaf is a contiguous primitive range, so the whole leaf is consumed here; then fall through to the pop step.
             const std::span<const Hittable* const> leaf_prims = std::span(primitives_).subspan(node.offset, node.count);
-            if (hit_leaf(leaf_prims, r, Interval(ray_t.min, closest), rec, sampler)) {
+            if (hit_leaf(leaf_prims, r, Interval(ray_t.min, closest), rec)) {
                 is_hit = true;
                 closest = rec.t;
             }

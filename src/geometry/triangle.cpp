@@ -61,7 +61,7 @@ Aabb triangle_bounds(const Point3& v0, const Point3& v1, const Point3& v2) noexc
 Triangle::Triangle(const Point3& v0, const Point3& v1, const Point3& v2, const Material* mat)
     : v0_(v0), v1_(v1), v2_(v2), mat_(mat), bbox_(triangle_bounds(v0, v1, v2)) {}
 
-bool Triangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler&) const {
+bool Triangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     TriangleHit tri_hit;
     if (!intersect_triangle(r, ray_t, v0_, v1_, v2_, tri_hit)) return false;
 

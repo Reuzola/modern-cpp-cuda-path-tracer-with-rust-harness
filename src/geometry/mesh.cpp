@@ -65,7 +65,7 @@ MeshTriangle::MeshTriangle(const Mesh* mesh, std::uint32_t triangle_index) : mes
     assert(mesh != nullptr);
 }
 
-bool MeshTriangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler&) const {
+bool MeshTriangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     const auto [a, b, c] = mesh_->triangle(triangle_index_);
 
     TriangleHit tri_hit;

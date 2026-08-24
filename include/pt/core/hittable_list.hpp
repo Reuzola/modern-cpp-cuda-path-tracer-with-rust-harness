@@ -4,13 +4,10 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
-#include "pt/math/sampler.hpp"
 #include <span>
 #include <vector>
 
 namespace pt {
-
-class Sampler;
 
 class HittableList final : public Hittable {
 public:
@@ -19,7 +16,7 @@ public:
 
     [[nodiscard]] Aabb bounding_box() const override;
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     void clear();
 

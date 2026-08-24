@@ -6,11 +6,9 @@
 
 namespace pt {
 
-class Sampler;
-
 class Hittable {
 public:
-    [[nodiscard]] virtual bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const = 0;
+    [[nodiscard]] virtual bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const = 0;
 
     [[nodiscard]] virtual Aabb bounding_box() const = 0;
 

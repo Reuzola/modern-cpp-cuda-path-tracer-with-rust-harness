@@ -9,15 +9,13 @@ namespace pt {
 
 class Interval;
 
-class Sampler;
-
 // A transformed reference to another hittable. The child is shared rather than
 // owned, so the same geometry can appear under any number of instances.
 class Instance final : public Hittable {
 public:
     Instance(const Hittable* object, const Transform& transform);
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     [[nodiscard]] Aabb bounding_box() const override;
 

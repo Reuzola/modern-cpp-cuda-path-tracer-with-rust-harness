@@ -16,14 +16,9 @@
 namespace pt {
 
 class HittableList;
-
 class Interval;
-
 class Material;
-
 class Ray;
-
-class Sampler;
 
 // Texture coordinate for one vertex. Deliberately arithmetic-free: the only
 // operation the engine performs on it is barycentric interpolation.
@@ -134,7 +129,7 @@ class MeshTriangle final : public Hittable {
 public:
     MeshTriangle(const Mesh* mesh, std::uint32_t triangle_index);
 
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     [[nodiscard]] Aabb bounding_box() const override;
 

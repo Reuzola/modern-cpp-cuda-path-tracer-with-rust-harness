@@ -14,7 +14,6 @@
 namespace pt {
 
 class Ray;
-class Sampler;
 class HittableList;
 
 // Binned SAH build parameters (cost ratio determines tree shape).
@@ -56,7 +55,7 @@ public:
     explicit Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& settings = {});
 
     // Closest hit inside ray_t, or false when the ray misses the tree entirely.
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const override;
+    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
     // Root bounds, or an empty box when the tree holds no primitives.
     [[nodiscard]] Aabb bounding_box() const override;
