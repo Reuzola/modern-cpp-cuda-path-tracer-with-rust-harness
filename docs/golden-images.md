@@ -29,6 +29,17 @@ scripts/render-goldens.sh /tmp/actual
 
 ## Comparing
 
+The whole loop — build, render into a scratch directory, compare every
+reference — runs in one command:
+
+```bash
+scripts/check-goldens.sh
+```
+
+It leaves the difference images behind only when something failed, and takes
+`--threshold` for the AArch64 case below. The manual invocation underneath is
+for looking at a single scene.
+
 ```bash
 tools/scene-tool/target/release/scene-tool compare \
     tests/golden/cornell_box.png /tmp/actual/cornell_box.png \
