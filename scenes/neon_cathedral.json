@@ -33,8 +33,7 @@
     "emit_magenta": { "type": "solid_color", "albedo": [14.0, 0.06, 7.5] },
     "emit_green": { "type": "solid_color", "albedo": [0.08, 12.0, 0.12] },
     "emit_violet": { "type": "solid_color", "albedo": [0.28, 0.02, 2.3] },
-    "emit_core": { "type": "solid_color", "albedo": [0.7, 20.0, 3.0] },
-    "haze": { "type": "solid_color", "albedo": [0.92, 0.94, 1.0] }
+    "emit_core": { "type": "solid_color", "albedo": [0.7, 20.0, 3.0] }
   },
   "materials": {
     "wall": { "type": "lambertian", "texture": "concrete" },
@@ -55,9 +54,7 @@
     "light_magenta": { "type": "diffuse_light", "texture": "emit_magenta" },
     "light_green": { "type": "diffuse_light", "texture": "emit_green" },
     "light_violet": { "type": "diffuse_light", "texture": "emit_violet" },
-    "light_core": { "type": "diffuse_light", "texture": "emit_core" },
-
-    "fog": { "type": "isotropic", "texture": "haze" }
+    "light_core": { "type": "diffuse_light", "texture": "emit_core" }
   },
   "objects": [
     {
@@ -149,13 +146,6 @@
         { "type": "sphere", "center": [-124, 118, -150], "radius": 26, "material": "glass" },
         { "type": "sphere", "center": [138, 172, -100], "radius": 22, "material": "chrome" }
       ]
-    },
-
-    {
-      "type": "constant_medium",
-      "density": 0.0000000000008,
-      "phase_function": "fog",
-      "boundary": { "type": "box", "a": [-358, 1, -598], "b": [358, 518, 1598], "material": "wall" }
     }
   ],
   "importance_targets": [
