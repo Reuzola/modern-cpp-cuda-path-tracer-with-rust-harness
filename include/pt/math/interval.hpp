@@ -11,7 +11,7 @@ public:
     Float max{-infinity};
 
     constexpr Interval() = default;
-    constexpr Interval(Float min, Float max) : min(min), max(max) {}
+    constexpr Interval(Float lo, Float hi) : min(lo), max(hi) {}
     constexpr Interval(const Interval& a, const Interval& b) : min(std::min(a.min, b.min)), max(std::max(a.max, b.max)) {}
 
     constexpr bool contains(Float x) const {

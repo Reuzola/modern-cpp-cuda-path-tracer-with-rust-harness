@@ -13,7 +13,8 @@ public:
     Interval x, y, z;
 
     constexpr Aabb() = default;
-    constexpr Aabb(const Interval& x, const Interval& y, const Interval& z) : x(x), y(y), z(z) { pad_to_minimums(); }
+    constexpr Aabb(const Interval& x_range, const Interval& y_range, const Interval& z_range)
+        : x(x_range), y(y_range), z(z_range) { pad_to_minimums(); }
     Aabb(const Point3& a, const Point3& b) {
         x = (a[0] <= b[0]) ? Interval(a[0], b[0]) : Interval(b[0], a[0]);
         y = (a[1] <= b[1]) ? Interval(a[1], b[1]) : Interval(b[1], a[1]);

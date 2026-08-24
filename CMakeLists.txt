@@ -74,6 +74,12 @@ set(pt_gnu_like_warnings
   -Wformat=2
 )
 
+# Clang-only warnings (GCC errors on unknown flags).
+set(pt_clang_only_warnings
+  # Extended shadowing (superset of -Wshadow).
+  -Wshadow-all
+)
+
 # MSVC skeleton; project currently targets WSL/Linux + Clang only.
 set(pt_msvc_warnings
   /W4
@@ -82,6 +88,7 @@ set(pt_msvc_warnings
 # COMPILE_LANG_AND_ID filters by language too, so C++ flags don't leak elsewhere.
 target_compile_options(pt_warnings INTERFACE
   $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:${pt_gnu_like_warnings}>
+  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:${pt_clang_only_warnings}>
   $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:${pt_msvc_warnings}>
 
   # Generate-time check; stays correct under multi-config generators.
