@@ -3,6 +3,7 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/bvh.hpp"
+#include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
@@ -15,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -89,6 +91,10 @@ public:
 
     void build_bvh();
 
+    void add_medium(const Hittable* boundary, Float density, const Material* phase_function);
+
+    [[nodiscard]] std::span<const ConstantMedium> media() const noexcept { return media_; }
+
     [[nodiscard]] const BvhStats& bvh_stats() const noexcept { return bvh_stats_; }
     [[nodiscard]] BvhStats& bvh_stats() noexcept { return bvh_stats_; }
 
@@ -98,6 +104,7 @@ private:
     Arena<Material> materials_;
     std::vector<std::unique_ptr<Mesh>> meshes_;
     Arena<Hittable> objects_;
+    std::vector<ConstantMedium> media_;
     HittableList world_;
     ImportanceTargets importance_targets_;
     BvhStats bvh_stats_{};

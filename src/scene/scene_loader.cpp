@@ -217,6 +217,18 @@ template <typename T>
     }
 }
 
+void build_medium(const Json& j, LoadContext& ctx) {
+    if (j.contains("name"))
+        throw SceneError("Object type 'constant_medium' cannot be named: media are not part of the object graph");
+
+    const Hittable* boundary = child_at(j, ctx, "boundary");
+    const Float density = read_number(field(j, "density"));
+    if (density <= 0) throw SceneError(std::format("Field 'density' must be positive, got {}", density));
+    const Material* phase_function = find_material(ctx, j, "phase_function");
+
+    ctx.scene.add_medium(boundary, density, phase_function);
+}
+
 [[nodiscard]] const Hittable* build_object(const Json& j, LoadContext& ctx) {
     const std::string& type = read_string(field(j, "type"));
     const Hittable* result = nullptr;
@@ -311,12 +323,7 @@ template <typename T>
 
         result = ctx.scene.create_object<Instance>(child, transform);
     } else if (type == "constant_medium") {
-        const Hittable* boundary = child_at(j, ctx, "boundary");
-        const Float density = read_number(field(j, "density"));
-        if (density <= 0) throw SceneError(std::format("Field 'density' must be positive, got {}", density));
-        const Material* phase_function = find_material(ctx, j, "phase_function");
-
-        result = ctx.scene.create_object<ConstantMedium>(boundary, density, phase_function);
+        throw SceneError("Object type 'constant_medium' may only appear as a top-level entry in 'objects'");
     } else {
         throw SceneError(std::format("Unknown object type '{}'", type));
     }
@@ -407,7 +414,13 @@ void parse_objects(const Json& doc, LoadContext& ctx) {
     for (const auto& element : objects) {
         try {
             if (!element.is_object()) throw SceneError("Top-level entries in 'objects' must be definitions, not names");
-            ctx.scene.add_object(build_object(element, ctx));
+
+            // Media are sampled by the integrator, not intersected as geometry, so they never enter the object graph.
+            const std::string& type = read_string(field(element, "type"));
+            if (type == "constant_medium")
+                build_medium(element, ctx);
+            else
+                ctx.scene.add_object(build_object(element, ctx));
         } catch (SceneError& e) {
             e.prepend(std::format("/objects/{}", index));
             throw;

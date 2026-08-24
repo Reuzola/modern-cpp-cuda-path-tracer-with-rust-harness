@@ -1,6 +1,7 @@
 #include "pt/render/path_integrator.hpp"
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/geometry/constant_medium.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
@@ -19,6 +20,14 @@
 
 namespace pt {
 
+namespace {
+
+// Shared by the surface query and the media segment: a medium sampled in front
+// of this epsilon would scatter inside the surface the path just left.
+constexpr Float ray_epsilon = 0.001_f;
+
+} // namespace
+
 Color PathIntegrator::radiance(const Ray& r, Sampler& sampler) const {
     return trace(r, max_depth_, sampler);
 }
@@ -29,7 +38,22 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     HitRecord rec;
 
     count_ray_query();
-    if (!world_.hit(r, Interval(0.001_f, infinity), rec, sampler)) return background_;
+    const bool hit_surface = world_.hit(r, Interval(ray_epsilon, infinity), rec, sampler);
+    Float t_limit = hit_surface ? rec.t : infinity;
+    bool hit_medium{false};
+
+    // Free-flight sampling happens here rather than inside Hittable::hit so that
+    // the sampler stream advances with the light path, not with traversal order.
+    for (const ConstantMedium& medium : media_) {
+        HitRecord candidate;
+        if (medium.sample_interaction(r, Interval(ray_epsilon, t_limit), sampler, candidate)) {
+            t_limit = candidate.t;
+            rec = candidate;
+            hit_medium = true;
+        }
+    }
+
+    if (!hit_surface && !hit_medium) return background_;
 
     const Color color_from_emission = rec.mat->emitted(r, rec);
 

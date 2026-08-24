@@ -1,7 +1,6 @@
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -16,9 +15,7 @@ namespace pt {
 ConstantMedium::ConstantMedium(const Hittable* boundary, Float density, const Material* phase_function)
     : boundary_(boundary), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) { assert(boundary != nullptr); }
 
-Aabb ConstantMedium::bounding_box() const { return boundary_->bounding_box(); }
-
-bool ConstantMedium::hit(const Ray& r, const Interval& ray_t, HitRecord& rec, Sampler& sampler) const {
+bool ConstantMedium::sample_interaction(const Ray& r, const Interval& ray_t, Sampler& sampler, HitRecord& rec) const {
     HitRecord rec1, rec2;
 
     if (!boundary_->hit(r, Interval::universe, rec1, sampler)) return false;

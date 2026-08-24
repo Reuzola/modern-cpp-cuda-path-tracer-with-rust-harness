@@ -1,4 +1,4 @@
-//! Rules a JSON Schema cannot express: name resolution, ordering, geometry, then importance targets, then whole-scene lints.
+//! Rules a JSON Schema cannot express: name resolution, ordering, geometry, placement, then importance targets, then whole-scene lints.
 use crate::report::Diagnostic;
 use crate::scene::{Material, Object, ObjectOrRef, Scene, Texture};
 use std::collections::HashSet;
@@ -107,6 +107,12 @@ fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut Na
         }
 
         ObjectOrRef::Inline(object) => {
+            if matches!(object.as_ref(), Object::ConstantMedium { .. }) {
+                diagnostics.push(Diagnostic::error(
+                    location.to_string(),
+                    "constant_medium may only appear as a top-level entry in 'objects'".to_string(),
+                ));
+            }
             walk_object(object, location, scene, names, base_dir, diagnostics);
         }
     }
@@ -156,7 +162,14 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             walk_child(object, &child_location, scene, names, base_dir, diagnostics);
         }
 
-        Object::ConstantMedium { boundary, phase_function, .. } => {
+        Object::ConstantMedium { boundary, phase_function, name, .. } => {
+            if name.is_some() {
+                diagnostics.push(Diagnostic::error(
+                    location.to_string(),
+                    "constant_medium cannot be named: media are not part of the object graph".to_string(),
+                ));
+            }
+
             check_material(phase_function, location, scene, names, diagnostics);
 
             let child_location = format!("{location}/boundary");
@@ -226,6 +239,10 @@ mod tests {
 
     /// A mesh referring to a file the fixture may or may not create.
     const MESH: &str = r#"{ "type": "mesh", "filename": "bunny.obj", "material": "grey" }"#;
+
+    /// A well-formed medium; the rules below fire on where it sits, not what it holds.
+    const MEDIUM: &str = r#"{ "type": "constant_medium", "density": 0.01, "phase_function": "grey",
+                              "boundary": { "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" } }"#;
 
     /// Runs the rules against a directory containing `files`, for the rules that
     /// read the filesystem. The directory is removed when the call returns; the
@@ -364,6 +381,42 @@ mod tests {
         let found = analyse(&json);
 
         assert_eq!(only(&found).location, "/objects/1");
+    }
+
+    // Media are sampled by the integrator rather than intersected, so they never
+    // enter the object graph: they cannot be nested under a parent and cannot be
+    // named. The C++ loader throws on both; this keeps the two answers together.
+    #[test]
+    fn a_nested_constant_medium_is_reported_at_the_child() {
+        let json = with_objects(&format!(r#"{{ "type": "group", "children": [{MEDIUM}] }}"#));
+
+        let found = analyse(&json);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.severity, Severity::Error);
+        assert_eq!(diagnostic.location, "/objects/0/children/0");
+    }
+
+    #[test]
+    fn a_named_constant_medium_is_reported_at_the_object() {
+        let json = with_objects(&MEDIUM.replace(
+            r#""type": "constant_medium""#,
+            r#""type": "constant_medium", "name": "haze""#,
+        ));
+
+        let found = analyse(&json);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.severity, Severity::Error);
+        assert_eq!(diagnostic.location, "/objects/0");
+        assert!(diagnostic.message.contains("named"), "{}", diagnostic.message);
+    }
+
+    // The pair above only proves the rules fire; this one proves they do not
+    // over-fire on the placement every shipped scene actually uses.
+    #[test]
+    fn a_top_level_unnamed_constant_medium_is_accepted() {
+        assert_eq!(locations(&analyse(&with_objects(MEDIUM))), Vec::<&str>::new());
     }
 
     #[test]

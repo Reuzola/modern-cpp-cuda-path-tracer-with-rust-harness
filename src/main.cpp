@@ -60,7 +60,7 @@ int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     const int image_height = scene.render.image_height;
 
     const pt::Camera camera(scene.camera, image_width, image_height);
-    const pt::PathIntegrator integrator(scene.world(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
+    const pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
     const pt::Renderer renderer(camera, integrator, scene.render);
     pt::ConsoleProgressReporter reporter;
 

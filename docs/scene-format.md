@@ -294,6 +294,8 @@ Children of a `group` are organised into a bounding volume hierarchy when the sc
 `constant_medium` fills its boundary volume with a participating medium. The
 boundary contributes no visible surface of its own; if you also want to see it,
 name it, list it among `objects`, and refer to it by name here.
+A `constant_medium` may only appear as a top-level entry in `objects` and cannot be named or referenced.
+This restriction exists because media are sampled directly by the integrator along the ray rather than intersected as part of the object graph.
 
 ### Inline objects and references
 
