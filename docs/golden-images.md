@@ -4,8 +4,7 @@
 refactors — mesh support, the flat BVH, SAH construction, traversal rewrites —
 can be made under a regression test that fails loudly when the image changes.
 
-They are deliberately small and noisy. Their job is to be a cheap fingerprint,
-not a showcase.
+They are deliberately small and noisy. Their job is to be a cheap fingerprint, not a gallery.
 
 ## Regenerating
 
@@ -72,6 +71,10 @@ the only evidence that anything changed.
 
 Each scene earns its place by being the one where some feature dominates the
 image, so a failure points at a short list of suspects.
+Two of them are different in kind. `gilded_orrery` and `showcase` combine
+features rather than isolate one, because some defects only surface in the
+interaction — a mesh reused under a transform inside a deep BVH, or two media
+overlapping along a single ray — and no single-feature scene can produce that.
 
 | Scene | Covers |
 |---|---|
@@ -80,7 +83,10 @@ image, so a failure points at a short list of suspects.
 | `cornell_box` | dielectrics, boxes, instancing, importance sampling and mixture densities |
 | `cornell_smoke` | constant-density volumes and the isotropic phase function |
 | `earth` | image textures, texture path resolution, sphere UV mapping |
+| `gilded_orrery` | dense triangle meshes reused under transforms, the deepest BVH in the set, and a thin medium over the whole frame |
+| `mesh_showcase` | OBJ loading and triangle intersection in isolation: a dielectric mesh, uniform scaling, and the set's deepest ray recursion |
 | `neon_cathedral` | metals, nested BVH groups, ACES tone mapping with exposure, defocus blur, a non-default seed |
 | `perlin_spheres` | Perlin noise texture |
 | `quads` | quad primitives in all six orientations |
 | `random_spheres` | motion blur — the only scene in the set that moves geometry |
+| `showcase` | the largest primitive count, two overlapping media, and a boundary shared between a visible object and a medium |
