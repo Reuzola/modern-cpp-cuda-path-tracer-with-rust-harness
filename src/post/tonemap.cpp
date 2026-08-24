@@ -39,8 +39,19 @@ namespace {
     return x;
 }
 
-[[nodiscard]] Float encode_gamma(Float x) noexcept {
-    return (x > 0) ? std::sqrt(x) : 0.0_f;
+// sRGB OETF (IEC 61966-2-1). The linear segment near black bounds the slope where
+// the power function's derivative is unbounded, which would otherwise band in 8 bits.
+[[nodiscard]] Float encode_srgb(Float x) noexcept {
+    static constexpr Float linear_cutoff = 0.0031308_f;
+    static constexpr Float linear_slope = 12.92_f;
+    static constexpr Float alpha = 1.055_f;
+    static constexpr Float offset = 0.055_f;
+    static constexpr Float gamma_exponent = 1.0_f / 2.4_f;
+
+    if (x <= 0) return 0.0_f;
+    if (x < linear_cutoff) return linear_slope * x;
+
+    return alpha * std::pow(x, gamma_exponent) - offset;
 }
 
 [[nodiscard]] Float clamp_display(Float x) noexcept {
@@ -52,7 +63,7 @@ namespace {
     x = sanitize(x);
     x = x * s.exposure;
     x = apply_operator(x, s.op);
-    x = encode_gamma(x);
+    x = encode_srgb(x);
     x = clamp_display(x);
     return x;
 }
