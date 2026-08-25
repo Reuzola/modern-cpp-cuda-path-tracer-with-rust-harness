@@ -19,6 +19,8 @@ enable_testing()
 #   cmake --preset dev -DPT_WARNINGS_AS_ERRORS=OFF
 option(PT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in Debug builds" ON)
 
+# Release-only IPO/LTO across translation units. Escape hatch:
+#   cmake --preset release -DPT_ENABLE_IPO=OFF
 option(PT_ENABLE_IPO "Enable interprocedural optimization (LTO) in Release builds" ON)
 
 # pt::Float precision. ON=double (default, golden images), OFF=float (perf/GPU).
@@ -28,6 +30,11 @@ option(PT_DOUBLE_PRECISION "Use double as the engine's scalar type (OFF selects 
 # BVH traversal counters; off by default (hot-loop cost).
 #   cmake --preset release-stats
 option(PT_ENABLE_STATS "Collect BVH traversal statistics" OFF)
+
+# Interactive GLFW viewer. OFF by default: headless CI, golden renders and
+# release builds must not pull in a windowing/OpenGL stack.
+#   cmake --preset dev -DPT_BUILD_VIEWER=ON
+option(PT_BUILD_VIEWER "Build the interactive viewer executable" OFF)
 
 if(PT_ENABLE_IPO)
   include(CheckIPOSupported)
@@ -231,6 +238,33 @@ target_include_directories(pathtracer PRIVATE
 # pt::core brings the engine (+ stb path). CLI11 is PRIVATE (no consumers);
 # its include dir is SYSTEM, so -Wconversion/-Werror skip it.
 target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11)
+
+# pathtracer_viewer - interactive frontend, opt-in.
+# Everything viewer-related lives inside this if(): with the option OFF, CMake
+# never evaluates it, so a machine without a window stack still configures.
+if(PT_BUILD_VIEWER)
+  add_executable(pathtracer_viewer
+    src/viewer/main.cpp
+  )
+
+  # Same private src/ root as the driver: viewer-local headers stay out of the
+  # installed include/ tree.
+  target_include_directories(pathtracer_viewer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+
+  # One-way arrow: viewer -> core. No viewer dependency ever flows back.
+  target_link_libraries(pathtracer_viewer PRIVATE pt::core pt::warnings)
+
+  # Core uses ThinLTO in Release; linking targets must opt into IPO too.
+  if(PT_ENABLE_IPO AND pt_ipo_supported)
+    set_property(TARGET pathtracer_viewer PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+  endif()
+
+  install(TARGETS pathtracer_viewer
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
+endif()
 
 # Own scope so Catch2 stays contained. Must follow enable_testing() above.
 add_subdirectory(tests)
