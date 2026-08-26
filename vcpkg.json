@@ -11,5 +11,17 @@
     "openexr",
     "tinyobjloader"
   ],
+  "features": {
+    "viewer": {
+      "description": "Interactive GLFW viewer (PT_BUILD_VIEWER=ON)",
+      "dependencies": [
+        "glfw3",
+        {
+          "name": "glad",
+          "features": ["gl-api-33", "loader"]
+        }
+      ]
+    }
+  },
   "builtin-baseline": "6d9d7df564a1ccdaa994e4ad39ccd4a32360867b"
 }

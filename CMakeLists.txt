@@ -243,8 +243,24 @@ target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11)
 # Everything viewer-related lives inside this if(): with the option OFF, CMake
 # never evaluates it, so a machine without a window stack still configures.
 if(PT_BUILD_VIEWER)
+  # The option and the vcpkg feature are separate switches; catch the mismatch
+  # here instead of letting find_package fail with an unrelated message.
+  if(NOT "viewer" IN_LIST VCPKG_MANIFEST_FEATURES)
+    message(FATAL_ERROR
+      "PT_BUILD_VIEWER=ON requires the 'viewer' vcpkg feature. Use: cmake --preset dev-viewer")
+  endif()
+
+  # Window and input. CONFIG only; the port's target is plain 'glfw'.
+  find_package(glfw3 CONFIG REQUIRED)
+
+  # Runtime loader for GL 3.3 entry points (only GL 1.1 is linkable directly).
+  find_package(glad CONFIG REQUIRED)
+
   add_executable(pathtracer_viewer
     src/viewer/main.cpp
+    src/viewer/window.cpp
+    src/viewer/display.cpp
+    src/viewer/cli.cpp
   )
 
   # Same private src/ root as the driver: viewer-local headers stay out of the
@@ -254,7 +270,15 @@ if(PT_BUILD_VIEWER)
   )
 
   # One-way arrow: viewer -> core. No viewer dependency ever flows back.
-  target_link_libraries(pathtracer_viewer PRIVATE pt::core pt::warnings)
+  # glfw/glad are imported targets, so their headers are SYSTEM: -Wconversion
+  # and friends skip them.
+  target_link_libraries(pathtracer_viewer PRIVATE
+    pt::core
+    pt::warnings
+    glfw
+    glad::glad
+    CLI11::CLI11
+  )
 
   # Core uses ThinLTO in Release; linking targets must opt into IPO too.
   if(PT_ENABLE_IPO AND pt_ipo_supported)

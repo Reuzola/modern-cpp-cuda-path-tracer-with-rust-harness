@@ -1,5 +1,5 @@
 CompileFlags:
-  CompilationDatabase: build/dev
+  CompilationDatabase: build/dev-viewer
 
 Diagnostics:
   UnusedIncludes: Strict

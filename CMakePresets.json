@@ -10,7 +10,8 @@
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
+        "PT_BUILD_VIEWER": "OFF"
       }
     },
     {
@@ -19,6 +20,15 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "dev-viewer",
+      "displayName": "Development + interactive viewer",
+      "inherits": "dev",
+      "cacheVariables": {
+        "PT_BUILD_VIEWER": "ON",
+        "VCPKG_MANIFEST_FEATURES": "viewer"
       }
     },
     {
@@ -56,6 +66,15 @@
       }
     },
     {
+      "name": "release-viewer",
+      "displayName": "Release + interactive viewer",
+      "inherits": "release",
+      "cacheVariables": {
+        "PT_BUILD_VIEWER": "ON",
+        "VCPKG_MANIFEST_FEATURES": "viewer"
+      }
+    },
+    {
       "name": "release-stats",
       "displayName": "Release + BVH statistics (measurement only)",
       "inherits": "release",
@@ -68,6 +87,10 @@
     {
       "name": "dev",
       "configurePreset": "dev"
+    },
+    {
+      "name": "dev-viewer",
+      "configurePreset": "dev-viewer"
     },
     {
       "name": "asan-ubsan",
@@ -84,6 +107,10 @@
     {
       "name": "release-native",
       "configurePreset": "release-native"
+    },
+    {
+      "name": "release-viewer",
+      "configurePreset": "release-viewer"
     },
     {
       "name": "release-stats",
@@ -105,6 +132,11 @@
       "name": "dev",
       "inherits": "test-base",
       "configurePreset": "dev"
+    },
+    {
+      "name": "dev-viewer",
+      "inherits": "test-base",
+      "configurePreset": "dev-viewer"
     },
     {
       "name": "asan-ubsan",
