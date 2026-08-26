@@ -1,5 +1,6 @@
 #include "pt/io/color.hpp"
 #include "pt/post/tonemap.hpp"
+#include "pt/render/accumulator.hpp"
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
 #include "pt/render/path_integrator.hpp"
@@ -61,21 +62,26 @@ int main(int argc, char** argv) {
         const pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
         const pt::Renderer renderer(camera, integrator, scene.render);
 
-        pt::log_info("Rendering...");
+        pt::Accumulator acc(img_w, img_h);
+        const int target_spp = renderer.samples_per_pixel();
+        std::vector<std::uint8_t> pixels;
 
         const auto start = std::chrono::steady_clock::now();
-        const pt::Film film = renderer.render();
-        const auto end = std::chrono::steady_clock::now();
-        const std::chrono::duration<double> elapsed = end - start;
-
-        pt::log_info("Render time: {:.2f}s", elapsed.count());
-
-        std::vector<std::uint8_t> pixels;
-        film_to_bytes(film, scene.render.tone_map, pixels);
-        display.upload(pixels);
-
         while (!window.should_close()) {
             window.poll_events();
+
+            if (acc.sample_count() < target_spp) {
+                renderer.render_pass(acc, acc.sample_count());
+                film_to_bytes(acc.resolve(), scene.render.tone_map, pixels);
+                display.upload(pixels);
+
+                if (acc.sample_count() == target_spp) {
+                    const auto end = std::chrono::steady_clock::now();
+                    const std::chrono::duration<double> elapsed = end - start;
+                    pt::log_info("Elapsed time: {:.2f}s", elapsed.count());
+                    pt::log_info("Reached spp: {}", acc.sample_count());
+                }
+            }
 
             const auto [fb_w, fb_h] = window.framebuffer_size();
             display.draw(fb_w, fb_h);
