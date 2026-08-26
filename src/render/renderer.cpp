@@ -4,6 +4,7 @@
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/render/accumulator.hpp"
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
 #include "pt/render/integrator.hpp"
@@ -13,7 +14,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <vector>
 
 namespace pt {
 
@@ -34,55 +34,52 @@ Renderer::Renderer(const Camera& camera, const Integrator& integrator, const Ren
       image_height_(settings.image_height),
       sqrt_spp_(static_cast<int>(std::sqrt(static_cast<Float>(settings.samples_per_pixel)))),
       recip_sqrt_spp_(1.0_f / static_cast<Float>(sqrt_spp_)),
-      pixel_samples_scale_(1.0_f / static_cast<Float>(sqrt_spp_ * sqrt_spp_)),
-      tile_size_(tile_size),
+      tiles_(make_tiles(image_width_, image_height_, tile_size)),
       seed_(settings.seed) {
     assert(image_width_ > 0 && image_height_ > 0);
     assert(sqrt_spp_ > 0);
-    assert(tile_size_ > 0);
-}
-
-Color Renderer::render_pixel(int x, int y) const {
-    Color pixel_color(0, 0, 0);
-
-    const auto pixel_index = static_cast<std::uint64_t>(y) * static_cast<std::uint64_t>(image_width_) + static_cast<std::uint64_t>(x);
-
-    for (int s_j = 0; s_j < sqrt_spp_; s_j++) {
-        for (int s_i = 0; s_i < sqrt_spp_; s_i++) {
-            const auto sample_index = static_cast<std::uint64_t>(s_j) * static_cast<std::uint64_t>(sqrt_spp_) + static_cast<std::uint64_t>(s_i);
-
-            Sampler sampler(sampler_seed(seed_, pixel_index, sample_index));
-
-            const Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp_, sampler);
-            const Ray ray = camera_.generate_ray(x, y, offset, sampler);
-            pixel_color += integrator_.radiance(ray, sampler);
-        }
-    }
-
-    return pixel_samples_scale_ * pixel_color;
+    assert(tile_size > 0);
 }
 
 Film Renderer::render(const ProgressCallback& progress) const {
-    Film film(image_width_, image_height_);
+    Accumulator acc(image_width_, image_height_);
 
-    const std::vector<Tile> tiles = make_tiles(image_width_, image_height_, tile_size_);
-
-    const int total = static_cast<int>(tiles.size());
+    const int total = samples_per_pixel();
     if (progress) progress(RenderProgress{0, total});
 
-    int completed = 0;
-    for (const Tile& tile : tiles) {
-        render_tile(film, tile);
-        completed++;
-        if (progress) progress(RenderProgress{completed, total});
+    for (int pass = 0; pass < total; ++pass) {
+        render_pass(acc, pass);
+        if (progress) progress(RenderProgress{pass + 1, total});
     }
-    return film;
+    return acc.resolve();
 }
 
-void Renderer::render_tile(Film& film, const Tile& tile) const {
+void Renderer::render_pass(Accumulator& acc, int pass_index) const {
+    for (const Tile& tile : tiles_) {
+        render_tile(acc, tile, pass_index);
+    }
+    acc.end_pass();
+}
+
+Color Renderer::render_sample(int x, int y, int pass_index) const {
+    assert(pass_index >= 0 && pass_index < samples_per_pixel());
+    const std::uint64_t pixel_index = static_cast<std::uint64_t>(y) * static_cast<std::uint64_t>(image_width_) + static_cast<std::uint64_t>(x);
+
+    const int s_i = pass_index % sqrt_spp_;
+    const int s_j = pass_index / sqrt_spp_;
+
+    Sampler sampler(sampler_seed(seed_, pixel_index, static_cast<std::uint64_t>(pass_index)));
+
+    const Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp_, sampler);
+    const Ray ray = camera_.generate_ray(x, y, offset, sampler);
+
+    return integrator_.radiance(ray, sampler);
+}
+
+void Renderer::render_tile(Accumulator& acc, const Tile& tile, int pass_index) const {
     for (int y = tile.y0; y < tile.y1; y++) {
         for (int x = tile.x0; x < tile.x1; x++) {
-            film.set_pixel(x, y, render_pixel(x, y));
+            acc.add_sample(x, y, render_sample(x, y, pass_index));
         }
     }
 }

@@ -14,7 +14,7 @@ struct RenderProgress {
 
 // Invoked total+1 times: once with completed=0 before rendering starts, then once after
 // each completed unit, so the final call always has completed == total.
-// The unit is defined by the renderer; it is currently one tile.
+// The unit is defined by the renderer; it is currently one sample pass over the image.
 // RenderProgress is only 8 bytes. No need to use reference.
 using ProgressCallback = std::function<void(RenderProgress)>;
 
