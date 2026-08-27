@@ -14,4 +14,7 @@ AccessModifierOffset: -4
 DerivePointerAlignment: false
 PointerAlignment: Left
 ReferenceAlignment: Pointer
+
 AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortEnumsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
