@@ -18,6 +18,29 @@ void glfw_error_callback(int error_code, const char* description) noexcept {
     pt::log_error("GLFW Error ({}): {}", error_code, description);
 }
 
+[[nodiscard]] int to_glfw(Key key) noexcept {
+    // No default case: adding an enumerator must fail the -Wswitch build.
+    switch (key) {
+    case Key::w: return GLFW_KEY_W;
+    case Key::a: return GLFW_KEY_A;
+    case Key::s: return GLFW_KEY_S;
+    case Key::d: return GLFW_KEY_D;
+    case Key::q: return GLFW_KEY_Q;
+    case Key::e: return GLFW_KEY_E;
+    case Key::left_shift: return GLFW_KEY_LEFT_SHIFT;
+    case Key::left_control: return GLFW_KEY_LEFT_CONTROL;
+    }
+    return GLFW_KEY_UNKNOWN;
+}
+
+[[nodiscard]] int to_glfw(MouseButton button) noexcept {
+    // No default case: adding an enumerator must fail the -Wswitch build.
+    switch (button) {
+    case MouseButton::right: return GLFW_MOUSE_BUTTON_RIGHT;
+    }
+    return -1;
+}
+
 } // namespace
 
 void WindowDeleter::operator()(GLFWwindow* w) const noexcept {
@@ -71,6 +94,45 @@ std::pair<int, int> Window::framebuffer_size() const noexcept {
     int height{};
     glfwGetFramebufferSize(handle_.get(), &width, &height);
     return {width, height};
+}
+
+bool Window::is_key_down(Key key) const noexcept {
+    return glfwGetKey(handle_.get(), to_glfw(key)) == GLFW_PRESS;
+}
+
+bool Window::is_mouse_button_down(MouseButton button) const noexcept {
+    return glfwGetMouseButton(handle_.get(), to_glfw(button)) == GLFW_PRESS;
+}
+
+std::pair<double, double> Window::cursor_delta() noexcept {
+    double x{};
+    double y{};
+    glfwGetCursorPos(handle_.get(), &x, &y);
+
+    if (!cursor_valid_) {
+        cursor_x_ = x;
+        cursor_y_ = y;
+        cursor_valid_ = true;
+        return {0.0, 0.0};
+    }
+
+    const double dx = x - cursor_x_;
+    const double dy = y - cursor_y_;
+    cursor_x_ = x;
+    cursor_y_ = y;
+    return {dx, dy};
+}
+
+void Window::set_cursor_mode(CursorMode mode) noexcept {
+    const bool is_disabled = mode == CursorMode::disabled;
+
+    glfwSetInputMode(handle_.get(), GLFW_CURSOR, is_disabled ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+
+    // Raw motion bypasses OS pointer acceleration, keeping look 1:1 with device movement.
+    if (glfwRawMouseMotionSupported())
+        glfwSetInputMode(handle_.get(), GLFW_RAW_MOUSE_MOTION, is_disabled ? GLFW_TRUE : GLFW_FALSE);
+
+    cursor_valid_ = false;
 }
 
 } // namespace pt
