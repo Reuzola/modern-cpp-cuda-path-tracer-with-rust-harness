@@ -124,14 +124,9 @@ std::pair<double, double> Window::cursor_delta() noexcept {
 }
 
 void Window::set_cursor_mode(CursorMode mode) noexcept {
-    const bool is_disabled = mode == CursorMode::disabled;
-
-    glfwSetInputMode(handle_.get(), GLFW_CURSOR, is_disabled ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
-
-    // Raw motion bypasses OS pointer acceleration, keeping look 1:1 with device movement.
-    if (glfwRawMouseMotionSupported())
-        glfwSetInputMode(handle_.get(), GLFW_RAW_MOUSE_MOTION, is_disabled ? GLFW_TRUE : GLFW_FALSE);
-
+    // Deliberately not GLFW_CURSOR_DISABLED: it warps the pointer to the window
+    // centre, which XWayland does not apply, so the same offset is reported every poll.
+    glfwSetInputMode(handle_.get(), GLFW_CURSOR, mode == CursorMode::hidden ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_NORMAL);
     cursor_valid_ = false;
 }
 

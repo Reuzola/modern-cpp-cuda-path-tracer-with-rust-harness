@@ -25,7 +25,7 @@ public:
 // clang-format off
 enum class Key { w, a, s, d, q, e, left_shift, left_control };
 enum class MouseButton { right };
-enum class CursorMode { normal, disabled };
+enum class CursorMode { normal, hidden };
 // clang-format on
 
 class Window final {

@@ -261,6 +261,7 @@ if(PT_BUILD_VIEWER)
     src/viewer/window.cpp
     src/viewer/display.cpp
     src/viewer/cli.cpp
+    src/viewer/camera_controller.cpp
   )
 
   # Same private src/ root as the driver: viewer-local headers stay out of the

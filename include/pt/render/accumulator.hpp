@@ -2,6 +2,7 @@
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/render/film.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <vector>
@@ -21,6 +22,12 @@ public:
     }
 
     void end_pass() noexcept { ++sample_count_; }
+
+    // Keeps the allocation; only the estimator state is invalidated by a camera move.
+    void reset() noexcept {
+        std::ranges::fill(sum_, Color{});
+        sample_count_ = 0;
+    }
 
     [[nodiscard]] Film resolve() const {
         Film film(width_, height_);

@@ -14,7 +14,8 @@ class Camera;
 class Integrator;
 struct RenderSettings;
 
-// Lifetime contract: camera and integrator must outlive Renderer
+// Lifetime contract: camera and integrator must outlive Renderer.
+// The referenced camera may be reassigned between passes; it is read per sample.
 // Reference members implicitly delete copy assignment.
 class Renderer final {
 public:
