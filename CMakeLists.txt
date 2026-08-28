@@ -133,7 +133,6 @@ add_library(pathtracer_core STATIC
   src/io/stb_impl.cpp
 
   src/math/color.cpp
-  src/math/transform.cpp
   src/math/vec3.cpp
 
   src/core/hittable.cpp
