@@ -1,4 +1,5 @@
 #pragma once
+#include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -93,5 +94,10 @@ private:
 [[nodiscard]] constexpr Aabb operator+(const Vec3& offset, const Aabb& box) noexcept {
     return box + offset;
 }
+
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert(Aabb(Point3(-1, -1, -1), Point3(1, 1, 1)).centroid().x() == 0.0_f);
+static_assert(Aabb(Point3(-1, -1, -1), Point3(1, 1, 1)).surface_area() == 24.0_f);
+static_assert(Aabb(Point3(-1, -1, -1), Point3(1, 1, 1)).intersect(Point3(-3, 0, 0), Vec3(1.0_f, infinity, infinity), Interval(0.0_f, infinity)) == 2.0_f);
 
 } // namespace pt

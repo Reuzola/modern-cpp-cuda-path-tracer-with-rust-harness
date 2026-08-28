@@ -24,4 +24,7 @@ private:
     Float tm_{};
 };
 
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert(Ray(Point3(1, 2, 3), Vec3(0, 0, 1)).at(2.0_f).z() == 5.0_f);
+
 } // namespace pt

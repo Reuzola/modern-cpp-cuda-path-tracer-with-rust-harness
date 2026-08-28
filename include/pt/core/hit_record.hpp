@@ -29,4 +29,11 @@ struct HitRecord {
     }
 };
 
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert([] {
+    HitRecord rec;
+    rec.set_face_normal(Ray(Point3(0, 0, 0), Vec3(0, 0, -1)), Vec3(0, 0, 1));
+    return rec.front_face;
+}());
+
 } // namespace pt

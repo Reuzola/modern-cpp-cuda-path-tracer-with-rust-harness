@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/math/scalar.hpp"
 #include <cmath>
+#include <type_traits>
 
 namespace pt {
 
@@ -116,5 +117,20 @@ private:
 [[nodiscard]] Vec3 random_cosine_direction(Sampler& sampler) noexcept;
 
 using Point3 = Vec3;
+
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert(std::is_trivially_copyable_v<Vec3>);
+static_assert(Vec3{}.length_squared() == 0.0_f);
+static_assert((2.0_f * Vec3(1, 2, 3) + Vec3(0, 0, 2)).z() == 8.0_f);
+static_assert(dot(Vec3(1, 2, 3), Vec3(4, 5, 6)) == 32.0_f);
+static_assert(cross(Vec3(1, 0, 0), Vec3(0, 1, 0)).z() == 1.0_f);
+static_assert(reflect(Vec3(1, -1, 0), Vec3(0, 1, 0)).y() == 1.0_f);
+static_assert([] {
+    Vec3 v(1, 2, 3);
+    v += Vec3(1, 1, 1);
+    v *= 2.0_f;
+    v[0] = 4.0_f;
+    return v[0];
+}() == 4.0_f);
 
 } // namespace pt

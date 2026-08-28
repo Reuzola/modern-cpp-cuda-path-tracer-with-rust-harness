@@ -50,4 +50,9 @@ inline constexpr Interval Interval::universe{-infinity, +infinity};
     return i + displacement;
 }
 
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert(Interval::universe.contains(0.0_f));
+static_assert(Interval(0.0_f, 4.0_f).clamp(8.0_f) == 4.0_f);
+static_assert(Interval(0.0_f, 4.0_f).expand(2.0_f).min == -1.0_f);
+
 } // namespace pt

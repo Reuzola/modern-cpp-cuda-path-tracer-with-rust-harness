@@ -176,11 +176,15 @@ private:
     Affine inv_{};
 };
 
-static_assert(std::is_trivially_copyable_v<Transform>);
-
 [[nodiscard]] constexpr Transform operator*(const Transform& a, const Transform& b) noexcept {
     // Reversed on purpose: (AB) inverse is (B inverse)(A inverse).
     return Transform(a.m_ * b.m_, b.inv_ * a.inv_);
 }
+
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert(std::is_trivially_copyable_v<Transform>);
+static_assert(Transform::translation(Vec3(1, 2, 3)).apply_point(Point3(0, 0, 0)).x() == 1.0_f);
+static_assert(Transform::scaling(Vec3(2, 2, 2)).apply_inverse_point(Point3(4, 4, 4)).y() == 2.0_f);
+static_assert((Transform::translation(Vec3(1, 0, 0)) * Transform::scaling(Vec3(2, 2, 2))).apply_point(Point3(1, 0, 0)).x() == 3.0_f);
 
 } // namespace pt
