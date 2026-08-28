@@ -33,7 +33,7 @@ namespace {
 
 void save_screenshot(const Film& film, ImageFormat format) {
     // Fixed location: the repo's .gitignore already excludes out/.
-    static constexpr std::string_view output_dir = "out";
+    static constexpr std::string_view output_dir = "out/screenshots";
 
     std::error_code ec;
     std::filesystem::create_directories(output_dir, ec);
