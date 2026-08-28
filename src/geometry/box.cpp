@@ -19,38 +19,38 @@ const HittableList* box(Arena<Hittable>& arena, const Point3& a, const Point3& b
     const Vec3 dz = Vec3(0.0_f, 0.0_f, max_corner.z() - min_corner.z());
 
     HittableList sides;
-    Point3 Q;
+    Point3 q;
     Vec3 u, v;
 
-    Q = Point3(min_corner.x(), min_corner.y(), max_corner.z()); // front face
+    q = Point3(min_corner.x(), min_corner.y(), max_corner.z()); // front face
     u = dx;
     v = dy;
-    sides.add(arena.create<Quad>(Q, u, v, mat));
+    sides.add(arena.create<Quad>(q, u, v, mat));
 
-    Q = Point3(max_corner.x(), min_corner.y(), min_corner.z()); // right face
+    q = Point3(max_corner.x(), min_corner.y(), min_corner.z()); // right face
     u = dy;
     v = dz;
-    sides.add(arena.create<Quad>(Q, u, v, mat));
+    sides.add(arena.create<Quad>(q, u, v, mat));
 
-    Q = Point3(min_corner.x(), min_corner.y(), min_corner.z()); // rear face
+    q = Point3(min_corner.x(), min_corner.y(), min_corner.z()); // rear face
     u = dy;
     v = dx;
-    sides.add(arena.create<Quad>(Q, u, v, mat));
+    sides.add(arena.create<Quad>(q, u, v, mat));
 
-    Q = Point3(min_corner.x(), min_corner.y(), min_corner.z()); // left face
+    q = Point3(min_corner.x(), min_corner.y(), min_corner.z()); // left face
     u = dz;
     v = dy;
-    sides.add(arena.create<Quad>(Q, u, v, mat));
+    sides.add(arena.create<Quad>(q, u, v, mat));
 
-    Q = Point3(min_corner.x(), max_corner.y(), min_corner.z()); // top face
+    q = Point3(min_corner.x(), max_corner.y(), min_corner.z()); // top face
     u = dz;
     v = dx;
-    sides.add(arena.create<Quad>(Q, u, v, mat));
+    sides.add(arena.create<Quad>(q, u, v, mat));
 
-    Q = Point3(min_corner.x(), min_corner.y(), min_corner.z()); // bottom face
+    q = Point3(min_corner.x(), min_corner.y(), min_corner.z()); // bottom face
     u = dx;
     v = dz;
-    sides.add(arena.create<Quad>(Q, u, v, mat));
+    sides.add(arena.create<Quad>(q, u, v, mat));
 
     return arena.create<HittableList>(std::move(sides));
 }

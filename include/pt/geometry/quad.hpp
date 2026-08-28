@@ -14,7 +14,7 @@ class Material;
 
 class Quad final : public Hittable, public Sampleable {
 public:
-    Quad(const Point3& Q, const Vec3& u, const Vec3& v, const Material* mat);
+    Quad(const Point3& q, const Vec3& u, const Vec3& v, const Material* mat);
 
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
 
@@ -25,12 +25,12 @@ public:
     [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
 private:
-    Point3 Q_;
+    Point3 q_;
     Vec3 u_, v_;
     const Material* mat_ = nullptr;
     Aabb bbox_;
     Vec3 normal_;
-    Float D_{};
+    Float d_{};
     Vec3 w_;
     Float area_{};
 
