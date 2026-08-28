@@ -116,6 +116,13 @@ int main(int argc, char** argv) {
         pt::Film resolved(img_w, img_h);
         bool display_dirty{true};
 
+        // Every restart must clear the stopwatch too; keep the two in one place.
+        double accumulated_seconds{};
+        const auto restart_accumulation = [&acc, &accumulated_seconds]() noexcept {
+            acc.reset();
+            accumulated_seconds = 0.0;
+        };
+
         auto last_time = std::chrono::steady_clock::now();
         bool looking{};
         while (!window.should_close()) {
@@ -127,7 +134,7 @@ int main(int argc, char** argv) {
                 integrator.set_max_depth(controls.max_depth);
                 renderer.set_samples_per_pixel(controls.target_spp);
                 controls.target_spp = renderer.samples_per_pixel(); // mirror whatever the renderer actually adopted
-                acc.reset();
+                restart_accumulation();
             }
             if (change.display) display_dirty = true;
 
@@ -135,7 +142,7 @@ int main(int argc, char** argv) {
                 if (gui.key_pressed(pt::ViewerKey::r)) {
                     controller.reset();
                     camera = pt::Camera(controller.settings(), img_w, img_h);
-                    acc.reset();
+                    restart_accumulation();
                 }
                 if (gui.key_pressed(pt::ViewerKey::f2)) pt::save_screenshot(pt::tone_map(resolved, controls.tone_map), pt::ImageFormat::png);
                 if (gui.key_pressed(pt::ViewerKey::f3)) pt::save_screenshot(resolved, pt::ImageFormat::exr);
@@ -157,11 +164,13 @@ int main(int argc, char** argv) {
             const pt::CameraInput input = read_camera_input(window, looking, moving);
             if (controller.update(input, dt)) {
                 camera = pt::Camera(controller.settings(), img_w, img_h);
-                acc.reset();
+                restart_accumulation();
             }
 
             if (acc.sample_count() < renderer.samples_per_pixel()) {
+                const auto pass_start = std::chrono::steady_clock::now();
                 renderer.render_pass(acc, acc.sample_count());
+                accumulated_seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - pass_start).count();
                 resolved = acc.resolve();
                 display_dirty = true;
             }
@@ -173,6 +182,12 @@ int main(int argc, char** argv) {
             }
 
             const auto [fb_w, fb_h] = window.framebuffer_size();
+            gui.draw_hud({
+                .sample_count = acc.sample_count(),
+                .target_spp = renderer.samples_per_pixel(),
+                .accumulated_seconds = accumulated_seconds,
+                .camera_position = controller.settings().lookfrom,
+            });
 
             // Safe to draw after the UI trashed GL state last frame: draw() rebinds everything it needs.
             display.draw(fb_w, fb_h);

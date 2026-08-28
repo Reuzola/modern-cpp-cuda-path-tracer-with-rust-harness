@@ -119,4 +119,40 @@ ControlChange Gui::draw_controls(ViewerControls& controls) noexcept {
     return change;
 }
 
+void Gui::draw_hud(const HudStats& stats) const noexcept {
+    constexpr float pad = 10.0F;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + pad, viewport->WorkPos.y + pad), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.35F);
+
+    // NoFocusOnAppearing keeps the overlay from stealing mouse capture from the camera.
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoMove;
+
+    if (ImGui::Begin("##hud", nullptr, flags)) {
+        ImGui::Text("%d / %d spp", stats.sample_count, stats.target_spp);
+
+        const ImGuiIO& io = ImGui::GetIO();
+        const double frame_time = static_cast<double>(1000.0F / io.Framerate);
+        const double fps = static_cast<double>(io.Framerate);
+        ImGui::Text("%.1f ms/frame (%.1f fps)", frame_time, fps);
+
+        ImGui::Text("Accumulated: %.2f s", stats.accumulated_seconds);
+
+        const double x = static_cast<double>(stats.camera_position.x());
+        const double y = static_cast<double>(stats.camera_position.y());
+        const double z = static_cast<double>(stats.camera_position.z());
+        ImGui::Text("Camera: %.2f, %.2f, %.2f", x, y, z);
+
+        ImGui::Separator();
+
+        ImGui::TextDisabled("F1 panel   F2 png   F3 exr   R reset");
+    }
+    ImGui::End();
+}
+
 } // namespace pt
