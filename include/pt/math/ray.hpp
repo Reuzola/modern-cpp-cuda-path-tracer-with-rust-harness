@@ -6,15 +6,15 @@ namespace pt {
 
 class Ray {
 public:
-    Ray() = default;
-    Ray(const Point3& origin, const Vec3& direction) : Ray(origin, direction, 0.0_f) {}
-    Ray(const Point3& origin, const Vec3& direction, Float tm) : orig_(origin), dir_(direction), tm_(tm) {}
+    constexpr Ray() noexcept = default;
+    constexpr Ray(const Point3& origin, const Vec3& direction) noexcept : Ray(origin, direction, 0.0_f) {}
+    constexpr Ray(const Point3& origin, const Vec3& direction, Float tm) noexcept : orig_(origin), dir_(direction), tm_(tm) {}
 
-    [[nodiscard]] const Point3& origin() const { return orig_; }
-    [[nodiscard]] const Vec3& direction() const { return dir_; }
-    [[nodiscard]] Float time() const { return tm_; }
+    [[nodiscard]] constexpr const Point3& origin() const noexcept { return orig_; }
+    [[nodiscard]] constexpr const Vec3& direction() const noexcept { return dir_; }
+    [[nodiscard]] constexpr Float time() const noexcept { return tm_; }
 
-    Point3 at(Float t) const {
+    [[nodiscard]] constexpr Point3 at(Float t) const noexcept {
         return orig_ + t * dir_;
     }
 
