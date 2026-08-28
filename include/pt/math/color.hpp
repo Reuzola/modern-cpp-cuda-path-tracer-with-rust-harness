@@ -21,9 +21,9 @@ public:
         return *this;
     }
 
-    [[nodiscard]] static Color random(Sampler& sampler);
+    [[nodiscard]] static Color random(Sampler& sampler) noexcept;
 
-    [[nodiscard]] static Color random(Float min, Float max, Sampler& sampler);
+    [[nodiscard]] static Color random(Float min, Float max, Sampler& sampler) noexcept;
 
 private:
     Float r_{};

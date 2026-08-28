@@ -7,21 +7,21 @@
 
 namespace pt {
 
-Vec3 Vec3::random(Sampler& sampler) {
+Vec3 Vec3::random(Sampler& sampler) noexcept {
     const Float x = sampler.next_scalar();
     const Float y = sampler.next_scalar();
     const Float z = sampler.next_scalar();
     return Vec3(x, y, z);
 }
 
-Vec3 Vec3::random(Float min, Float max, Sampler& sampler) {
+Vec3 Vec3::random(Float min, Float max, Sampler& sampler) noexcept {
     const Float x = sampler.next_scalar(min, max);
     const Float y = sampler.next_scalar(min, max);
     const Float z = sampler.next_scalar(min, max);
     return Vec3(x, y, z);
 }
 
-Vec3 random_unit_vector(Sampler& sampler) {
+Vec3 random_unit_vector(Sampler& sampler) noexcept {
     while (true) {
         const Vec3 p = Vec3::random(-1, 1, sampler);
         const Float lensq = p.length_squared();
@@ -30,7 +30,7 @@ Vec3 random_unit_vector(Sampler& sampler) {
     }
 }
 
-Vec3 random_in_unit_disk(Sampler& sampler) {
+Vec3 random_in_unit_disk(Sampler& sampler) noexcept {
     while (true) {
         const Float px = sampler.next_scalar(-1, 1);
         const Float py = sampler.next_scalar(-1, 1);
@@ -42,7 +42,7 @@ Vec3 random_in_unit_disk(Sampler& sampler) {
     }
 }
 
-Vec3 random_cosine_direction(Sampler& sampler) {
+Vec3 random_cosine_direction(Sampler& sampler) noexcept {
     const Float r1 = sampler.next_scalar();
     const Float r2 = sampler.next_scalar();
     const Float sqrt_r2 = std::sqrt(r2);

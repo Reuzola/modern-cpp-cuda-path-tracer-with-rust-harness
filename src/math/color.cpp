@@ -4,14 +4,14 @@
 
 namespace pt {
 
-Color Color::random(Sampler& sampler) {
+Color Color::random(Sampler& sampler) noexcept {
     const Float r = sampler.next_scalar();
     const Float g = sampler.next_scalar();
     const Float b = sampler.next_scalar();
     return Color(r, g, b);
 }
 
-Color Color::random(Float min, Float max, Sampler& sampler) {
+Color Color::random(Float min, Float max, Sampler& sampler) noexcept {
     const Float r = sampler.next_scalar(min, max);
     const Float g = sampler.next_scalar(min, max);
     const Float b = sampler.next_scalar(min, max);

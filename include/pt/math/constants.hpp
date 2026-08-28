@@ -9,7 +9,7 @@ inline constexpr Float infinity = std::numeric_limits<Float>::infinity();
 
 inline constexpr Float pi = std::numbers::pi_v<Float>;
 
-[[nodiscard]] constexpr Float degrees_to_radians(Float degrees) {
+[[nodiscard]] constexpr Float degrees_to_radians(Float degrees) noexcept {
     return degrees * pi / 180.0_f;
 }
 
