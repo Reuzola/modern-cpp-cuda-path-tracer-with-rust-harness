@@ -1,9 +1,9 @@
 # Style Guide
 
-Naming conventions for the C++ engine (`include/`, `src/`, `tests/`) and for the
+Naming and declaration conventions for the C++ engine (`include/`, `src/`, `tests/`) and for the
 build files that describe it.
 
-**Scope.** This document covers *names* only. Layout — indentation, brace
+**Scope.** This document covers *names* and *declaration specifiers*. Layout — indentation, brace
 placement, line breaking, include ordering — is not described here and is not
 open to discussion in review: it is produced mechanically by `.clang-format`,
 which is the single source of truth for formatting.
@@ -104,6 +104,35 @@ the type, the object and the operation are visually distinct.
 `double` or `float` depending on the build, so the concrete type name would be
 wrong in one of the two configurations. `random_int()` keeps its name because
 `int` is a concrete type, not an abstraction over one.
+
+---
+
+## Declaration specifiers
+
+Value types — `Vec3`, `Color`, `Interval`, `Aabb`, `Ray`, `Onb`, `Mat3`, `Affine`,
+`Transform`, `Tile` — carry all three specifiers on every member and every free function
+operating on them, wherever the language allows:
+
+```cpp
+[[nodiscard]] static constexpr Transform translation(const Vec3& offset) noexcept;
+```
+
+`constexpr` here is less about compile-time evaluation than about the contract it makes
+the compiler enforce: no global state, no allocation, no side effects. That is what a
+value type promises, and a later edit that breaks it becomes a build error.
+
+- **`constexpr` implies `inline`.** Never write both.
+- **No `[[nodiscard]]` on compound assignment.** `operator+=` returns `*this` so
+  assignments chain; marking it would warn on ordinary use.
+- **Nothing calling `<cmath>` is `constexpr`.** `sqrt`, `sin`, `cos`, `fabs`, `fmin` and
+  `fmax` are not constant expressions before C++26. Such functions still take
+  `[[nodiscard]]` and `noexcept`. A compile-time replacement selected with
+  `std::is_constant_evaluated()` is deliberately not used: two implementations of one
+  formula diverge in the last ulp, and the golden images depend on the runtime one.
+- **Guards live with the type.** Each value type header ends with `static_assert`s over
+  its constructors, operators and accessors, so a silent loss of `constexpr` fails the
+  build. Their values are restricted to integers and powers of two, exact in both
+  `float` and `double` builds.
 
 ---
 
@@ -326,8 +355,9 @@ const Float h = dot(oc, r.direction());
 const Float discriminant = h * h - a * c;
 ```
 
-Not permitted for **data members**, whose lifetime and reading distance are
-much longer than a formula's:
+For **data members** the letter is kept only when it is the domain's standard name for
+the quantity — `u_` and `v_` for a quad's edge vectors — and always in lowercase. A
+capital reads as a type, and the member outlives the formula it was transcribed from:
 
 ```cpp
 class Quad final : public Hittable {
