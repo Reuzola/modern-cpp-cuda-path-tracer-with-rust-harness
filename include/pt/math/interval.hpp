@@ -10,29 +10,29 @@ public:
     Float min{+infinity};
     Float max{-infinity};
 
-    constexpr Interval() = default;
-    constexpr Interval(Float lo, Float hi) : min(lo), max(hi) {}
-    constexpr Interval(const Interval& a, const Interval& b) : min(std::min(a.min, b.min)), max(std::max(a.max, b.max)) {}
+    constexpr Interval() noexcept = default;
+    constexpr Interval(Float lo, Float hi) noexcept : min(lo), max(hi) {}
+    constexpr Interval(const Interval& a, const Interval& b) noexcept : min(std::min(a.min, b.min)), max(std::max(a.max, b.max)) {}
 
-    constexpr bool contains(Float x) const {
+    [[nodiscard]] constexpr bool contains(Float x) const noexcept {
         return min <= x && x <= max;
     }
 
-    constexpr bool surrounds(Float x) const {
+    [[nodiscard]] constexpr bool surrounds(Float x) const noexcept {
         return min < x && x < max;
     }
 
-    constexpr Float clamp(Float x) const {
+    [[nodiscard]] constexpr Float clamp(Float x) const noexcept {
         if (x < min) return min;
         if (x > max) return max;
         return x;
     }
 
-    constexpr Float size() const {
+    [[nodiscard]] constexpr Float size() const noexcept {
         return max - min;
     }
 
-    [[nodiscard]] constexpr Interval expand(Float delta) const {
+    [[nodiscard]] constexpr Interval expand(Float delta) const noexcept {
         const Float padding = delta / 2;
         return Interval(min - padding, max + padding);
     }
@@ -40,13 +40,13 @@ public:
     static const Interval universe;
 };
 
-inline const Interval Interval::universe{-infinity, +infinity};
+inline constexpr Interval Interval::universe{-infinity, +infinity};
 
-[[nodiscard]] constexpr inline Interval operator+(const Interval& i, Float displacement) {
+[[nodiscard]] constexpr Interval operator+(const Interval& i, Float displacement) noexcept {
     return Interval(i.min + displacement, i.max + displacement);
 }
 
-[[nodiscard]] constexpr inline Interval operator+(Float displacement, const Interval& i) {
+[[nodiscard]] constexpr Interval operator+(Float displacement, const Interval& i) noexcept {
     return i + displacement;
 }
 
