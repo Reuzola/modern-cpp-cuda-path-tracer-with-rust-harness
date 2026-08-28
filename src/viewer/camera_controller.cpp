@@ -18,17 +18,9 @@ constexpr Float slow_multiplier = 0.25_f;
 
 } // namespace
 
-CameraController::CameraController(const CameraSettings& settings) : settings_(settings), frame_(settings.vup) {
-    const Vec3 look_vec = settings.lookat - settings.lookfrom;
-    const Vec3 forward0 = look_vec.near_zero() ? frame_.u() : unit_vector(look_vec);
-
-    const Float a_sin = std::asin(std::clamp(dot(forward0, frame_.w()), -1.0_f, 1.0_f));
-    pitch_ = std::clamp(a_sin, -max_pitch, max_pitch);
-
-    yaw_ = std::atan2(dot(forward0, frame_.v()), dot(forward0, frame_.u()));
-
-    const Float len = look_vec.length();
-    base_speed_ = (len == 0.0_f ? 1.0_f : len) * base_speed_fraction;
+CameraController::CameraController(const CameraSettings& settings)
+    : initial_settings_(settings), frame_(settings.vup) {
+    set_pose(settings);
 }
 
 bool CameraController::update(const CameraInput& input, Float dt) noexcept {
@@ -56,9 +48,26 @@ bool CameraController::update(const CameraInput& input, Float dt) noexcept {
     return true;
 }
 
+void CameraController::reset() noexcept { set_pose(initial_settings_); }
+
 Vec3 CameraController::forward() const noexcept {
     const Float cos_pitch = std::cos(pitch_);
     return frame_.transform(Vec3(cos_pitch * std::cos(yaw_), cos_pitch * std::sin(yaw_), std::sin(pitch_)));
+}
+
+void CameraController::set_pose(const CameraSettings& settings) noexcept {
+    settings_ = settings;
+
+    const Vec3 look_vec = settings.lookat - settings.lookfrom;
+    const Vec3 forward0 = look_vec.near_zero() ? frame_.u() : unit_vector(look_vec);
+
+    const Float a_sin = std::asin(std::clamp(dot(forward0, frame_.w()), -1.0_f, 1.0_f));
+    pitch_ = std::clamp(a_sin, -max_pitch, max_pitch);
+
+    yaw_ = std::atan2(dot(forward0, frame_.v()), dot(forward0, frame_.u()));
+
+    const Float len = look_vec.length();
+    base_speed_ = (len == 0.0_f ? 1.0_f : len) * base_speed_fraction;
 }
 
 } // namespace pt

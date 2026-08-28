@@ -1,4 +1,5 @@
 #include "pt/io/color.hpp"
+#include "pt/io/image_format.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/post/tonemap.hpp"
@@ -16,6 +17,7 @@
 #include "viewer/controls.hpp"
 #include "viewer/display.hpp"
 #include "viewer/gui.hpp"
+#include "viewer/screenshot.hpp"
 #include "viewer/window.hpp"
 #include <algorithm>
 #include <chrono>
@@ -128,6 +130,16 @@ int main(int argc, char** argv) {
                 acc.reset();
             }
             if (change.display) display_dirty = true;
+
+            if (!gui.wants_keyboard()) {
+                if (gui.key_pressed(pt::ViewerKey::r)) {
+                    controller.reset();
+                    camera = pt::Camera(controller.settings(), img_w, img_h);
+                    acc.reset();
+                }
+                if (gui.key_pressed(pt::ViewerKey::f2)) pt::save_screenshot(pt::tone_map(resolved, controls.tone_map), pt::ImageFormat::png);
+                if (gui.key_pressed(pt::ViewerKey::f3)) pt::save_screenshot(resolved, pt::ImageFormat::exr);
+            }
 
             const auto now = std::chrono::steady_clock::now();
             const std::chrono::duration<double> frame_time = now - last_time;

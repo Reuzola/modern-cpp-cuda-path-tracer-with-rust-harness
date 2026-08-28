@@ -14,6 +14,21 @@
 
 namespace pt {
 
+namespace {
+
+[[nodiscard]] ImGuiKey to_imgui(ViewerKey key) noexcept {
+    // No 'default': a new enumerator must break this switch.
+    switch (key) {
+    case ViewerKey::f1: return ImGuiKey_F1;
+    case ViewerKey::f2: return ImGuiKey_F2;
+    case ViewerKey::f3: return ImGuiKey_F3;
+    case ViewerKey::r: return ImGuiKey_R;
+    }
+    return ImGuiKey_None;
+}
+
+} // namespace
+
 Gui::Gui(Window& window, float ui_scale) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -62,8 +77,12 @@ bool Gui::wants_mouse() const noexcept {
     return ImGui::GetIO().WantCaptureMouse;
 }
 
+bool Gui::key_pressed(ViewerKey key) const noexcept {
+    return ImGui::IsKeyPressed(to_imgui(key), false);
+}
+
 ControlChange Gui::draw_controls(ViewerControls& controls) noexcept {
-    if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) controls_visible_ = !controls_visible_;
+    if (key_pressed(ViewerKey::f1)) controls_visible_ = !controls_visible_;
     if (!controls_visible_) return {};
 
     ControlChange change{};

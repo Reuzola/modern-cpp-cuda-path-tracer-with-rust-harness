@@ -22,9 +22,13 @@ public:
 
     [[nodiscard]] bool update(const CameraInput& input, Float dt) noexcept;
 
+    // Restores the pose the scene file specified; the caller must rebuild its Camera and reset accumulation.
+    void reset() noexcept;
+
     [[nodiscard]] const CameraSettings& settings() const noexcept { return settings_; }
 
 private:
+    CameraSettings initial_settings_;
     CameraSettings settings_;
     Onb frame_; // w() is world up; u()/v() span the plane yaw rotates in.
     Float yaw_{};
@@ -32,6 +36,8 @@ private:
     Float base_speed_{};
 
     [[nodiscard]] Vec3 forward() const noexcept;
+
+    void set_pose(const CameraSettings& settings) noexcept;
 };
 
 } // namespace pt

@@ -5,6 +5,10 @@ namespace pt {
 
 class Window;
 
+// clang-format off
+enum class ViewerKey { f1, f2, f3, r };
+// clang-format on
+
 // Gui must be destroyed before Window (its backends hold the GLFW window and an active OpenGL context).
 class Gui final {
 public:
@@ -21,6 +25,7 @@ public:
 
     [[nodiscard]] bool wants_keyboard() const noexcept;
     [[nodiscard]] bool wants_mouse() const noexcept;
+    [[nodiscard]] bool key_pressed(ViewerKey key) const noexcept;
 
     [[nodiscard]] ControlChange draw_controls(ViewerControls& controls) noexcept;
 
