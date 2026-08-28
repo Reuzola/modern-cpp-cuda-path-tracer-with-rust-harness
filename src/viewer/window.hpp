@@ -40,6 +40,12 @@ public:
 
     [[nodiscard]] std::pair<int, int> framebuffer_size() const noexcept;
 
+    // DPI hint from the platform (Xft.dpi on X11, output scale on Wayland). 1.0 when unknown.
+    [[nodiscard]] float content_scale() const noexcept;
+
+    // Escape hatch for libraries that must bind to the GLFW window directly.
+    [[nodiscard]] GLFWwindow* native_handle() const noexcept { return handle_.get(); }
+
     [[nodiscard]] bool is_key_down(Key key) const noexcept;
 
     [[nodiscard]] bool is_mouse_button_down(MouseButton button) const noexcept;

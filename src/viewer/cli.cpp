@@ -41,6 +41,8 @@ std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv
     app.add_option("--max-depth", opts.max_depth, "maximum ray bounce depth")
         ->check(positive_int);
     app.add_option("--seed", opts.seed, "random seed");
+    app.add_option("--ui-scale", opts.ui_scale, "UI scale factor (default: platform content scale)")
+        ->check(CLI::Range(0.5F, 4.0F));
 
     try {
         app.parse(argc, argv);

@@ -2,6 +2,7 @@
 // clang-format off
 #include "viewer/window.hpp"
 #include "pt/util/log.hpp"
+#include <algorithm>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stdexcept>
@@ -94,6 +95,13 @@ std::pair<int, int> Window::framebuffer_size() const noexcept {
     int height{};
     glfwGetFramebufferSize(handle_.get(), &width, &height);
     return {width, height};
+}
+
+float Window::content_scale() const noexcept {
+    float x{};
+    float y{};
+    glfwGetWindowContentScale(handle_.get(), &x, &y);
+    return std::max(x, y);
 }
 
 bool Window::is_key_down(Key key) const noexcept {

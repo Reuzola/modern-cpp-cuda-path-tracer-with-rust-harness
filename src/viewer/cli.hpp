@@ -17,6 +17,7 @@ struct ViewerOptions {
     std::optional<int> samples_per_pixel;
     std::optional<int> max_depth;
     std::optional<std::uint64_t> seed;
+    std::optional<float> ui_scale; // Overrides the platform's content scale (XWayland reports none).
 };
 
 [[nodiscard]] std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv);

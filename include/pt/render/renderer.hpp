@@ -15,7 +15,7 @@ class Integrator;
 struct RenderSettings;
 
 // Lifetime contract: camera and integrator must outlive Renderer.
-// The referenced camera may be reassigned between passes; it is read per sample.
+// Both may be mutated or reassigned between passes; they are read per sample.
 // Reference members implicitly delete copy assignment.
 class Renderer final {
 public:
@@ -28,6 +28,9 @@ public:
     void render_pass(Accumulator& acc, int pass_index) const;
 
     [[nodiscard]] int samples_per_pixel() const noexcept { return sqrt_spp_ * sqrt_spp_; }
+
+    // Changes the stratification grid, so any samples already accumulated become inconsistent.
+    void set_samples_per_pixel(int spp);
 
 private:
     const Camera& camera_;
@@ -42,6 +45,8 @@ private:
     [[nodiscard]] Color render_sample(int x, int y, int pass_index) const;
 
     void render_tile(Accumulator& acc, const Tile& tile, int pass_index) const;
+
+    [[nodiscard]] static int sqrt_spp_from(int samples_per_pixel) noexcept;
 };
 
 } // namespace pt

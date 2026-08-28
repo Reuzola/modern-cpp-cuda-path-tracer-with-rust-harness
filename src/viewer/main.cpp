@@ -11,10 +11,12 @@
 #include "pt/scene/scene_error.hpp"
 #include "pt/scene/scene_loader.hpp"
 #include "pt/util/log.hpp"
-#include "viewer/cli.hpp"
-#include "viewer/display.hpp"
-#include "viewer/window.hpp"
 #include "viewer/camera_controller.hpp"
+#include "viewer/cli.hpp"
+#include "viewer/controls.hpp"
+#include "viewer/display.hpp"
+#include "viewer/gui.hpp"
+#include "viewer/window.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -48,18 +50,23 @@ void film_to_bytes(const pt::Film& film, const pt::ToneMapSettings& settings, st
 }
 
 // Key bindings live here, not in Window: the device layer stays free of semantics.
-[[nodiscard]] pt::CameraInput read_camera_input(pt::Window& window, bool looking) noexcept {
+[[nodiscard]] pt::CameraInput read_camera_input(pt::Window& window, bool looking, bool moving) noexcept {
     pt::CameraInput input{};
-    auto axis = [&window](pt::Key pos, pt::Key neg) -> pt::Float {
-        const pt::Float pos_val = static_cast<pt::Float>(window.is_key_down(pos));
-        const pt::Float neg_val = static_cast<pt::Float>(window.is_key_down(neg));
-        return pos_val - neg_val;
-    };
 
-    const pt::Float x = axis(pt::Key::d, pt::Key::a);
-    const pt::Float y = axis(pt::Key::e, pt::Key::q);
-    const pt::Float z = axis(pt::Key::w, pt::Key::s);
-    input.move = pt::Vec3(x, y, z);
+    if (moving) {
+        auto axis = [&window](pt::Key pos, pt::Key neg) -> pt::Float {
+            const pt::Float pos_val = static_cast<pt::Float>(window.is_key_down(pos));
+            const pt::Float neg_val = static_cast<pt::Float>(window.is_key_down(neg));
+            return pos_val - neg_val;
+        };
+
+        const pt::Float x = axis(pt::Key::d, pt::Key::a);
+        const pt::Float y = axis(pt::Key::e, pt::Key::q);
+        const pt::Float z = axis(pt::Key::w, pt::Key::s);
+        input.move = pt::Vec3(x, y, z);
+        input.fast = window.is_key_down(pt::Key::left_shift);
+        input.slow = window.is_key_down(pt::Key::left_control);
+    }
 
     if (looking) {
         const auto [dx, dy] = window.cursor_delta();
@@ -67,8 +74,6 @@ void film_to_bytes(const pt::Film& film, const pt::ToneMapSettings& settings, st
         input.look_dy = static_cast<pt::Float>(dy);
     }
 
-    input.fast = window.is_key_down(pt::Key::left_shift);
-    input.slow = window.is_key_down(pt::Key::left_control);
     return input;
 }
 
@@ -90,19 +95,39 @@ int main(int argc, char** argv) {
         pt::Window window(img_w, img_h, "pathtracer viewer");
         pt::Display display(img_w, img_h);
 
+        // Platform scale is the default; XWayland reports 1.0 regardless of DPI, hence the override.
+        pt::Gui gui(window, opts.ui_scale.value_or(window.content_scale()));
+
         pt::CameraController controller(scene.camera);
         pt::Camera camera(controller.settings(), img_w, img_h);
-        const pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
-        const pt::Renderer renderer(camera, integrator, scene.render);
+        pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
+        pt::Renderer renderer(camera, integrator, scene.render);
+        pt::ViewerControls controls{
+            .tone_map = scene.render.tone_map,
+            .max_depth = scene.render.max_depth,
+            .target_spp = renderer.samples_per_pixel(),
+        };
 
         pt::Accumulator acc(img_w, img_h);
-        const int target_spp = renderer.samples_per_pixel();
         std::vector<std::uint8_t> pixels;
+
+        pt::Film resolved(img_w, img_h);
+        bool display_dirty{true};
 
         auto last_time = std::chrono::steady_clock::now();
         bool looking{};
         while (!window.should_close()) {
             window.poll_events();
+            gui.begin_frame();
+
+            const pt::ControlChange change = gui.draw_controls(controls);
+            if (change.accumulation) {
+                integrator.set_max_depth(controls.max_depth);
+                renderer.set_samples_per_pixel(controls.target_spp);
+                controls.target_spp = renderer.samples_per_pixel(); // mirror whatever the renderer actually adopted
+                acc.reset();
+            }
+            if (change.display) display_dirty = true;
 
             const auto now = std::chrono::steady_clock::now();
             const std::chrono::duration<double> frame_time = now - last_time;
@@ -110,26 +135,36 @@ int main(int argc, char** argv) {
             const auto dt = static_cast<pt::Float>(std::min(frame_time.count(), max_frame_time));
 
             const bool is_rmb_down = window.is_mouse_button_down(pt::MouseButton::right);
-            if (is_rmb_down != looking) {
-                looking = is_rmb_down;
+            const bool desired_looking = looking ? is_rmb_down : (is_rmb_down && !gui.wants_mouse());
+            if (desired_looking != looking) {
+                looking = desired_looking;
                 window.set_cursor_mode(looking ? pt::CursorMode::hidden : pt::CursorMode::normal);
             }
 
-            const pt::CameraInput input = read_camera_input(window, looking);
+            const bool moving = !gui.wants_keyboard();
+            const pt::CameraInput input = read_camera_input(window, looking, moving);
             if (controller.update(input, dt)) {
                 camera = pt::Camera(controller.settings(), img_w, img_h);
                 acc.reset();
             }
 
-            if (acc.sample_count() < target_spp) {
+            if (acc.sample_count() < renderer.samples_per_pixel()) {
                 renderer.render_pass(acc, acc.sample_count());
-                film_to_bytes(acc.resolve(), scene.render.tone_map, pixels);
+                resolved = acc.resolve();
+                display_dirty = true;
+            }
+
+            if (display_dirty) {
+                film_to_bytes(resolved, controls.tone_map, pixels);
                 display.upload(pixels);
+                display_dirty = false;
             }
 
             const auto [fb_w, fb_h] = window.framebuffer_size();
-            display.draw(fb_w, fb_h);
 
+            // Safe to draw after the UI trashed GL state last frame: draw() rebinds everything it needs.
+            display.draw(fb_w, fb_h);
+            gui.end_frame();
             window.swap_buffers();
         }
 

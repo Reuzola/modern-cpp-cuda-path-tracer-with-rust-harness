@@ -62,7 +62,11 @@ As dependencies are introduced through the package manager, each is recorded her
 | [OpenEXR](https://github.com/AcademySoftwareFoundation/openexr) | 3.4.13 | Contributors to the OpenEXR Project (Academy Software Foundation) | BSD-3-Clause | HDR image output - linked into the engine library |
 | [Imath](https://github.com/AcademySoftwareFoundation/Imath) | 3.2.2 | Contributors to the Imath Project (Academy Software Foundation) | BSD-3-Clause | Math types required by OpenEXR - arrives as a transitive dependency |
 | [CLI11](https://github.com/CLIUtils/CLI11) | 2.6.2 | Henry Schreiner and contributors | BSD-3-Clause | Command-line argument parsing - header-only, compiled into the driver executable only |
+| [nlohmann/json](https://github.com/nlohmann/json) | 3.12.0 | Niels Lohmann and contributors | MIT | JSON scene file parsing - confined to the scene loader translation unit |
 | [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader) | 2.0.0rc13 | Syoyo Fujita and contributors | MIT | Wavefront OBJ parsing - linked into the engine library |
+| [GLFW](https://github.com/glfw/glfw) | 3.4 | Marcus Geelnard, Camilla Löwy and contributors | Zlib | Window creation, OpenGL context and input - linked into the viewer executable only |
+| [glad](https://github.com/Dav1dde/glad) | 0.1.36 | David Herberth | MIT | OpenGL 3.3 function loader - linked into the viewer executable only |
+| [Dear ImGui](https://github.com/ocornut/imgui) | 1.92.8 | Omar Cornut and contributors | MIT | Debug UI for runtime controls, with GLFW and OpenGL3 backends - linked into the viewer executable only |
 
 ---
 

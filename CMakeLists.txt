@@ -256,12 +256,17 @@ if(PT_BUILD_VIEWER)
   # Runtime loader for GL 3.3 entry points (only GL 1.1 is linkable directly).
   find_package(glad CONFIG REQUIRED)
 
+  # Debug UI. The port compiles the glfw/opengl3 backends into the same target,
+  # so imgui::imgui is the only thing to link.
+  find_package(imgui CONFIG REQUIRED)
+
   add_executable(pathtracer_viewer
     src/viewer/main.cpp
     src/viewer/window.cpp
     src/viewer/display.cpp
     src/viewer/cli.cpp
     src/viewer/camera_controller.cpp
+    src/viewer/gui.cpp
   )
 
   # Same private src/ root as the driver: viewer-local headers stay out of the
@@ -271,13 +276,14 @@ if(PT_BUILD_VIEWER)
   )
 
   # One-way arrow: viewer -> core. No viewer dependency ever flows back.
-  # glfw/glad are imported targets, so their headers are SYSTEM: -Wconversion
+  # glfw/glad/imgui are imported targets, so their headers are SYSTEM: -Wconversion
   # and friends skip them.
   target_link_libraries(pathtracer_viewer PRIVATE
     pt::core
     pt::warnings
     glfw
     glad::glad
+    imgui::imgui
     CLI11::CLI11
   )
 

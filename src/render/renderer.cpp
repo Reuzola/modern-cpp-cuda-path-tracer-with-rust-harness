@@ -32,7 +32,7 @@ Renderer::Renderer(const Camera& camera, const Integrator& integrator, const Ren
       integrator_(integrator),
       image_width_(settings.image_width),
       image_height_(settings.image_height),
-      sqrt_spp_(static_cast<int>(std::sqrt(static_cast<Float>(settings.samples_per_pixel)))),
+      sqrt_spp_(sqrt_spp_from(settings.samples_per_pixel)),
       recip_sqrt_spp_(1.0_f / static_cast<Float>(sqrt_spp_)),
       tiles_(make_tiles(image_width_, image_height_, tile_size)),
       seed_(settings.seed) {
@@ -61,6 +61,12 @@ void Renderer::render_pass(Accumulator& acc, int pass_index) const {
     acc.end_pass();
 }
 
+void Renderer::set_samples_per_pixel(int spp) {
+    assert(spp > 0);
+    sqrt_spp_ = sqrt_spp_from(spp);
+    recip_sqrt_spp_ = 1.0_f / static_cast<Float>(sqrt_spp_);
+}
+
 Color Renderer::render_sample(int x, int y, int pass_index) const {
     assert(pass_index >= 0 && pass_index < samples_per_pixel());
     const std::uint64_t pixel_index = static_cast<std::uint64_t>(y) * static_cast<std::uint64_t>(image_width_) + static_cast<std::uint64_t>(x);
@@ -82,6 +88,10 @@ void Renderer::render_tile(Accumulator& acc, const Tile& tile, int pass_index) c
             acc.add_sample(x, y, render_sample(x, y, pass_index));
         }
     }
+}
+
+int Renderer::sqrt_spp_from(int samples_per_pixel) noexcept {
+    return static_cast<int>(std::sqrt(static_cast<Float>(samples_per_pixel)));
 }
 
 } // namespace pt

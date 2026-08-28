@@ -3,14 +3,13 @@
 #include "pt/math/color.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/render/integrator.hpp"
+#include <cassert>
 #include <span>
 
 namespace pt {
 
 class Hittable;
-
 class ImportanceTargets;
-
 class Sampler;
 
 class PathIntegrator final : public Integrator {
@@ -20,6 +19,12 @@ public:
         : world_(world), media_(media), targets_(targets), background_(background), max_depth_(max_depth) {}
 
     [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override;
+
+    // Set between passes only: render_pass() reads this while tracing.
+    void set_max_depth(int depth) noexcept {
+        assert(depth > 0);
+        max_depth_ = depth;
+    }
 
 private:
     const Hittable& world_;
