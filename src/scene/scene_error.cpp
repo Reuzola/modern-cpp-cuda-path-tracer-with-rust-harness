@@ -28,4 +28,4 @@ const char* SceneError::what() const noexcept {
     return composed_.c_str();
 }
 
-}
+} // namespace pt

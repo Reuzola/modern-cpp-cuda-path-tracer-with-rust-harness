@@ -25,4 +25,4 @@ private:
     std::string composed_;
 };
 
-}
+} // namespace pt

@@ -20,7 +20,8 @@ const HittableList* box(Arena<Hittable>& arena, const Point3& a, const Point3& b
 
     HittableList sides;
     Point3 q;
-    Vec3 u, v;
+    Vec3 u;
+    Vec3 v;
 
     q = Point3(min_corner.x(), min_corner.y(), max_corner.z()); // front face
     u = dx;

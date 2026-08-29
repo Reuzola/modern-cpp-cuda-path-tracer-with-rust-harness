@@ -89,7 +89,7 @@ ControlChange Gui::draw_controls(ViewerControls& controls) noexcept {
     ImGui::Begin("Controls");
 
     float exposure = static_cast<float>(controls.tone_map.exposure);
-    if (ImGui::SliderFloat("Exposure", &exposure, 0.01f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+    if (ImGui::SliderFloat("Exposure", &exposure, 0.01F, 10.0F, "%.3f", ImGuiSliderFlags_Logarithmic)) {
         controls.tone_map.exposure = static_cast<Float>(exposure);
         change.display = true;
     }

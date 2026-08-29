@@ -16,7 +16,8 @@ ConstantMedium::ConstantMedium(const Hittable* boundary, Float density, const Ma
     : boundary_(boundary), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) { assert(boundary != nullptr); }
 
 bool ConstantMedium::sample_interaction(const Ray& r, const Interval& ray_t, Sampler& sampler, HitRecord& rec) const {
-    HitRecord rec1, rec2;
+    HitRecord rec1;
+    HitRecord rec2;
 
     if (!boundary_->hit(r, Interval::universe, rec1)) return false;
     if (!boundary_->hit(r, Interval(rec1.t + 0.0001_f, infinity), rec2)) return false;

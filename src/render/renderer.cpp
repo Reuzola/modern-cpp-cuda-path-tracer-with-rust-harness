@@ -20,9 +20,9 @@ namespace pt {
 namespace {
 
 [[nodiscard]] Vec3 sample_square_stratified(int s_i, int s_j, Float recip_sqrt_spp, Sampler& sampler) {
-    const Float px = ((static_cast<Float>(s_i) + sampler.next_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
-    const Float py = ((static_cast<Float>(s_j) + sampler.next_scalar()) * recip_sqrt_spp) - static_cast<Float>(0.5_f);
-    return Vec3(px, py, static_cast<Float>(0.0_f));
+    const Float px = ((s_i + sampler.next_scalar()) * recip_sqrt_spp) - 0.5_f;
+    const Float py = ((s_j + sampler.next_scalar()) * recip_sqrt_spp) - 0.5_f;
+    return Vec3(px, py, 0.0_f);
 }
 
 } // namespace
