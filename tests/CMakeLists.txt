@@ -5,6 +5,11 @@ find_package(Catch2 3 REQUIRED)
 add_executable(pathtracer_tests
   smoke/smoke_test.cpp
 
+  util/arena_test.cpp
+  util/log_test.cpp
+  util/overloaded_test.cpp
+  util/stats_test.cpp
+
   math/sampler_test.cpp
   math/vec3_test.cpp
   math/interval_test.cpp
