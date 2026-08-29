@@ -22,6 +22,9 @@ add_executable(pathtracer_tests
 
   geometry/sphere_test.cpp
   geometry/quad_test.cpp
+  geometry/box_test.cpp
+  geometry/instance_test.cpp
+  geometry/constant_medium_test.cpp
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
   geometry/bvh_test.cpp
