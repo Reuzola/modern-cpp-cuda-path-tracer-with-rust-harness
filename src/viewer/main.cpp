@@ -82,13 +82,13 @@ void film_to_bytes(const pt::Film& film, const pt::ToneMapSettings& settings, st
 } // namespace
 
 int main(int argc, char** argv) {
-    const auto parsed = pt::parse_viewer_command_line(argc, argv);
-    if (const int* exit_code = std::get_if<int>(&parsed)) return *exit_code;
-
-    const auto& opts = std::get<pt::ViewerOptions>(parsed);
-    pt::set_log_level(opts.log_level);
-
     try {
+        const std::variant<pt::ViewerOptions, int> parsed = pt::parse_viewer_command_line(argc, argv);
+        if (const int* exit_code = std::get_if<int>(&parsed)) return *exit_code;
+
+        const pt::ViewerOptions& opts = std::get<pt::ViewerOptions>(parsed);
+        pt::set_log_level(opts.log_level);
+
         pt::Scene scene(pt::load_scene(opts.scene));
         pt::apply_overrides(scene, opts);
 
@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
             const auto now = std::chrono::steady_clock::now();
             const std::chrono::duration<double> frame_time = now - last_time;
             last_time = now;
-            const auto dt = static_cast<pt::Float>(std::min(frame_time.count(), max_frame_time));
+            const pt::Float dt = static_cast<pt::Float>(std::min(frame_time.count(), max_frame_time));
 
             const bool is_rmb_down = window.is_mouse_button_down(pt::MouseButton::right);
             const bool desired_looking = looking ? is_rmb_down : (is_rmb_down && !gui.wants_mouse());
@@ -201,6 +201,9 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     } catch (const std::exception& e) {
         pt::log_error("Viewer error: {}", e.what());
+        return EXIT_FAILURE;
+    } catch (...) {
+        pt::log_error("Unknown viewer error");
         return EXIT_FAILURE;
     }
 }

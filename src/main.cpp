@@ -15,6 +15,7 @@
 #include "pt/util/stats.hpp"
 #include <chrono>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -23,39 +24,9 @@
 #include <system_error>
 #include <variant>
 
-[[nodiscard]] int render_scene(const pt::Scene& scene, const pt::CliOptions& opts);
+namespace {
 
-int main(int argc, char** argv) {
-    const auto parsed = pt::parse_command_line(argc, argv);
-    if (const auto* exit_code = std::get_if<int>(&parsed)) return *exit_code;
-
-    const auto& opts = std::get<pt::CliOptions>(parsed);
-
-    pt::set_log_level(opts.log_level);
-
-    std::optional<pt::Scene> scene;
-    try {
-        scene = pt::load_scene(opts.scene);
-    } catch (const pt::SceneError& e) {
-        pt::log_error("{}", e.what());
-        return EXIT_FAILURE;
-    }
-
-    pt::apply_overrides(*scene, opts);
-
-    const pt::BvhStats& stats = scene->bvh_stats();
-    pt::log_info(
-        "BVH: {} trees, {} nodes, {} leaves, max depth {}, built in {:.3f} ms",
-        stats.bvh_count,
-        stats.node_count,
-        stats.leaf_count,
-        stats.max_depth,
-        std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(stats.build_time).count());
-
-    return render_scene(*scene, opts);
-}
-
-int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
+[[nodiscard]] int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     const int image_width = scene.render.image_width;
     const int image_height = scene.render.image_height;
 
@@ -108,4 +79,48 @@ int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
     }
 
     return EXIT_SUCCESS;
+}
+
+[[nodiscard]] int run(int argc, char** argv) {
+    const std::variant<pt::CliOptions, int> parsed = pt::parse_command_line(argc, argv);
+    if (const int* exit_code = std::get_if<int>(&parsed)) return *exit_code;
+
+    const pt::CliOptions& opts = std::get<pt::CliOptions>(parsed);
+
+    pt::set_log_level(opts.log_level);
+
+    std::optional<pt::Scene> scene;
+    try {
+        scene = pt::load_scene(opts.scene);
+    } catch (const pt::SceneError& e) {
+        pt::log_error("{}", e.what());
+        return EXIT_FAILURE;
+    }
+
+    pt::apply_overrides(*scene, opts);
+
+    const pt::BvhStats& stats = scene->bvh_stats();
+    pt::log_info(
+        "BVH: {} trees, {} nodes, {} leaves, max depth {}, built in {:.3f} ms",
+        stats.bvh_count,
+        stats.node_count,
+        stats.leaf_count,
+        stats.max_depth,
+        std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(stats.build_time).count());
+
+    return render_scene(*scene, opts);
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    try {
+        return run(argc, argv);
+    } catch (const std::exception& e) {
+        pt::log_error("{}", e.what());
+        return EXIT_FAILURE;
+    } catch (...) {
+        pt::log_error("Unknown error");
+        return EXIT_FAILURE;
+    }
 }
