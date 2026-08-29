@@ -39,6 +39,8 @@ add_executable(pathtracer_tests
   scene/obj_loader_test.cpp
   scene/scene_loader_test.cpp
 
+  post/tonemap_test.cpp
+
   render/accumulator_test.cpp
 )
 
