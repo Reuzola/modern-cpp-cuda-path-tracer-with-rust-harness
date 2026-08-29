@@ -8,6 +8,9 @@ add_executable(pathtracer_tests
   math/sampler_test.cpp
   math/vec3_test.cpp
   math/interval_test.cpp
+  math/aabb_test.cpp
+  math/onb_test.cpp
+  math/transform_test.cpp
 
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
