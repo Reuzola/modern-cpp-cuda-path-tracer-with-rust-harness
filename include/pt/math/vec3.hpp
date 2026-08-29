@@ -1,6 +1,8 @@
 #pragma once
 #include "pt/math/scalar.hpp"
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <type_traits>
 
 namespace pt {
@@ -18,8 +20,8 @@ public:
 
     [[nodiscard]] constexpr Vec3 operator-() const noexcept { return Vec3(-e_[0], -e_[1], -e_[2]); }
 
-    [[nodiscard]] constexpr Float operator[](int i) const noexcept { return e_[i]; }
-    [[nodiscard]] constexpr Float& operator[](int i) noexcept { return e_[i]; }
+    [[nodiscard]] constexpr Float operator[](int i) const noexcept { return e_[static_cast<std::size_t>(i)]; }
+    [[nodiscard]] constexpr Float& operator[](int i) noexcept { return e_[static_cast<std::size_t>(i)]; }
 
     constexpr Vec3& operator+=(const Vec3& v) noexcept {
         e_[0] += v.e_[0];
@@ -59,7 +61,7 @@ public:
     }
 
 private:
-    Float e_[3]{};
+    std::array<Float, 3> e_{};
 };
 
 [[nodiscard]] constexpr Vec3 operator+(const Vec3& u, const Vec3& v) noexcept {
@@ -102,10 +104,10 @@ private:
 }
 
 [[nodiscard]] inline Vec3 refract(const Vec3& uv, const Vec3& n, Float etai_over_etat) noexcept {
-    Float cos_theta = std::fmin(dot(-uv, n), 1.0_f);
+    const Float cos_theta = std::fmin(dot(-uv, n), 1.0_f);
 
-    auto r_out_perp = etai_over_etat * (uv + cos_theta * n);
-    auto r_out_parallel = -std::sqrt(std::fabs(1.0_f - r_out_perp.length_squared())) * n;
+    const Vec3 r_out_perp = etai_over_etat * (uv + cos_theta * n);
+    const Vec3 r_out_parallel = -std::sqrt(std::fabs(1.0_f - r_out_perp.length_squared())) * n;
 
     return r_out_perp + r_out_parallel;
 }

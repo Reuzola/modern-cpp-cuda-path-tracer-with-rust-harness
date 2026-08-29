@@ -66,7 +66,7 @@ Window::Window(int width, int height, std::string_view title) {
 
     glfwMakeContextCurrent(handle_.get());
 
-    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
+    if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0)
         throw std::runtime_error("Failed to load GLAD");
 
     glfwSwapInterval(1);
@@ -78,7 +78,7 @@ Window::Window(int width, int height, std::string_view title) {
     pt::log_info("GL Renderer: {}", renderer != nullptr ? renderer : "unknown");
 }
 
-bool Window::should_close() const noexcept { return glfwWindowShouldClose(handle_.get()); }
+bool Window::should_close() const noexcept { return glfwWindowShouldClose(handle_.get()) == GLFW_TRUE; }
 
 void Window::poll_events() noexcept {
     glfwPollEvents();

@@ -6,7 +6,7 @@ namespace pt {
 
 class PpmWriter final : public ImageWriter {
 public:
-    bool write(const Film& film, const std::filesystem::path& path) const override;
+    [[nodiscard]] bool write(const Film& film, const std::filesystem::path& path) const override;
 };
 
 } // namespace pt

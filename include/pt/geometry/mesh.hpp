@@ -60,6 +60,7 @@ struct MeshData {
 class Mesh {
 public:
     Mesh(MeshData data, const Material* mat);
+    ~Mesh() = default;
 
     // Neither copyable nor movable: MeshTriangle stores a Mesh*, so relocating
     // the object would dangle every handle into it.

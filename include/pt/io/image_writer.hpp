@@ -10,12 +10,11 @@ class Film;
 class ImageWriter {
 public:
     ImageWriter() = default;
-
-    ImageWriter(const ImageWriter&) = delete;
-
     virtual ~ImageWriter() = default;
-
+    ImageWriter(const ImageWriter&) = delete;
     ImageWriter& operator=(const ImageWriter&) = delete;
+    ImageWriter(ImageWriter&&) = delete;
+    ImageWriter& operator=(ImageWriter&&) = delete;
 
     [[nodiscard]] virtual bool write(const Film& film, const std::filesystem::path& path) const = 0;
 };

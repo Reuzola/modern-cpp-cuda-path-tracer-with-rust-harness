@@ -33,13 +33,13 @@ void main() {
 )";
 
 GLuint compile_shader(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
+    const GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
 
     GLint success = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
+    if (success == GL_FALSE) {
         GLint log_len = 0;
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_len);
         std::string info_log(static_cast<std::size_t>(log_len), '\0');
@@ -55,8 +55,8 @@ GLuint compile_shader(GLenum type, const char* source) {
 } // namespace
 
 Display::Display(int width, int height) : width_(width), height_(height) {
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
+    const GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
+    const GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
 
     program_ = glCreateProgram();
 
@@ -67,7 +67,7 @@ Display::Display(int width, int height) : width_(width), height_(height) {
 
     GLint success = 0;
     glGetProgramiv(program_, GL_LINK_STATUS, &success);
-    if (!success) {
+    if (success == GL_FALSE) {
         GLint log_len = 0;
         glGetProgramiv(program_, GL_INFO_LOG_LENGTH, &log_len);
         std::string info_log(static_cast<std::size_t>(log_len), '\0');

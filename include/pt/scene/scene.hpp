@@ -48,6 +48,7 @@ public:
     RenderSettings render{};
 
     Scene() = default;
+    ~Scene() = default;
     Scene(const Scene&) = delete;
     Scene& operator=(const Scene&) = delete;
     Scene(Scene&&) noexcept = default;

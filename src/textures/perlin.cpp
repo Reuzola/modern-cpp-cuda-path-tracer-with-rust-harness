@@ -20,6 +20,10 @@ void shuffle_permutation(std::span<int> perm, Sampler& sampler) {
     }
 }
 
+[[nodiscard]] constexpr std::size_t corner_index(int di, int dj, int dk) noexcept {
+    return (static_cast<std::size_t>(di) * 4) + (static_cast<std::size_t>(dj) * 2) + static_cast<std::size_t>(dk);
+}
+
 } // namespace
 
 Perlin::Perlin(Sampler& sampler) {
@@ -43,13 +47,13 @@ Float Perlin::noise(const Point3& p) const {
     const int j = static_cast<int>(std::floor(p.y()));
     const int k = static_cast<int>(std::floor(p.z()));
 
-    Vec3 c[2][2][2];
+    GradientCorners c;
 
     for (int di = 0; di < 2; di++) {
         for (int dj = 0; dj < 2; dj++) {
             for (int dk = 0; dk < 2; dk++) {
                 const std::size_t index = static_cast<std::size_t>(perm_x_[(i + di) & 255] ^ perm_y_[(j + dj) & 255] ^ perm_z_[(k + dk) & 255]);
-                c[di][dj][dk] = randvec_[index];
+                c[corner_index(di, dj, dk)] = randvec_[index];
             }
         }
     }
@@ -69,7 +73,7 @@ Float Perlin::turb(const Point3& p, int depth) const {
     return std::fabs(accum);
 }
 
-Float Perlin::perlin_interp(const Vec3 c[2][2][2], Float u, Float v, Float w) {
+Float Perlin::perlin_interp(const GradientCorners& c, Float u, Float v, Float w) {
     const Float uu = u * u * (3 - 2 * u); // u = 3u² − 2u³
     const Float vv = v * v * (3 - 2 * v); // v = 3v² − 2v³
     const Float ww = w * w * (3 - 2 * w); // w = 3w² − 2w³
@@ -83,7 +87,10 @@ Float Perlin::perlin_interp(const Vec3 c[2][2][2], Float u, Float v, Float w) {
                 const Float fk = static_cast<Float>(k);
                 const Vec3 weight_v(u - fi, v - fj, w - fk);
 
-                accum += (fi * uu + (1 - fi) * (1 - uu)) * (fj * vv + (1 - fj) * (1 - vv)) * (fk * ww + (1 - fk) * (1 - ww)) * dot(c[i][j][k], weight_v);
+                accum += (fi * uu + (1 - fi) * (1 - uu)) *
+                         (fj * vv + (1 - fj) * (1 - vv)) *
+                         (fk * ww + (1 - fk) * (1 - ww)) *
+                         dot(c[corner_index(i, j, k)], weight_v);
             }
         }
     }

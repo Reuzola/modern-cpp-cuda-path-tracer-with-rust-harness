@@ -145,9 +145,9 @@ public:
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 2; j++) {
                 for (int k = 0; k < 2; k++) {
-                    const Float x = i ? box.x.max : box.x.min;
-                    const Float y = j ? box.y.max : box.y.min;
-                    const Float z = k ? box.z.max : box.z.min;
+                    const Float x = i != 0 ? box.x.max : box.x.min;
+                    const Float y = j != 0 ? box.y.max : box.y.min;
+                    const Float z = k != 0 ? box.z.max : box.z.min;
 
                     const Point3 applied = apply_point(Point3(x, y, z));
 
