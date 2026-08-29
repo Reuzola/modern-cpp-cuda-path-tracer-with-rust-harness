@@ -20,6 +20,8 @@ add_executable(pathtracer_tests
   core/hit_record_test.cpp
   core/hittable_list_test.cpp
 
+  geometry/sphere_test.cpp
+  geometry/quad_test.cpp
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
   geometry/bvh_test.cpp
