@@ -3,7 +3,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/checker_texture.hpp"
 #include "pt/textures/solid_color.hpp"
-#include "pt/textures/texture.hpp"
+#include "support/probe_texture.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,42 +11,15 @@ namespace {
 
 using pt::CheckerTexture;
 using pt::Color;
-using pt::Float;
 using pt::Point3;
 using pt::SolidColor;
-using pt::Texture;
 using pt::operator""_f;
+using pt_test::ProbeTexture;
 using pt_test::require_color_near;
 using pt_test::require_near;
 
 const Color white{1.0_f, 1.0_f, 1.0_f};
 const Color black{0.0_f, 0.0_f, 0.0_f};
-
-/// Reports a fixed colour and remembers the coordinates it was asked about.
-class ProbeTexture final : public Texture {
-public:
-    explicit ProbeTexture(const Color& answer) noexcept : answer_(answer) {}
-
-    [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override {
-        last_u_ = u;
-        last_v_ = v;
-        last_p_ = p;
-        ++calls_;
-        return answer_;
-    }
-
-    [[nodiscard]] Float last_u() const noexcept { return last_u_; }
-    [[nodiscard]] Float last_v() const noexcept { return last_v_; }
-    [[nodiscard]] const Point3& last_p() const noexcept { return last_p_; }
-    [[nodiscard]] int calls() const noexcept { return calls_; }
-
-private:
-    Color answer_;
-    mutable Float last_u_{};
-    mutable Float last_v_{};
-    mutable Point3 last_p_{};
-    mutable int calls_ = 0;
-};
 
 } // namespace
 
