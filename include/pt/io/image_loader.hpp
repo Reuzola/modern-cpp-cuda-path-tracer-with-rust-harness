@@ -13,15 +13,15 @@ class ImageLoader {
 public:
     explicit ImageLoader(const std::string& filename);
 
-    [[nodiscard]] int width() const {
+    [[nodiscard]] int width() const noexcept {
         return fdata_ ? image_width_ : 0;
     }
 
-    [[nodiscard]] int height() const {
+    [[nodiscard]] int height() const noexcept {
         return fdata_ ? image_height_ : 0;
     }
 
-    [[nodiscard]] Color pixel_data(int x, int y) const;
+    [[nodiscard]] Color pixel_data(int x, int y) const noexcept;
 
 private:
     std::unique_ptr<float, StbiDeleter> fdata_;

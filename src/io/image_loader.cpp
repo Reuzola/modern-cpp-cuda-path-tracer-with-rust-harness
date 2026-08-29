@@ -16,7 +16,11 @@ ImageLoader::ImageLoader(const std::string& filename) {
     if (!success) log_warning("Could not load image file '{}'", filename);
 }
 
-Color ImageLoader::pixel_data(int x, int y) const {
+Color ImageLoader::pixel_data(int x, int y) const noexcept {
+    // No data: the clamps below would be handed an inverted range and the pointer
+    // is null. Black rather than a visible sentinel - what a missing texture should
+    // look like is the texture's decision, not the loader's.
+    if (!fdata_) return Color();
     x = std::clamp(x, 0, image_width_ - 1);
     y = std::clamp(y, 0, image_height_ - 1);
 
