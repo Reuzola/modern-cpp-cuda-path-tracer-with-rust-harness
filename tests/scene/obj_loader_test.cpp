@@ -1,19 +1,14 @@
-#include "pt/math/scalar.hpp"
-#include "pt/scene/obj_loader.hpp"
 #include "pt/geometry/mesh.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "pt/scene/obj_loader.hpp"
 #include "pt/scene/scene_error.hpp"
-#include "pt/util/log.hpp"
+#include "support/log_silencer.hpp"
+#include "support/temp_dir.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
-#include <cstdint>
 #include <filesystem>
-#include <format>
-#include <fstream>
-#include <random>
-#include <string>
 #include <string_view>
-#include <system_error>
 
 namespace {
 
@@ -22,65 +17,10 @@ using pt::Point3;
 using pt::SceneError;
 using pt::load_obj;
 using pt::operator""_f;
+using pt_test::LogSilencer;
+using pt_test::TempDir;
 using pt_test::require_uv_near;
 using pt_test::require_vec_near;
-
-// Randomised rather than counter-based: catch_discover_tests runs each case in
-// its own process, and `ctest -j` runs several of them at once.
-[[nodiscard]] std::string unique_directory_name() {
-    std::random_device device;
-    const std::uint64_t value = (static_cast<std::uint64_t>(device()) << 32U) | device();
-
-    return std::format("pt_obj_loader_test_{:016x}", value);
-}
-
-// Owns a scratch directory for the duration of one test case.
-class TempDir {
-public:
-    TempDir() : path_(std::filesystem::temp_directory_path() / unique_directory_name()) {
-        std::filesystem::create_directories(path_);
-    }
-
-    ~TempDir() {
-        // Destructors must not throw; a leaked temp directory is not worth aborting over.
-        std::error_code ec;
-        std::filesystem::remove_all(path_, ec);
-    }
-
-    TempDir(const TempDir&) = delete;
-    TempDir& operator=(const TempDir&) = delete;
-
-    // Writes one OBJ file and returns its path.
-    [[nodiscard]] std::filesystem::path write(std::string_view name, std::string_view contents) const {
-        const std::filesystem::path file = path_ / name;
-
-        std::ofstream stream(file);
-        stream << contents;
-        REQUIRE(stream.good());
-
-        return file;
-    }
-
-    [[nodiscard]] const std::filesystem::path& path() const noexcept { return path_; }
-
-private:
-    std::filesystem::path path_;
-};
-
-// The loader logs one info line per successful load and warns when it drops an
-// attribute; neither belongs in the test output.
-class LogSilencer {
-public:
-    LogSilencer() : previous_(pt::log_level()) { pt::set_log_level(pt::LogLevel::off); }
-
-    ~LogSilencer() { pt::set_log_level(previous_); }
-
-    LogSilencer(const LogSilencer&) = delete;
-    LogSilencer& operator=(const LogSilencer&) = delete;
-
-private:
-    pt::LogLevel previous_;
-};
 
 // A single triangle in the z = 0 plane, wound counter-clockwise seen from +z.
 constexpr std::string_view single_triangle = R"(

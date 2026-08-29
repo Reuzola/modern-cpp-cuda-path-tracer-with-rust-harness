@@ -8,20 +8,20 @@
 #include "pt/scene/scene.hpp"
 #include "pt/scene/scene_error.hpp"
 #include "pt/scene/scene_loader.hpp"
-#include "pt/util/log.hpp"
+#include "support/log_silencer.hpp"
+#include "support/temp_dir.hpp"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <filesystem>
-#include <fstream>
-#include <random>
 #include <string>
 #include <string_view>
-#include <system_error>
 
 namespace {
+
+using pt_test::LogSilencer;
 
 // PT_SCENES_DIR is injected by tests/CMakeLists.txt; it appears exactly once.
 const std::filesystem::path scenes_dir{PT_SCENES_DIR};
@@ -47,81 +47,23 @@ constexpr std::string_view minimal_scene = R"json({
   ]
 })json";
 
-// Deliberately non-deterministic, unlike the engine's Sampler: two `ctest -j`
-// worker processes must not agree on a fixture directory name.
-[[nodiscard]] const std::string& process_token() {
-    static const std::string token = [] {
-        std::random_device device;
-        return std::to_string(device());
-    }();
-    return token;
-}
-
-/// Writes JSON to `<temp>/pt_scene_<token>_<n>/scene.json` and removes the
-/// directory on destruction. The scene gets its own directory because the
-/// loader resolves `image.filename` relative to the scene file's parent.
+/// Writes JSON to `scene.json` inside a scratch directory of its own. The scene
+/// needs its own directory because the loader resolves `image.filename` and a
+/// mesh's `filename` relative to the scene file's parent.
 class TempSceneDir {
 public:
-    explicit TempSceneDir(std::string_view json_text) {
-        static int counter = 0;
-        ++counter;
+    explicit TempSceneDir(std::string_view json_text) : path_(dir_.write("scene.json", json_text)) {}
 
-        dir_ = std::filesystem::temp_directory_path() / ("pt_scene_" + process_token() + "_" + std::to_string(counter));
-        path_ = dir_ / "scene.json";
-
-        std::error_code ec;
-        std::filesystem::create_directories(dir_, ec);
-        REQUIRE(!ec);
-
-        // Binary mode: no newline translation, so the bytes on disk are the
-        // bytes in the literal above. ofstream::binary rather than ios::binary
-        // so <fstream> is the only header this line needs.
-        std::ofstream stream(path_, std::ofstream::binary);
-        stream << json_text;
-        stream.close();
-        REQUIRE(stream.good());
-    }
-
-    TempSceneDir(const TempSceneDir&) = delete;
-    TempSceneDir& operator=(const TempSceneDir&) = delete;
-
-    // error_code overload, not the throwing one: this destructor runs during
-    // unwinding from a failed expectation, where a second exception terminates.
-    ~TempSceneDir() {
-        std::error_code ec;
-        std::filesystem::remove_all(dir_, ec);
-    }
-
-    /// Writes `content` to a file beside the scene. A mesh's `filename` is
-    /// resolved against the scene file's directory, so an OBJ fixture has to
-    /// share that directory rather than live in the working directory.
+    /// Writes a fixture beside the scene, for the paths the loader resolves relatively.
     void write_sibling(std::string_view name, std::string_view content) const {
-        std::ofstream stream(dir_ / name, std::ofstream::binary);
-        stream << content;
-        stream.close();
-        REQUIRE(stream.good());
+        static_cast<void>(dir_.write(name, content));
     }
 
     [[nodiscard]] const std::filesystem::path& scene_path() const noexcept { return path_; }
 
 private:
-    std::filesystem::path dir_;
+    pt_test::TempDir dir_{"pt_scene"};
     std::filesystem::path path_;
-};
-
-/// Suppresses log output for the duration of a scope. Used where a scene is
-/// expected to warn - a missing image file is a warning, not a load error.
-class LogSilencer {
-public:
-    LogSilencer() : previous_(pt::log_level()) { pt::set_log_level(pt::LogLevel::off); }
-
-    LogSilencer(const LogSilencer&) = delete;
-    LogSilencer& operator=(const LogSilencer&) = delete;
-
-    ~LogSilencer() { pt::set_log_level(previous_); }
-
-private:
-    pt::LogLevel previous_;
 };
 
 // `margin` exists for boxes: box() emits six flat quads, and Aabb inflates a
