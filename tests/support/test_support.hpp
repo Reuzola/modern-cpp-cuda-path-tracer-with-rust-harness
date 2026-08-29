@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/math/aabb.hpp"
+#include "pt/math/color.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -51,6 +52,14 @@ inline void require_aabb_near(const pt::Aabb& box, const pt::Point3& min_corner,
     require_near(box.x.max, max_corner.x(), tol);
     require_near(box.y.max, max_corner.y(), tol);
     require_near(box.z.max, max_corner.z(), tol);
+}
+
+// Colour is a distinct type from Vec3 in this engine, so it needs its own
+// helper: comparing r/g/b by hand hides which channel drifted.
+inline void require_color_near(const pt::Color& actual, const pt::Color& expected, double tol = tolerance) {
+    require_near(actual.r(), expected.r(), tol);
+    require_near(actual.g(), expected.g(), tol);
+    require_near(actual.b(), expected.b(), tol);
 }
 
 // Arbitrary but fixed: tests must not depend on the engine's default seed, and
