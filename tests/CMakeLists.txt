@@ -39,6 +39,8 @@ add_executable(pathtracer_tests
 
   sampling/pdf_test.cpp
 
+  scene/scene_test.cpp
+  scene/scene_error_test.cpp
   scene/obj_loader_test.cpp
   scene/scene_loader_test.cpp
 
