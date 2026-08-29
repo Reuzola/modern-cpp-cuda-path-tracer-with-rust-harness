@@ -73,4 +73,16 @@ inline constexpr std::uint64_t base_seed = 0x5EEDULL;
     return pt::Sampler(pt::sampler_seed(base_seed, stream, 0));
 }
 
+// Whether `sampler` has taken exactly `expected` draws since it was created by
+// make_sampler(stream). Compares the next value against a reference stream
+// advanced by hand: the RNG is part of the engine's observable behaviour, so how
+// much of it a call consumes is worth stating rather than inferring.
+[[nodiscard]] inline bool consumed_draws(pt::Sampler& sampler, std::uint64_t stream, int expected) {
+    pt::Sampler reference = make_sampler(stream);
+    for (int i = 0; i < expected; ++i) {
+        static_cast<void>(reference.next_uint32());
+    }
+    return sampler.next_uint32() == reference.next_uint32();
+}
+
 } // namespace pt_test

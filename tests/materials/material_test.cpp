@@ -19,7 +19,6 @@
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
-#include <cstdint>
 #include <optional>
 #include <variant>
 
@@ -48,6 +47,7 @@ using pt::SpherePdf;
 using pt::unit_vector;
 using pt::Vec3;
 using pt::operator""_f;
+using pt_test::consumed_draws;
 using pt_test::make_sampler;
 using pt_test::ProbeTexture;
 using pt_test::require_color_near;
@@ -75,16 +75,6 @@ public:
         return std::nullopt;
     }
 };
-
-// Counts how far a stream advanced, in draws.
-[[nodiscard]] int draws_between(Sampler& used, std::uint64_t stream) {
-    Sampler counted = make_sampler(stream);
-    for (int i = 0; i < 64; ++i) {
-        if (used.next_uint32() == counted.next_uint32()) return i;
-        static_cast<void>(counted.next_uint32());
-    }
-    return -1;
-}
 
 } // namespace
 
@@ -125,7 +115,7 @@ TEST_CASE("lambertian scatters into a cosine lobe about the normal", "[materials
     require_near(as_pdf(bounce.sampling_pdf).value(Vec3(1, 0, 0)), 0.0_f);
 
     // No draw is taken here. Scattering decides the shape; sampling happens later.
-    REQUIRE(draws_between(sampler, 71) == 0);
+    REQUIRE(consumed_draws(sampler, 71, 0));
 }
 
 TEST_CASE("lambertian's density matches the lobe it samples from", "[materials][lambertian]") {
@@ -201,7 +191,7 @@ TEST_CASE("a polished metal reflects exactly", "[materials][metal]") {
 
     // Nothing was drawn: the offset is skipped entirely rather than multiplied
     // by zero, so a mirror leaves the stream where it found it.
-    REQUIRE(draws_between(sampler, 74) == 0);
+    REQUIRE(consumed_draws(sampler, 74, 0));
 }
 
 TEST_CASE("a specular bounce keeps the ray's place in the shutter", "[materials][metal]") {
@@ -231,7 +221,7 @@ TEST_CASE("fuzz is clamped to a usable range", "[materials][metal]") {
 
     // Clamped to zero, so it behaves as a polished mirror in every respect,
     // including leaving the sampler untouched.
-    REQUIRE(draws_between(sampler, 76) == 0);
+    REQUIRE(consumed_draws(sampler, 76, 0));
 
     const Metal rough{Color(1, 1, 1), 5.0_f};
     Sampler rough_sampler = make_sampler(77);
@@ -308,7 +298,7 @@ TEST_CASE("total internal reflection needs no random number", "[materials][diele
     // the left operand of a short-circuiting ||. Drawing here anyway would still
     // render correctly, and would shift the RNG stream for every path that grazes
     // a glass surface.
-    REQUIRE(draws_between(sampler, 80) == 0);
+    REQUIRE(consumed_draws(sampler, 80, 0));
 }
 
 TEST_CASE("four percent reflects at normal incidence", "[materials][dielectric]") {
@@ -381,7 +371,7 @@ TEST_CASE("a light emits from its front and scatters nothing", "[materials][diff
     // contribution is the emitted term. Returning a bounce instead would let a
     // path continue through the lamp.
     REQUIRE_FALSE(light.scatter(incoming, surface(Vec3(0, 1, 0)), sampler).has_value());
-    REQUIRE(draws_between(sampler, 83) == 0);
+    REQUIRE(consumed_draws(sampler, 83, 0));
 
     // Emission is above one on purpose - that is what makes it a light rather
     // than a bright surface, and why the film needs tone mapping at all.
@@ -411,7 +401,7 @@ TEST_CASE("an isotropic medium scatters over the whole sphere", "[materials][iso
 
     const DiffuseBounce& bounce = std::get<DiffuseBounce>(scattered->bounce);
     REQUIRE(std::holds_alternative<SpherePdf>(bounce.sampling_pdf));
-    REQUIRE(draws_between(sampler, 84) == 0);
+    REQUIRE(consumed_draws(sampler, 84, 0));
 
     // Uniform over the sphere: 1 / 4pi in every direction, including backwards.
     // The arbitrary normal the medium wrote into the record is never consulted,
