@@ -8,6 +8,7 @@
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <algorithm>
 #include <cmath>
 
 namespace pt {
@@ -49,7 +50,11 @@ Vec3 Sphere::sample_direction(const Point3& origin, Sampler& sampler) const {
 }
 
 auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
-    const Float theta = std::acos(-p.y());
+    // The caller's normal is (p - center) / radius, not a renormalised unit vector, so
+    // cancellation in the intersection can push it a few ulps past +/-1 - enough for acos
+    // to return NaN at the poles. Clamping is a no-op everywhere else.
+    const Float cos_theta = -p.y();
+    const Float theta = std::acos(std::clamp(cos_theta, -1.0_f, 1.0_f));
     const Float phi = std::atan2(-p.z(), p.x()) + pi;
 
     const Float u = phi / (2 * pi);
