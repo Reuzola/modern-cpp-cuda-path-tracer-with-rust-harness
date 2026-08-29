@@ -6,6 +6,8 @@ add_executable(pathtracer_tests
   smoke/smoke_test.cpp
 
   math/sampler_test.cpp
+  math/vec3_test.cpp
+  math/interval_test.cpp
 
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
