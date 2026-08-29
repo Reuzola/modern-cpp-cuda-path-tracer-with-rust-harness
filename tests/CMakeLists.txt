@@ -31,6 +31,9 @@ add_executable(pathtracer_tests
 
   textures/texture_test.cpp
   textures/perlin_test.cpp
+  textures/image_texture_test.cpp
+
+  io/image_io_test.cpp
 
   materials/material_test.cpp
 
