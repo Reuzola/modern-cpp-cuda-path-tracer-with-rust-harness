@@ -8,10 +8,11 @@ placement, line breaking, include ordering — is not described here and is not
 open to discussion in review: it is produced mechanically by `.clang-format`,
 which is the single source of truth for formatting.
 
-**Enforcement.** These rules are currently applied by hand and checked in review.
-They are written to be mechanically checkable, and a `clang-tidy`
-`readability-identifier-naming` configuration will encode them later; where a
-rule below is phrased loosely, the tighter reading is the intended one.
+**Enforcement.** Naming is checked mechanically by `readability-identifier-naming`
+in `.clang-tidy`, which encodes the table below. Rules that a checker cannot
+express — acronym capitalization, whether a name describes the return value or
+the implementation — are still applied by hand; where a rule is phrased loosely,
+the tighter reading is the intended one.
 
 **Third-party code is exempt.** Everything under `external/` keeps its upstream
 naming. Our own code that mirrors a third-party API may follow that API's shape
@@ -31,7 +32,8 @@ where doing otherwise would be confusing (see *Exceptions*).
 | Public data member | `snake_case` | `Interval::min` |
 | Private / protected data member | `snake_case_` | `bbox_`, `mat_` |
 | Constant (any scope) | `snake_case` | `pi`, `Perlin::point_count` |
-| `enum class` and its enumerators | `PascalCase` | `Axis::X` |
+| `enum class` | `PascalCase` | `ImageFormat`, `ToneMapOperator` |
+| Enumerator | `snake_case` | `ImageFormat::png`, `Key::left_shift` |
 | Template parameter | `PascalCase` | `T`, `Ts` |
 | Macro | `PT_SCREAMING_SNAKE_CASE` | `PT_FLOAT_AS_DOUBLE` |
 | Namespace | `lowercase` | `pt`, `pt::detail` |
@@ -210,16 +212,19 @@ Constants that mirror mathematics keep the mathematical name: `pi`, not
 
 ## Enumerations
 
-Scoped enumerations only (`enum class`); both the type and its enumerators use
-`PascalCase`:
+Scoped enumerations only (`enum class`). The type is `PascalCase`; its
+enumerators are `snake_case`:
 
 ```cpp
-enum class Axis { X, Y, Z };
+enum class ToneMapOperator { none, reinhard, aces };
 ```
 
-**Rationale.** An enumerator is a value of a type, and it is always reached
-through that type (`Axis::X`), so it reads as a type-qualified name
-rather than as a variable. Unscoped `enum` is not used: it leaks its
+**Rationale.** Most enumerators in this project mirror an external lowercase
+token: a tone map operator named in a scene file, a format or log level spelled
+on the command line, a key on the keyboard. Keeping the spellings identical
+makes the mapping checkable by eye at the point where the two meet. It also
+avoids a name collision that `PascalCase` would invite — `None` is a macro in
+Xlib, which the viewer links against. Unscoped `enum` is not used: it leaks its
 enumerators into the surrounding scope and converts implicitly to `int`.
 
 ---
