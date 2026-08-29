@@ -44,6 +44,8 @@ add_executable(pathtracer_tests
 
   post/tonemap_test.cpp
 
+  render/tile_test.cpp
+  render/camera_test.cpp
   render/accumulator_test.cpp
 )
 
