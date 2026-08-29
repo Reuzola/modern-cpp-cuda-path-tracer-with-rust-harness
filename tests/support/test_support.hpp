@@ -23,6 +23,10 @@ inline constexpr double tolerance = std::is_same_v<pt::Float, double> ? 1e-6 : 1
 // widen explicitly - an implicit promotion would trip -Wdouble-promotion.
 [[nodiscard]] inline double widen(pt::Float v) noexcept { return static_cast<double>(v); }
 
+// The reverse of widen. Statistical helpers work in double throughout, so the
+// direction handed to the engine has to be narrowed explicitly.
+[[nodiscard]] inline pt::Float narrow(double v) noexcept { return static_cast<pt::Float>(v); }
+
 inline void require_near(pt::Float actual, pt::Float expected, double tol = tolerance) {
     REQUIRE_THAT(widen(actual), Catch::Matchers::WithinAbs(widen(expected), tol));
 }

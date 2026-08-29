@@ -16,6 +16,8 @@ add_executable(pathtracer_tests
   geometry/mesh_test.cpp
   geometry/bvh_test.cpp
 
+  sampling/pdf_test.cpp
+
   scene/obj_loader_test.cpp
   scene/scene_loader_test.cpp
 
