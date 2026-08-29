@@ -13,7 +13,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
-#include "test_support.hpp"
+#include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>

@@ -3,14 +3,18 @@
 find_package(Catch2 3 REQUIRED)
 
 add_executable(pathtracer_tests
-  smoke_test.cpp
-  sampler_test.cpp
-  scene_loader_test.cpp
-  triangle_test.cpp
-  mesh_test.cpp
-  obj_loader_test.cpp
-  bvh_test.cpp
-  accumulator_test.cpp
+  smoke/smoke_test.cpp
+
+  math/sampler_test.cpp
+
+  geometry/triangle_test.cpp
+  geometry/mesh_test.cpp
+  geometry/bvh_test.cpp
+
+  scene/obj_loader_test.cpp
+  scene/scene_loader_test.cpp
+
+  render/accumulator_test.cpp
 )
 
 # PRIVATE: executables have no consumers.
@@ -20,6 +24,12 @@ target_link_libraries(pathtracer_tests PRIVATE
   Catch2::Catch2WithMain
   pt::core
   pt::warnings
+)
+
+# Root of the suite tree: shared headers are addressed from here
+# (support/test_support.hpp), never by a bare filename.
+target_include_directories(pathtracer_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # Core uses ThinLTO in Release; without -flto the linker rejects its

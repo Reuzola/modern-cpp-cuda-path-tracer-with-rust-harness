@@ -4,7 +4,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/scene/scene_error.hpp"
 #include "pt/util/log.hpp"
-#include "test_support.hpp"
+#include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
