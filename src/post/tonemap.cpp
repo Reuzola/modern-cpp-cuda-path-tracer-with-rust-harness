@@ -9,8 +9,13 @@ namespace pt {
 
 namespace {
 
+// Values that are not physical radiance: a NaN from a degenerate estimator, or a
+// negative sample. Both become black here, before the operator - reinhard has a
+// pole at -1 and aces changes sign in both terms, so either would turn a large
+// negative into white further down the chain.
 [[nodiscard]] Float sanitize(Float x) noexcept {
-    return std::isnan(x) ? 0.0_f : x;
+    if (std::isnan(x)) return 0.0_f;
+    return std::fmax(0.0_f, x);
 }
 
 [[nodiscard]] Float reinhard(Float x) noexcept {
