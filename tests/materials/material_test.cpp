@@ -198,6 +198,10 @@ TEST_CASE("a polished metal reflects exactly", "[materials][metal]") {
     // component flips.
     require_vec_near(unit_vector(out.direction()), unit_vector(Vec3(1, 1, 0)));
     require_vec_near(out.origin(), rec.p);
+
+    // Nothing was drawn: the offset is skipped entirely rather than multiplied
+    // by zero, so a mirror leaves the stream where it found it.
+    REQUIRE(draws_between(sampler, 74) == 0);
 }
 
 TEST_CASE("a specular bounce keeps the ray's place in the shutter", "[materials][metal]") {
@@ -225,11 +229,9 @@ TEST_CASE("fuzz is clamped to a usable range", "[materials][metal]") {
     const auto scattered = negative.scatter(incoming, rec, sampler);
     require_vec_near(unit_vector(std::get<SpecularBounce>(scattered->bounce).scattered.direction()), unit_vector(Vec3(1, 1, 0)));
 
-    // Clamped to zero, but the offset vector is still drawn: the multiply happens
-    // whatever the fuzz, so a mirror consumes the stream exactly as a rough metal
-    // does. Documented rather than asserted as a count - random_unit_vector
-    // rejects samples, so the number of draws varies.
-    REQUIRE(draws_between(sampler, 76) != 0);
+    // Clamped to zero, so it behaves as a polished mirror in every respect,
+    // including leaving the sampler untouched.
+    REQUIRE(draws_between(sampler, 76) == 0);
 
     const Metal rough{Color(1, 1, 1), 5.0_f};
     Sampler rough_sampler = make_sampler(77);
