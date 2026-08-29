@@ -33,7 +33,7 @@ f 1 2 3
 } // namespace
 
 TEST_CASE("a triangle file becomes one triangle with three vertices", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
     const MeshData data = load_obj(dir.write("triangle.obj", single_triangle));
 
@@ -49,7 +49,7 @@ TEST_CASE("a triangle file becomes one triangle with three vertices", "[scene][o
 }
 
 TEST_CASE("corners agreeing on every attribute index collapse into one vertex", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     // A unit square as two faces sharing the diagonal v1-v3.
@@ -74,7 +74,7 @@ TEST_CASE("corners agreeing on every attribute index collapse into one vertex", 
 }
 
 TEST_CASE("corners differing in any attribute index stay separate vertices", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     // The same square, but the two faces claim different normals. Positions v1
@@ -105,7 +105,7 @@ TEST_CASE("corners differing in any attribute index stay separate vertices", "[s
 }
 
 TEST_CASE("a polygon face is triangulated", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     // One quad face, not two triangles.
@@ -125,7 +125,7 @@ TEST_CASE("a polygon face is triangulated", "[scene][obj]") {
 }
 
 TEST_CASE("normals and UVs survive when every corner references them", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     constexpr std::string_view textured = R"(
@@ -156,7 +156,7 @@ TEST_CASE("normals and UVs survive when every corner references them", "[scene][
 }
 
 TEST_CASE("an attribute only some faces reference is dropped entirely", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     // The second face carries no normal index, so no consistent per-vertex
@@ -181,7 +181,7 @@ TEST_CASE("an attribute only some faces reference is dropped entirely", "[scene]
 }
 
 TEST_CASE("object groups are merged into a single mesh", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     constexpr std::string_view groups = R"(
@@ -205,7 +205,7 @@ TEST_CASE("object groups are merged into a single mesh", "[scene][obj]") {
 }
 
 TEST_CASE("negative face indices are resolved relative to the end", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     constexpr std::string_view relative = R"(
@@ -223,7 +223,7 @@ TEST_CASE("negative face indices are resolved relative to the end", "[scene][obj
 }
 
 TEST_CASE("unreadable and empty files are rejected", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
 
     SECTION("a file that does not exist") {
@@ -243,7 +243,7 @@ TEST_CASE("unreadable and empty files are rejected", "[scene][obj]") {
 }
 
 TEST_CASE("the loaded buffers satisfy Mesh's invariants", "[scene][obj]") {
-    LogSilencer silence;
+    const LogSilencer silence;
     const TempDir dir;
     const std::filesystem::path file = dir.write("triangle.obj", single_triangle);
 

@@ -17,6 +17,7 @@
 #include "pt/textures/solid_color.hpp"
 #include "support/probe_texture.hpp"
 #include "support/test_support.hpp"
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <optional>
@@ -134,7 +135,7 @@ TEST_CASE("lambertian's density matches the lobe it samples from", "[materials][
     // purely diffuse bounce adds no variance of its own - and why the two
     // drifting apart would give a plausible but wrong image rather than an
     // obviously broken one.
-    const Vec3 directions[] = {Vec3(0, 1, 0), Vec3(1, 1, 0), Vec3(0.2_f, 0.9_f, -0.3_f), Vec3(3, 4, 0)};
+    const std::array directions = {Vec3(0, 1, 0), Vec3(1, 1, 0), Vec3(0.2_f, 0.9_f, -0.3_f), Vec3(3, 4, 0)};
 
     for (const Vec3& direction : directions) {
         const Ray out{rec.p, direction};

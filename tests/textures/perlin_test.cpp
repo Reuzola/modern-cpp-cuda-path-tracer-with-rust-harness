@@ -5,6 +5,7 @@
 #include "pt/textures/noise_texture.hpp"
 #include "pt/textures/perlin.hpp"
 #include "support/test_support.hpp"
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 
@@ -22,7 +23,7 @@ using pt_test::require_near;
 
 // A spread of positions that is not a lattice: fractional, negative and large
 // coordinates all take different paths through the permutation tables.
-const Point3 probes[] = {
+const std::array probes = {
     Point3(0.13_f, 0.71_f, 0.42_f),
     Point3(3.5_f, -2.25_f, 7.75_f),
     Point3(-9.6_f, 0.05_f, -0.95_f),

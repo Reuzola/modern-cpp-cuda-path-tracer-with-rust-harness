@@ -131,7 +131,7 @@ TEST_CASE("created objects keep their addresses as the scene grows", "[scene]") 
 }
 
 TEST_CASE("meshes are owned outside the arena and counted", "[scene]") {
-    Scene scene;
+    const Scene scene;
     REQUIRE(scene.mesh_count() == 0);
 }
 

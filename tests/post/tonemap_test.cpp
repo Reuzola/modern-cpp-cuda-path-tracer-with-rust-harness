@@ -3,6 +3,7 @@
 #include "pt/post/tonemap.hpp"
 #include "pt/render/film.hpp"
 #include "support/test_support.hpp"
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
 
@@ -110,7 +111,7 @@ TEST_CASE("negative and non-finite samples become black", "[post][tonemap]") {
     // would otherwise depend on which operator the scene happened to pick.
     require_near(mapped(-0.5_f, plain), 0.0_f);
 
-    const ToneMapOperator operators[] = {ToneMapOperator::none, ToneMapOperator::reinhard, ToneMapOperator::aces};
+    const std::array operators = {ToneMapOperator::none, ToneMapOperator::reinhard, ToneMapOperator::aces};
     for (const ToneMapOperator op : operators) {
         require_near(mapped(-1000.0_f, {.exposure = 2.0_f, .op = op}), 0.0_f);
     }
@@ -176,7 +177,7 @@ TEST_CASE("aces keeps black at black and holds up the midtones", "[post][tonemap
 }
 
 TEST_CASE("every operator is monotone", "[post][tonemap]") {
-    const ToneMapOperator operators[] = {ToneMapOperator::none, ToneMapOperator::reinhard, ToneMapOperator::aces};
+    const std::array operators = {ToneMapOperator::none, ToneMapOperator::reinhard, ToneMapOperator::aces};
 
     for (const ToneMapOperator op : operators) {
         const ToneMapSettings settings{.exposure = 1.0_f, .op = op};

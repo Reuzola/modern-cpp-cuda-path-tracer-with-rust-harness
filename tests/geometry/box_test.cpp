@@ -9,6 +9,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
 #include "support/test_support.hpp"
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
@@ -80,13 +81,13 @@ TEST_CASE("all six faces are where they should be", "[geometry][box]") {
         Point3 expected;
     };
 
-    const Probe probes[] = {
-        {Vec3(-5, 0, 0), Vec3(1, 0, 0), Point3(-1, 0, 0)},
-        {Vec3(5, 0, 0), Vec3(-1, 0, 0), Point3(1, 0, 0)},
-        {Vec3(0, -5, 0), Vec3(0, 1, 0), Point3(0, -1, 0)},
-        {Vec3(0, 5, 0), Vec3(0, -1, 0), Point3(0, 1, 0)},
-        {Vec3(0, 0, -5), Vec3(0, 0, 1), Point3(0, 0, -1)},
-        {Vec3(0, 0, 5), Vec3(0, 0, -1), Point3(0, 0, 1)},
+    const std::array probes = {
+        Probe{Vec3(-5, 0, 0), Vec3(1, 0, 0), Point3(-1, 0, 0)},
+        Probe{Vec3(5, 0, 0), Vec3(-1, 0, 0), Point3(1, 0, 0)},
+        Probe{Vec3(0, -5, 0), Vec3(0, 1, 0), Point3(0, -1, 0)},
+        Probe{Vec3(0, 5, 0), Vec3(0, -1, 0), Point3(0, 1, 0)},
+        Probe{Vec3(0, 0, -5), Vec3(0, 0, 1), Point3(0, 0, -1)},
+        Probe{Vec3(0, 0, 5), Vec3(0, 0, -1), Point3(0, 0, 1)},
     };
 
     for (const Probe& probe : probes) {
@@ -107,7 +108,7 @@ TEST_CASE("each face covers its whole extent", "[geometry][box]") {
     // A grid across one face, out to just inside its edges. A quad built with a
     // right edge vector but the wrong origin leaves a strip of the face missing,
     // which a single centred ray walks straight past.
-    constexpr Float offsets[] = {-0.95_f, -0.35_f, 0.35_f, 0.95_f};
+    constexpr std::array offsets = {-0.95_f, -0.35_f, 0.35_f, 0.95_f};
 
     for (const Float x : offsets) {
         for (const Float y : offsets) {

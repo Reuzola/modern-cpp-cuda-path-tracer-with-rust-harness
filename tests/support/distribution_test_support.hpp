@@ -57,7 +57,7 @@ inline constexpr int quadrature_resolution = 16;
     const int row = std::min(static_cast<int>((cos_theta + 1.0) * 0.5 * cos_theta_bins), cos_theta_bins - 1);
     const int column = std::min(static_cast<int>(phi / two_pi_d * phi_bins), phi_bins - 1);
 
-    return static_cast<std::size_t>(row * phi_bins + column);
+    return static_cast<std::size_t>(row) * static_cast<std::size_t>(phi_bins) + static_cast<std::size_t>(column);
 }
 
 // A direction drawn uniformly over the sphere: the measure the integral below
@@ -135,7 +135,7 @@ inline constexpr int quadrature_resolution = 16;
             }
 
             // Mean density over the bin, times the solid angle it covers.
-            probability[static_cast<std::size_t>(row * phi_bins + column)] = sum / probes_per_bin * bin_solid_angle;
+            probability[static_cast<std::size_t>(row) * static_cast<std::size_t>(phi_bins) + static_cast<std::size_t>(column)] = sum / probes_per_bin * bin_solid_angle;
         }
     }
 
@@ -198,6 +198,7 @@ struct ChiSquareResult {
 
     if (x <= 0.0) return 1.0;
 
+    // NOLINTNEXTLINE(concurrency-mt-unsafe) -- lgamma writes the global signgam; unread here, single-threaded.
     const double log_prefactor = a * std::log(x) - x - std::lgamma(a);
 
     if (x < a + 1.0) {
