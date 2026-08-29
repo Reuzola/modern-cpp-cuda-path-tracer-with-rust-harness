@@ -49,6 +49,7 @@ add_executable(pathtracer_tests
   render/tile_test.cpp
   render/camera_test.cpp
   render/renderer_test.cpp
+  render/path_integrator_test.cpp
   render/progress_test.cpp
   render/accumulator_test.cpp
 )
