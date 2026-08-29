@@ -1,0 +1,26 @@
+# clang-tidy overrides for the Catch2 suite. Everything not listed below is
+# inherited from the repository root configuration.
+---
+InheritParentConfig: true
+
+Checks: >
+  -bugprone-unchecked-optional-access,
+  -cppcoreguidelines-special-member-functions,
+  -clang-analyzer-optin.core.EnumCastOutOfRange
+
+# Why these three, and only these three:
+#
+#   bugprone-unchecked-optional-access
+#     Fires 25 times, all on values a REQUIRE has just asserted. The analysis
+#     does not model Catch2's assertion macros, so it cannot see that the
+#     optional is engaged. In engine code an unchecked access is undefined
+#     behaviour; in a test it is a failing test, which is the point.
+#
+#   cppcoreguidelines-special-member-functions
+#     Fixtures and RAII helpers under support/ are single-use scaffolding, not
+#     value types with copy and move semantics worth spelling out. The rule
+#     stays in force for everything the engine ships.
+#   clang-analyzer-optin.core.EnumCastOutOfRange
+#     False positive inside Catch2, which ORs two enumerators into a flags type.
+#     Analyzer diagnostics ignore HeaderFilterRegex, so a vendored header cannot
+#     be excluded any other way in this version. Still active for engine code.
