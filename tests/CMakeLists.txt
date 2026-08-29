@@ -17,6 +17,9 @@ add_executable(pathtracer_tests
   math/onb_test.cpp
   math/transform_test.cpp
 
+  core/hit_record_test.cpp
+  core/hittable_list_test.cpp
+
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
   geometry/bvh_test.cpp
