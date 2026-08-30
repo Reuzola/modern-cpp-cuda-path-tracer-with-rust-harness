@@ -4,6 +4,7 @@ A physically-based path tracer written from scratch in modern C++, with a Rust
 tool that validates its scene files and guards its output against regressions.
 
 [![CI](https://github.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness)](https://github.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/releases/latest)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
 ![Rust](https://img.shields.io/badge/Rust-scene--tool-orange)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
