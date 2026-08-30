@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(PathTracer
-  VERSION 0.1.0
+  VERSION 1.0.0
   DESCRIPTION "Physically-based path tracer"
   LANGUAGES CXX
 )
@@ -242,8 +242,11 @@ target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11 nloh
 # Records must state which configuration produced them; a timing from a Debug
 # build next to a Release one is worse than no number at all.
 # Generator expression, not ${CMAKE_BUILD_TYPE}: correct under multi-config generators too.
+# PT_VERSION comes from project(VERSION) so the tag, the manifests and --version
+# cannot drift apart.
 target_compile_definitions(pathtracer PRIVATE
   PT_BUILD_TYPE="$<CONFIG>"
+  PT_VERSION="${PROJECT_VERSION}"
 )
 
 # pathtracer_viewer - interactive frontend, opt-in.
@@ -281,6 +284,11 @@ if(PT_BUILD_VIEWER)
   # installed include/ tree.
   target_include_directories(pathtracer_viewer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+
+  # Same single source as the driver's --version.
+  target_compile_definitions(pathtracer_viewer PRIVATE
+    PT_VERSION="${PROJECT_VERSION}"
   )
 
   # One-way arrow: viewer -> core. No viewer dependency ever flows back.

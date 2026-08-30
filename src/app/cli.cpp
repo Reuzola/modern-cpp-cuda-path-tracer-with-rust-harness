@@ -8,6 +8,10 @@
 #include <string>
 #include <variant>
 
+#ifndef PT_VERSION
+#define PT_VERSION "unknown"
+#endif
+
 namespace pt {
 
 std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
@@ -30,7 +34,7 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
     const CLI::Range positive_int = CLI::Range(1, std::numeric_limits<int>::max());
 
     CLI::App app{"Physically-based path tracer"};
-    app.set_version_flag("--version", "0.1.0");
+    app.set_version_flag("--version", PT_VERSION);
 
     CliOptions opts;
 

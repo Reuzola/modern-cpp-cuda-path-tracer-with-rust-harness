@@ -7,6 +7,10 @@
 #include <string>
 #include <variant>
 
+#ifndef PT_VERSION
+#define PT_VERSION "unknown"
+#endif
+
 namespace pt {
 
 std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv) {
@@ -19,7 +23,7 @@ std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv
     const CLI::Range positive_int = CLI::Range(1, std::numeric_limits<int>::max());
 
     CLI::App app{"Interactive path tracer viewer"};
-    app.set_version_flag("--version", "0.1.0");
+    app.set_version_flag("--version", PT_VERSION);
 
     ViewerOptions opts;
 
