@@ -220,6 +220,7 @@ find_package(CLI11 CONFIG REQUIRED)
 add_executable(pathtracer
   src/main.cpp
   src/app/cli.cpp
+  src/app/benchmark.cpp
 )
 
 # Release-only IPO/LTO; set on both sides of the TU boundary.
@@ -236,7 +237,14 @@ target_include_directories(pathtracer PRIVATE
 
 # pt::core brings the engine (+ stb path). CLI11 is PRIVATE (no consumers);
 # its include dir is SYSTEM, so -Wconversion/-Werror skip it.
-target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11)
+target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11 nlohmann_json::nlohmann_json)
+
+# Records must state which configuration produced them; a timing from a Debug
+# build next to a Release one is worse than no number at all.
+# Generator expression, not ${CMAKE_BUILD_TYPE}: correct under multi-config generators too.
+target_compile_definitions(pathtracer PRIVATE
+  PT_BUILD_TYPE="$<CONFIG>"
+)
 
 # pathtracer_viewer - interactive frontend, opt-in.
 # Everything viewer-related lives inside this if(): with the option OFF, CMake

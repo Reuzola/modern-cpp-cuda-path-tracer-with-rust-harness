@@ -1,3 +1,4 @@
+#include "app/benchmark.hpp"
 #include "app/cli.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/io/image_format.hpp"
@@ -18,11 +19,14 @@
 #include <exception>
 #include <filesystem>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <ratio>
 #include <system_error>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace {
 
@@ -81,6 +85,59 @@ namespace {
     return EXIT_SUCCESS;
 }
 
+// Benchmark path: renders repeatedly without writing an image. The camera,
+// integrator and renderer are built once, so setup is outside every timing.
+[[nodiscard]] int run_benchmark(const pt::Scene& scene, const pt::CliOptions& opts) {
+    const int image_width = scene.render.image_width;
+    const int image_height = scene.render.image_height;
+
+    const pt::Camera camera(scene.camera, image_width, image_height);
+    const pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
+    const pt::Renderer renderer(camera, integrator, scene.render);
+
+    std::vector<double> render_seconds;
+    render_seconds.reserve(static_cast<std::size_t>(opts.bench_runs));
+
+    // Keeps the rendered frame observably used, so LTO cannot elide the call under measurement.
+    // Plain store, never a compound assignment: volatile += is deprecated in C++20.
+    volatile double sink{};
+
+    for (int i = 0; i < opts.bench_runs; ++i) {
+        // Counters accumulate; reset each run so the snapshot describes a single render.
+        pt::reset_traversal_stats();
+
+        const auto start = std::chrono::steady_clock::now();
+        const pt::Film film = renderer.render();
+        const auto end = std::chrono::steady_clock::now();
+
+        sink = static_cast<double>(film.pixel(0, 0).r());
+        render_seconds.push_back(std::chrono::duration<double>(end - start).count());
+    }
+
+    static_cast<void>(sink);
+
+    std::optional<pt::TraversalStats> traversal;
+    if constexpr (pt::stats_enabled) traversal = pt::traversal_snapshot();
+
+    pt::BenchmarkRecord record{
+        .scene = opts.scene.string(),
+        .timestamp = pt::utc_timestamp(),
+        .host = pt::detect_host(),
+        .build = pt::detect_build(),
+        .image_width = image_width,
+        .image_height = image_height,
+        .samples_per_pixel = renderer.samples_per_pixel(),
+        .max_depth = scene.render.max_depth,
+        .seed = scene.render.seed,
+        .render_seconds = std::move(render_seconds),
+        .bvh = scene.bvh_stats(),
+        .traversal = traversal,
+    };
+
+    pt::write_record(record, std::cout);
+    return EXIT_SUCCESS;
+}
+
 [[nodiscard]] int run(int argc, char** argv) {
     const std::variant<pt::CliOptions, int> parsed = pt::parse_command_line(argc, argv);
     if (const int* exit_code = std::get_if<int>(&parsed)) return *exit_code;
@@ -107,6 +164,8 @@ namespace {
         stats.leaf_count,
         stats.max_depth,
         std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(stats.build_time).count());
+
+    if (opts.benchmark) return run_benchmark(*scene, opts);
 
     return render_scene(*scene, opts);
 }

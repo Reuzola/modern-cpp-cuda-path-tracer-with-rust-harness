@@ -20,6 +20,8 @@ struct CliOptions { // CLI options with default values
     std::optional<int> samples_per_pixel;
     std::optional<int> max_depth;
     std::optional<std::uint64_t> seed;
+    bool benchmark{false};
+    int bench_runs{3};
 };
 
 [[nodiscard]] std::variant<CliOptions, int> parse_command_line(int argc, char** argv);

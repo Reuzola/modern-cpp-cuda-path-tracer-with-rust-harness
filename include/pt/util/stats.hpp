@@ -29,4 +29,10 @@ inline void count_ray_query() noexcept {
     if constexpr (stats_enabled) ++traversal_stats.ray_queries;
 }
 
+// Single read/reset point for the counters. A future parallel renderer will merge
+// per-thread state here; no other call site should touch the thread_local directly.
+[[nodiscard]] inline TraversalStats traversal_snapshot() noexcept { return traversal_stats; }
+
+void inline reset_traversal_stats() noexcept { traversal_stats = TraversalStats{}; }
+
 } // namespace pt

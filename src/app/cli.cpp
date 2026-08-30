@@ -35,28 +35,44 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
     CliOptions opts;
 
     app.add_option("scene", opts.scene, "scene file to render")->required();
-    app.add_option("-o,--output", opts.output, "Output image path")->capture_default_str();
-    app.add_option("--format", opts.format, "Output image format")
-        ->transform(CLI::CheckedTransformer(format_map, CLI::ignore_case))
-        ->option_text("FORMAT:{ppm, png, exr}")
-        ->capture_default_str();
+
+    CLI::Option* output_opt = app.add_option("-o,--output", opts.output, "Output image path")->capture_default_str();
+
+    CLI::Option* format_opt = app.add_option("--format", opts.format, "Output image format")
+                                  ->transform(CLI::CheckedTransformer(format_map, CLI::ignore_case))
+                                  ->option_text("FORMAT:{ppm, png, exr}")
+                                  ->capture_default_str();
+
     app.add_option("--log-level", opts.log_level, "Logging verbosity")
         ->transform(CLI::CheckedTransformer(log_level_map, CLI::ignore_case))
         ->option_text("LEVEL:{info, warning, error, off}")
         ->capture_default_str();
 
-    CLI::Option* width_opt = app.add_option("--width", opts.width, "image width to render")
-                                 ->check(positive_int);
-    CLI::Option* height_opt = app.add_option("--height", opts.height, "image height to render")
-                                  ->check(positive_int);
+    CLI::Option* width_opt = app.add_option("--width", opts.width, "image width to render")->check(positive_int);
+    CLI::Option* height_opt = app.add_option("--height", opts.height, "image height to render")->check(positive_int);
     width_opt->needs(height_opt);
     height_opt->needs(width_opt);
 
-    app.add_option("--spp", opts.samples_per_pixel, "samples per pixel")
-        ->check(positive_int);
-    app.add_option("--max-depth", opts.max_depth, "maximum ray bounce depth")
-        ->check(positive_int);
+    app.add_option("--spp", opts.samples_per_pixel, "samples per pixel")->check(positive_int);
+
+    app.add_option("--max-depth", opts.max_depth, "maximum ray bounce depth")->check(positive_int);
+
     app.add_option("--seed", opts.seed, "random seed");
+
+    // Benchmark mode writes one JSON record to stdout; diagnostics stay on the log
+    // sink (stderr), so a caller can append records without filtering.
+    CLI::Option* bench_opt = app.add_flag("--bench", opts.benchmark, "measure timing and stats, write one JSON record to stdout");
+
+    // Repeats are only meaningful for timing: the counters are deterministic, so
+    // the instrumented pass runs once.
+    app.add_option("--bench-runs", opts.bench_runs, "timed runs per scene; the reported time is the minimum")
+        ->check(positive_int)
+        ->capture_default_str()
+        ->needs(bench_opt);
+
+    // Image output is meaningless in benchmark mode; reject it instead of ignoring it.
+    output_opt->excludes(bench_opt);
+    format_opt->excludes(bench_opt);
 
     try {
         app.parse(argc, argv);
