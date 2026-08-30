@@ -70,6 +70,29 @@ As dependencies are introduced through the package manager, each is recorded her
 
 ---
 
+### Rust dependencies (`tools/scene-tool`)
+
+Fetched by Cargo at build time and linked into `scene-tool`, which is an
+internal tool: it is marked `publish = false` and is not distributed.
+
+| Component | Version | Author | License | Role |
+|---|---|---|---|---|
+| [clap](https://github.com/clap-rs/clap) | 4 | Kevin K. and contributors | MIT *or* Apache-2.0 | Command-line parsing |
+| [exr](https://github.com/johannesvollmer/exrs) | 1.73 | Johannes Vollmer | BSD-3-Clause | Reads the engine's 32-bit float EXR output |
+| [jsonschema](https://github.com/Stranger6667/jsonschema) | 0.46 | Dmitry Dygalo | MIT | Offline JSON Schema validation |
+| [png](https://github.com/image-rs/image-png) | 0.17 | The image-rs developers | MIT *or* Apache-2.0 | Decodes renders, encodes difference images |
+| [serde](https://github.com/serde-rs/serde) | 1.0 | Erick Tryzelaar, David Tolnay | MIT *or* Apache-2.0 | Scene model deserialization |
+| [serde_json](https://github.com/serde-rs/json) | 1.0 | Erick Tryzelaar, David Tolnay | MIT *or* Apache-2.0 | JSON backend for serde |
+| [thiserror](https://github.com/dtolnay/thiserror) | 2 | David Tolnay | MIT *or* Apache-2.0 | Error type derivation |
+| [tempfile](https://github.com/Stebalien/tempfile) | 3 | Steven Allen and contributors | MIT *or* Apache-2.0 | Test fixtures only; not in the shipped binary |
+
+Where a crate offers a choice of licenses, this project elects the **MIT**
+alternative, as it does for the vendored headers above.
+
+These are the direct dependencies. Each pulls in a transitive tree of its own;
+the complete resolved set, with exact versions, is `tools/scene-tool/Cargo.lock`
+and can be listed with `cargo tree` or `cargo license` from that directory.
+
 ## Assets
 
 | Asset | Source | Credit | License |
