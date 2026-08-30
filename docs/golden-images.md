@@ -4,7 +4,11 @@
 refactors — mesh support, the flat BVH, SAH construction, traversal rewrites —
 can be made under a regression test that fails loudly when the image changes.
 
-They are deliberately small and noisy. Their job is to be a cheap fingerprint, not a gallery.
+They are deliberately small and noisy. Their job is to be a cheap
+fingerprint, not a gallery.
+
+How to run the scripts below is also summarised in [usage.md](usage.md); this
+file is about why the set looks the way it does.
 
 ## Regenerating
 
@@ -46,8 +50,7 @@ tools/scene-tool/target/release/scene-tool compare \
     --diff /tmp/cornell_diff.png
 ```
 
-Exit code 0 means the RMSE is within the threshold, 1 means it is not, and 2
-means the tool itself failed. A difference image is written only on failure.
+The tool's exit codes and remaining flags are described in [usage.md](usage.md).
 
 ## Use the `release` preset
 

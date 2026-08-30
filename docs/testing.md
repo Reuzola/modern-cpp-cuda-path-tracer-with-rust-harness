@@ -6,6 +6,8 @@ neither builds or invokes the other.
 
 ## Running the C++ suite
 
+Prerequisites and preset details are in [building.md](building.md).
+
 ```bash
 cmake --preset dev
 cmake --build --preset dev
@@ -44,7 +46,7 @@ question.
 | `release` | Optimizer and ThinLTO. Catches issues that only appear once the compiler is allowed to transform the code. |
 
 Both scalar precisions are worth exercising, since tolerances and a few
-numerical paths depend on the width of `Float`:
+numerical paths depend on the width of `Float` (see [building.md](building.md)):
 
 ```bash
 cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
@@ -93,7 +95,17 @@ stayed behind.
 
 ## Continuous integration
 
-Every push to `main` runs the C++ suite under `dev`, `release` and
-`asan-ubsan`, the Rust suite with Clippy, clang-tidy over the full compilation
-database, and the golden image comparison. See
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+Every push to `main` runs four independent jobs:
+
+- the C++ suite under `dev`, `release` and `asan-ubsan`, with the latter two
+  also rendering one scene end to end;
+- the Rust suite, plus `cargo clippy` with warnings denied;
+- clang-tidy over the `dev-viewer` compilation database, which is configured
+  but not built — the analyser needs the commands and the headers, not an
+  artefact. `dev` is not used because the viewer's translation units are absent
+  from it and would go unanalysed;
+- a regression job that validates every scene file and compares a full render
+  of the golden set against the references, uploading the difference images
+  when it fails.
+
+See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).

@@ -29,10 +29,6 @@ happens to suit a single microarchitecture.
 Both are laptops or desktops running a general purpose OS, not isolated
 benchmarking hosts. Treat differences under about two percent as noise.
 
-The CPU model is read from `/proc/cpuinfo`, which carries no `model name` line
-on aarch64; records from the secondary machine therefore say `unknown` and the
-model above is filled in by hand.
-
 ## Method
 
 The workload is `benchmarks/manifest.txt`: one row per scene, giving the
@@ -40,11 +36,10 @@ resolution and sample count. Everything else — maximum depth, seed, background
 tone mapping — comes from the scene file, so a record describes exactly the
 work the renderer was asked to do.
 
-Sample counts were chosen so that each scene takes roughly ten seconds. Below
-about five seconds scheduler noise starts to hide the improvements worth
-finding; above fifteen a full sweep becomes something one stops running. Both
-machines use the file unchanged: adjusting a row per machine would make the two
-tables incomparable, which is the only thing the second machine is for.
+Sample counts were chosen so that each scene takes roughly ten seconds: much
+below that and scheduler noise hides the improvements worth finding, much above
+it and a full sweep stops getting run. Both machines use the file unchanged,
+since adjusting a row per machine would make the two tables incomparable.
 
 Each scene is measured twice, from two different builds:
 
@@ -82,6 +77,8 @@ A single scene, without the script:
 ./build/release/pathtracer scenes/cornell_box.json \
     --width 400 --height 400 --spp 49 --bench --bench-runs 3
 ```
+
+The flags are described in [usage.md](usage.md).
 
 ### What invalidates a comparison
 
@@ -168,51 +165,30 @@ Same workload, same source, same compiler version.
 
 ## Cross-architecture observations
 
-### Timing
+The two machines do not produce the same numbers, and this set is not designed
+to explain why. Three things matter for reading the tables above.
 
-The secondary machine is faster on every scene in the set, by 3% to 16%
-(`perlin_spheres` 0.84x, `cornell_smoke` 0.87x, `mesh_showcase` and
-`cornell_box` 0.97x). BVH construction runs the other way: 21% slower on
-`gilded_orrery`, 17% on `showcase`.
+**Timing differs in both directions.** The secondary machine renders every
+scene faster, by 3% to 16%, and builds the largest trees about 20% slower. No
+cause is attributed here: establishing one would need measurements this set
+does not take.
 
-No explanation is offered here. Attributing this to a specific
-microarchitectural difference would require measurements this set does not
-take.
+**Counters are reproducible within one architecture, not across two.** Eight of
+the twelve scenes produce byte-identical counters on both machines. The other
+four differ, by between two ray queries and 0.96% of node tests, for the reason
+already documented for the reference images: `fmadd` is baseline on AArch64, so
+Clang contracts multiply-add without being asked and intersection arithmetic
+differs in the last unit in the last place. Comparing an optimisation's
+counters against a baseline taken on the other machine is not a valid
+comparison.
 
-### The counters are not bit-identical across architectures
-
-Eight of the twelve scenes produce byte-for-byte identical counters on both
-machines. Four do not, in two distinct ways:
-
-| Scene | Difference on aarch64 |
-|---|---|
-| `mesh_showcase` | ray queries +110, node and leaf tests -0.002% |
-| `random_spheres` | ray queries +2, counters +0.00001% |
-| `showcase` | ray queries identical, node tests differ by 12 of 561M |
-| `gilded_orrery` | ray queries identical, node tests +0.96%, leaf tests +0.43% |
-
-The cause is the one already documented for the golden images: `fmadd` is
-baseline on AArch64, so Clang contracts multiply-add without being asked, and
-intersection arithmetic differs in the last unit in the last place.
-
-The practical rule: **traversal counters are reproducible within one
-architecture, not across two.** Comparing an optimisation's counters against a
-baseline taken on the other machine is not a valid comparison.
-
-### The counters cost 1-4%, and only measurably on x86_64
-
-The instrumented build against the plain one, same machine, same scene:
-
-| | Reference (x86_64) | Secondary (aarch64) |
-|---|---|---|
-| Range | +1.0% to +3.9% | -1.4% to +2.4% |
-| Median | +2.1% | +0.4% |
-
-On the secondary machine five of the twelve scenes came out *faster* with the
-counters compiled in, which is only possible if their cost is below that
-machine's noise floor. This is the concrete argument for the two-build method:
-a single instrumented run would have produced a table claiming the counters
-speed up rendering.
+**The counters cost 1-4%, and only measurably on x86_64.** The instrumented
+build against the plain one, same machine, same scene: a median of +2.1% on the
+reference machine and +0.4% on the secondary, where five of the twelve scenes
+came out *faster* with the counters compiled in — which is only possible if
+their cost sits below that machine's noise floor. That is the concrete argument
+for taking timing and counters from two separate builds. A single instrumented
+run would have produced a table claiming the counters speed up rendering.
 
 ---
 
@@ -353,29 +329,21 @@ A render located the first diverging commit exactly:
 - `3802963` (iterative distance-ordered traversal) — **diverges**
 
 The SAH commit being bit-identical is itself evidence: it rewrote the primitive
-permutation and leaf grouping wholesale. If this scene were sensitive to
-visiting order, it would have moved there. The difference image agreed — the
-brass cubes rest exactly coplanar with the floor quad, and that contact region
-showed zero difference.
+permutation and leaf grouping wholesale, so a scene sensitive to visiting order
+would have moved there.
 
-The difference was confined to the glass tetrahedron, the scene's only
-dielectric, and looked like scattered per-pixel noise rather than a displaced
-edge: paths diverged, geometry did not move. With deep recursion and total
-internal reflection, a single hit resolved differently reroutes an entire
-bounce chain, which is where the extra ray queries come from.
+The difference was confined to the scene's only dielectric and looked like
+scattered per-pixel noise rather than a displaced edge: paths diverged,
+geometry did not move. With deep recursion and total internal reflection, a
+single hit resolved differently reroutes an entire bounce chain, which accounts
+for the extra ray queries.
 
-The same commit also replaced per-node division with a per-ray reciprocal in
-the slab test, and `x * (1/y)` is not bit-identical to `x / y`. That was tested
-directly by reverting the arithmetic while keeping the new traversal: the
-divergence reproduced to eight digits, so the reciprocal was not the cause.
-What remains is the culling and ordering change inside that commit.
+The same commit also replaced per-node division with a per-ray reciprocal, and
+`x * (1/y)` is not bit-identical to `x / y`. Reverting that arithmetic while
+keeping the new traversal reproduced the divergence to eight digits, so the
+reciprocal was not the cause. What remains is the culling and ordering change.
 
 The current traversal is verified against brute-force intersection over the
-same OBJ assets, including rays cast from inside the mesh. No such verification
-exists for the earlier traversal, so the honest statement is that the two
-disagree and only the current one has been checked — not that the earlier one
-was wrong.
-
-The open item recorded at the time — that neither `mesh_showcase` nor
-`showcase` was covered by a reference image, leaving a regression in either
-invisible — has since been closed. Both are in the golden image set.
+same assets, including rays cast from inside the mesh. No such verification
+exists for the earlier one, so the honest statement is that the two disagree
+and only the current one has been checked — not that the earlier one was wrong.
