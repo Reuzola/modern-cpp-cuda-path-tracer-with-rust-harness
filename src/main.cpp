@@ -119,7 +119,7 @@ namespace {
     std::optional<pt::TraversalStats> traversal;
     if constexpr (pt::stats_enabled) traversal = pt::traversal_snapshot();
 
-    pt::BenchmarkRecord record{
+    const pt::BenchmarkRecord record{
         .scene = opts.scene.string(),
         .timestamp = pt::utc_timestamp(),
         .host = pt::detect_host(),
