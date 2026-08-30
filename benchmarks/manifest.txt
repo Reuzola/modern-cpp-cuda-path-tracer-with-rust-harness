@@ -1,0 +1,32 @@
+# Benchmark scene set.
+#
+# One row per measured scene. Unlike the golden manifest this set is not a
+# correctness fingerprint: the resolution and sample count exist to put every
+# scene in a timing range where scheduler noise does not dominate. The target
+# is roughly ten seconds per run on the reference machine.
+#
+# Everything else -- max depth, seed, background -- comes from the scene file,
+# so a record describes exactly what the renderer was asked to do.
+#
+# spp must be a perfect square: the renderer floors it to sqrt(spp)^2, and a
+# record that reported the requested value would be lying.
+#
+# These numbers are the workload, not a tuning knob. Changing a row makes every
+# earlier record for that scene incomparable, and the whole set has to be
+# remeasured. Both architectures use this file unchanged.
+#
+# Run with: scripts/run-benchmarks.sh
+
+# scene                          width  height  spp
+scenes/area_lights.json            480     270   225
+scenes/checkered_spheres.json      480     270   121
+scenes/cornell_box.json            400     400    49
+scenes/cornell_smoke.json          400     400    36
+scenes/earth.json                  480     270   484
+scenes/gilded_orrery.json          480     270    16
+scenes/mesh_showcase.json          480     270   169
+scenes/neon_cathedral.json         480     270    16
+scenes/perlin_spheres.json         480     270   144
+scenes/quads.json                  400     400   225
+scenes/random_spheres.json         480     270    81
+scenes/showcase.json               400     400    81
