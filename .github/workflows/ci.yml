@@ -16,10 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # MUST match "builtin-baseline" in vcpkg.json.
-  VCPKG_BASELINE: 6d9d7df564a1ccdaa994e4ad39ccd4a32360867b
-
 jobs:
   build-and-test:
     name: linux-clang (${{ matrix.preset }})
@@ -29,39 +25,37 @@ jobs:
     runs-on: ubuntu-24.04
 
     strategy:
-      # Dev failure must not cancel the release job; both results matter.
+      # One leg's failure must not cancel the others; all results matter.
       fail-fast: false
       matrix:
-        # dev = Debug + -Werror; release = optimizer + ThinLTO path.
-        preset: [dev, release]
+        include:
+          # Debug + -Werror. Tests only: this leg guards the compiler contract.
+          - preset: dev
+            render: false
+          # Optimizer + ThinLTO path, plus one render to prove the shipped
+          # binary reads a scene file and produces an image.
+          - preset: release
+            render: true
+          # ASan + UBSan over the same three stages; the render covers the
+          # loader -> BVH -> traversal -> writer path the unit tests split up.
+          - preset: asan-ubsan
+            render: true
+
+    env:
+      # Without it UBSan prints the diagnostic but not where it came from.
+      # Harmless on the non-sanitized legs.
+      UBSAN_OPTIONS: print_stacktrace=1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Runner's vcpkg lacks our pinned baseline; checkout it explicitly
-      # so port versions match, now and later.
-      - name: Checkout vcpkg at the pinned baseline
-        uses: actions/checkout@v7
+      # All three presets resolve the same dependency set, so they share one
+      # cache slot.
+      - name: Set up vcpkg
+        uses: ./.github/actions/setup-vcpkg
         with:
-          repository: microsoft/vcpkg
-          ref: ${{ env.VCPKG_BASELINE }}
-          path: vcpkg
-
-      - name: Bootstrap vcpkg
-        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
-      # $GITHUB_ENV persists vars across steps (each step is a new shell).
-      - name: Export VCPKG_ROOT
-        run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
-
-      # Whole dependency tree lives here; key includes manifest + baseline
-      # so changes correctly invalidate the cache.
-      - name: Cache vcpkg packages
-        uses: actions/cache@v6
-        with:
-          path: vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_BASELINE }}
+          cache-key: core
 
       # Logged so a future warning can be traced to its compiler version.
       - name: Toolchain versions
@@ -74,7 +68,7 @@ jobs:
         run: cmake --preset ${{ matrix.preset }}
 
       # catch_discover_tests runs the binary at build time, so discovery
-      # crashes fail Build, not Test.
+      # crashes - including sanitizer reports - fail Build, not Test.
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
@@ -82,14 +76,68 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
+      # Same scene and settings as the golden manifest entry, written to a
+      # scratch path: this is a smoke render, not a reference render.
+      - name: Render a scene
+        if: matrix.render
+        run: |
+          ./build/${{ matrix.preset }}/pathtracer scenes/cornell_box.json \
+            --width 200 --height 200 --spp 16 \
+            --format png --output "${RUNNER_TEMP}/cornell_box.png" \
+            --log-level warning
+
+  tidy:
+    name: clang-tidy
+
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # clang-tidy-18 and run-clang-tidy-18 are not in the runner image, and
+      # the viewer's vcpkg ports need the X11 and GL development headers.
+      - name: Install the analyser and the viewer's system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang-tidy-18 clang-tools-18 \
+            libgl1-mesa-dev libx11-dev libxcursor-dev libxi-dev \
+            libxinerama-dev libxrandr-dev
+
+      # Separate slot: this is the only job that installs the viewer feature.
+      - name: Set up vcpkg
+        uses: ./.github/actions/setup-vcpkg
+        with:
+          cache-key: viewer
+
+      - name: Toolchain versions
+        run: clang-tidy-18 --version
+
+      # Configure only. clang-tidy reads compile_commands.json and the
+      # dependency headers; nothing here needs a compiled artefact.
+      - name: Configure
+        run: cmake --preset dev-viewer
+
+      # dev-viewer, not dev: the viewer translation units are absent from the
+      # dev compilation database and would go unanalysed.
+      # -warnings-as-errors is set here rather than in .clang-tidy, so the
+      # gate lives in CI and the editor stays usable.
+      - name: Run clang-tidy
+        run: |
+          run-clang-tidy-18 \
+            -p build/dev-viewer \
+            -clang-tidy-binary clang-tidy-18 \
+            -j "$(nproc)" \
+            -quiet \
+            -warnings-as-errors='*'
+
   scene-tool:
     name: rust (scene-tool)
 
-    # Same pinned image as the C++ job, same reason.
+    # Same pinned image as the C++ jobs, same reason.
     runs-on: ubuntu-24.04
 
-    # Applies to all `run` steps; needed since the toolchain pin is
-    # read from the working directory.
     defaults:
       run:
         working-directory: tools/scene-tool
@@ -98,27 +146,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # rustup show installs the pinned channel from rust-toolchain.toml.
-      - name: Install the pinned toolchain
-        run: rustup show
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
       # Logged so a future lint can be traced to its toolchain version.
       - name: Toolchain versions
         run: |
           cargo --version
           cargo clippy --version
-
-      # Two caches: crate sources (~/.cargo) and build output (target/).
-      # restore-keys allow partial hits - stale target/ just recompiles.
-      - name: Cache cargo registry and build artifacts
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            tools/scene-tool/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('tools/scene-tool/Cargo.lock', 'tools/scene-tool/rust-toolchain.toml') }}
-          restore-keys: cargo-${{ runner.os }}-
 
       # --locked fails if Cargo.lock would change, since it's committed.
       - name: Build
@@ -137,46 +172,21 @@ jobs:
 
     runs-on: ubuntu-24.04
 
-    # Runs renderer and tool together for isolated status check.
+    # Runs renderer and tool together for an isolated status check.
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Checkout vcpkg at the pinned baseline
-        uses: actions/checkout@v7
+      - name: Set up vcpkg
+        uses: ./.github/actions/setup-vcpkg
         with:
-          repository: microsoft/vcpkg
-          ref: ${{ env.VCPKG_BASELINE }}
-          path: vcpkg
+          cache-key: core
 
-      - name: Bootstrap vcpkg
-        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
 
-      - name: Export VCPKG_ROOT
-        run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
-
-      # Key matches release leg to reuse dependency cache.
-      - name: Cache vcpkg packages
-        uses: actions/cache@v6
-        with:
-          path: vcpkg_installed
-          key: vcpkg-${{ runner.os }}-release-${{ hashFiles('vcpkg.json') }}-${{ env.VCPKG_BASELINE }}
-
-      - name: Install the pinned toolchain
-        run: rustup show
-        working-directory: tools/scene-tool
-
-      - name: Cache cargo registry and build artifacts
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            tools/scene-tool/target
-          key: cargo-release-${{ runner.os }}-${{ hashFiles('tools/scene-tool/Cargo.lock', 'tools/scene-tool/rust-toolchain.toml') }}
-          restore-keys: cargo-release-${{ runner.os }}-
-
-      # Use standard release (release-native alters math via FMA).
+      # Standard release, never release-native: FMA changes the arithmetic
+      # and the references were produced without it.
       - name: Build the renderer
         run: |
           cmake --preset release
@@ -195,11 +205,11 @@ jobs:
             tools/scene-tool/target/release/scene-tool validate "${scene}"
           done
 
-      # Render goldens to temp path without touching references.
+      # Render to a temp path without touching the references.
       - name: Render the golden scenes
         run: scripts/render-goldens.sh "${RUNNER_TEMP}/actual"
 
-      # Compare outputs; run full loop before failing.
+      # Compare outputs; run the full loop before failing.
       - name: Compare against the golden set
         run: |
           status=0

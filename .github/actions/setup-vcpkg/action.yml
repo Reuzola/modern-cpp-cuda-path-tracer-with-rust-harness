@@ -1,0 +1,43 @@
+name: Set up vcpkg
+description: Check out vcpkg at the manifest's pinned baseline, bootstrap it, and restore the installed dependency tree from cache.
+
+inputs:
+  cache-key:
+    description: Discriminator for the dependency cache. One slot per distinct feature set.
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    # The baseline lives in vcpkg.json alone. Reading it here keeps the
+    # workflow from carrying a second copy that can silently drift.
+    - name: Read the pinned baseline
+      id: manifest
+      shell: bash
+      run: echo "baseline=$(jq -r '.["builtin-baseline"]' vcpkg.json)" >> "$GITHUB_OUTPUT"
+
+    - name: Check out vcpkg at the baseline
+      uses: actions/checkout@v7
+      with:
+        repository: microsoft/vcpkg
+        ref: ${{ steps.manifest.outputs.baseline }}
+        path: vcpkg
+
+    - name: Bootstrap vcpkg
+      shell: bash
+      run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+    # $GITHUB_ENV persists into the calling job, not just this action.
+    - name: Export VCPKG_ROOT
+      shell: bash
+      run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> "$GITHUB_ENV"
+
+    # Dependency sources only; build directories are never cached.
+    # No restore-keys: a partial hit would mix port versions from two
+    # baselines into one tree.
+    - name: Cache the installed dependency tree
+      uses: actions/cache@v6
+      with:
+        path: vcpkg_installed
+        key: vcpkg-${{ runner.os }}-${{ inputs.cache-key }}-${{ hashFiles('vcpkg.json') }}

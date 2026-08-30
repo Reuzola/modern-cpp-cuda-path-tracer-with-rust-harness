@@ -1,0 +1,24 @@
+name: Set up the Rust toolchain
+description: Install the toolchain pinned by rust-toolchain.toml and restore the crate registry from cache.
+
+runs:
+  using: composite
+
+  steps:
+    # rustup resolves rust-toolchain.toml from the working directory, so this
+    # must run inside the crate rather than at the repository root.
+    - name: Install the pinned toolchain
+      shell: bash
+      working-directory: tools/scene-tool
+      run: rustup show
+
+    # Downloaded crate sources only. target/ is build output and is
+    # deliberately rebuilt from scratch on every run.
+    - name: Cache the crate registry
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: cargo-${{ runner.os }}-${{ hashFiles('tools/scene-tool/Cargo.lock') }}
+        restore-keys: cargo-${{ runner.os }}-
