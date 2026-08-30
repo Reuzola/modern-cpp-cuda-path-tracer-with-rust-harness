@@ -377,7 +377,7 @@ TEST_CASE("a single-primitive bvh is one leaf and still finds it", "[geometry][b
     const Bvh bvh(scene.objects());
 
     // The pointer tree this replaced linked a lone primitive into both children and tested
-    // it twice on every visit - docs/bvh-baseline.md records a single-sphere scene at 1.5
+    // it twice on every visit - docs/benchmark.md records a single-sphere scene at 1.5
     // leaf tests per ray. A leaf is a range now: one primitive, one node, one leaf, one test.
     REQUIRE(bvh.node_count() == 1);
     REQUIRE(bvh.leaf_count() == 1);
