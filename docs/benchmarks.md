@@ -63,6 +63,9 @@ Each object is self-describing — machine, build configuration, scene settings,
 timings, BVH statistics — so runs taken months apart can be concatenated and
 still be told apart.
 
+Where that time goes inside the renderer is a separate measurement, in
+[profiling.md](profiling.md).
+
 ### Reproduce
 
 ```bash

@@ -138,6 +138,7 @@ tools/scene-tool/target/release/scene-tool validate scenes/cornell_box.json
 | [testing.md](docs/testing.md) | Test suites and what each build configuration checks |
 | [golden-images.md](docs/golden-images.md) | The reference image set and its thresholds |
 | [benchmarks.md](docs/benchmarks.md) | Performance baseline, method, and what invalidates a comparison |
+| [profiling.md](docs/profiling.md) | Where time goes, how to measure it, and the recorded distribution |
 | [style-guide.md](docs/style-guide.md) | Naming and declaration conventions |
 | [CONTRIBUTING.md](.github/CONTRIBUTING.md) | Branching and commit conventions |
 

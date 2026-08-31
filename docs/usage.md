@@ -145,7 +145,7 @@ Both subcommands use the same exit codes, and so do the scripts built on them:
 
 ## Scripts
 
-All four resolve the repository root from their own location, so they can be
+All five resolve the repository root from their own location, so they can be
 run from anywhere. All accept `PATHTRACER` to point at a renderer outside the
 default build directory.
 
@@ -155,6 +155,7 @@ default build directory.
 | `scripts/render-goldens.sh [dir]` | Regenerates the reference set. Writes over `tests/golden/` unless given a scratch directory. |
 | `scripts/check-goldens.sh [--threshold V] [--no-build]` | Builds, renders into a scratch directory and compares every reference. Keeps the renders and difference images behind only when something failed. |
 | `scripts/run-benchmarks.sh [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, appending NDJSON to `out/benchmarks.ndjson`. `BENCH_RUNS` overrides the repeat count. |
+| `scripts/profile.sh [--out dir] [scene ...]` | Records a sampling profile per benchmark scene and renders a flame graph. Output goes to `out/profiles/`. Needs `perf` and `inferno`; see [profiling.md](profiling.md). |
 
 The reference set and the reasoning behind it are in
 [golden-images.md](golden-images.md).
