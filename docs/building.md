@@ -49,11 +49,11 @@ at the repository root rather than duplicated per build directory.
 | `dev` | Debug | Everyday work. Warnings are errors. |
 | `dev-viewer` | Debug | `dev` plus the interactive viewer. |
 | `asan-ubsan` | Debug + `-O1` | AddressSanitizer and UndefinedBehaviorSanitizer. |
-| `relwithdebinfo` | RelWithDebInfo | Profiling; optimized, with frame pointers kept. |
 | `release` | Release | Optimized and portable. **Reference images and benchmark timings are only valid from this one.** |
 | `release-native` | Release | `release` plus `-march=native`. Faster on this machine, and changes floating-point results. |
 | `release-viewer` | Release | `release` plus the viewer. |
 | `release-stats` | Release | `release` plus BVH traversal counters. For measurement only. |
+| `release-profiling` | Release | `release` plus debug info and frame pointers. For profiling only. |
 
 `ctest` presets exist for `dev`, `dev-viewer`, `asan-ubsan` and `release`.
 
@@ -64,6 +64,9 @@ Two presets are not interchangeable with the others and it matters:
   to generate or check reference images.
 - **`release-stats`** compiles counters into the traversal hot loop, which
   costs a few percent. It measures tree shape, never time.
+- **`release-profiling`** carries debug info and keeps frame pointers, so a
+  profile describes the same code generation `release` is timed with. It is not
+  a timing build: the frame pointer costs a register.
 
 ## Options
 

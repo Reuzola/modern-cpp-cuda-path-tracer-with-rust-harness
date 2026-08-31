@@ -41,15 +41,6 @@
       }
     },
     {
-      "name": "relwithdebinfo",
-      "displayName": "Profiling (optimized + debug info)",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "CMAKE_CXX_FLAGS": "-fno-omit-frame-pointer"
-      }
-    },
-    {
       "name": "release",
       "displayName": "Release (optimized, portable)",
       "inherits": "base",
@@ -81,6 +72,14 @@
       "cacheVariables": {
         "PT_ENABLE_STATS": "ON"
       }
+    },
+    {
+      "name": "release-profiling",
+      "displayName": "Release + profiling symbols (measurement only)",
+      "inherits": "release",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-g -fno-omit-frame-pointer"
+      }
     }
   ],
   "buildPresets": [
@@ -97,10 +96,6 @@
       "configurePreset": "asan-ubsan"
     },
     {
-      "name": "relwithdebinfo",
-      "configurePreset": "relwithdebinfo"
-    },
-    {
       "name": "release",
       "configurePreset": "release"
     },
@@ -115,6 +110,10 @@
     {
       "name": "release-stats",
       "configurePreset": "release-stats"
+    },
+    {
+      "name": "release-profiling",
+      "configurePreset": "release-profiling"
     }
   ],
   "testPresets": [
