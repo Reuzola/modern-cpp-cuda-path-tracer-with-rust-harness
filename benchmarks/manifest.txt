@@ -19,6 +19,7 @@
 
 # scene                          width  height  spp
 scenes/area_lights.json            480     270   225
+scenes/argent_weave.json           480     270     9
 scenes/checkered_spheres.json      480     270   121
 scenes/cornell_box.json            400     400    49
 scenes/cornell_smoke.json          400     400    36
