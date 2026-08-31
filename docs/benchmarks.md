@@ -123,6 +123,7 @@ the same record.
 | Scene | Res | spp | Render (s) | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Total | Ray queries |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `area_lights` | 480x270 | 225 | 8.18 | 1 | 7 | 4 | 3 | 0.003 | 4.1 | 0.91 | 5.0 | 46,369,309 |
+| `argent_weave` | 480x270 | 9 | 9.94 | 7 | 2,297,221 | 1,148,614 | 26 | 779.495 | 118.7 | 7.84 | 126.5 | 4,835,354 |
 | `checkered_spheres` | 480x270 | 121 | 8.75 | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.80 | 4.8 | 52,536,489 |
 | `cornell_box` | 400x400 | 49 | 9.92 | 1 | 15 | 8 | 6 | 0.004 | 13.2 | 1.38 | 14.6 | 42,910,672 |
 | `cornell_smoke` | 400x400 | 36 | 12.22 | 1 | 11 | 6 | 4 | 0.003 | 9.4 | 0.84 | 10.2 | 33,294,066 |
@@ -135,7 +136,24 @@ the same record.
 | `random_spheres` | 480x270 | 81 | 8.48 | 1 | 967 | 484 | 12 | 0.181 | 26.2 | 1.63 | 27.8 | 28,048,162 |
 | `showcase` | 400x400 | 81 | 12.36 | 3 | 2,811 | 1,407 | 13 | 0.501 | 17.6 | 1.28 | 18.9 | 31,812,306 |
 
-Two entries in the table are worth reading before drawing conclusions from it.
+Three entries in the table are worth reading before drawing conclusions from it.
+
+`argent_weave` is the traversal workload the rest of the set does not
+provide. One tree of 2.3M nodes over a 1.1M triangle mesh, 126.5 hit tests
+per ray query against 58.7 for the next heaviest scene, and the fewest ray
+queries in the set. Ninety-four percent of those tests are box tests: the
+geometry is interlaced tube strands whose bounds overlap heavily, which is
+the case a hierarchy of axis-aligned boxes handles worst. Its build time is
+also the only one large enough to move between runs — 649 to 934 ms across
+four measurements — so the figure in the table is one sample, not a
+converged one.
+
+Its numbers are the most fragile in the set, and for a reason that is not
+visible in the scene file. Coverage of the frame sets the ratio, because a
+ray that escapes into the background costs about two tests; the same
+geometry measures 106 tests per query from a camera sixteen units further
+back. The camera there is a measured setting rather than only a
+composition, and re-framing the shot is a change of workload.
 
 `gilded_orrery` is the only scene where BVH construction is visible at all:
 37 ms, four orders of magnitude above every other scene, across fifteen trees
@@ -166,6 +184,9 @@ Same workload, same source, same compiler version.
 | `random_spheres` | 480x270 | 81 | 7.96 | 1 | 967 | 484 | 12 | 0.215 | 26.2 | 1.63 | 27.8 | 28,048,164 |
 | `showcase` | 400x400 | 81 | 11.91 | 3 | 2,811 | 1,407 | 13 | 0.587 | 17.6 | 1.28 | 18.9 | 31,812,306 |
 
+`argent_weave` is absent from this table. Its figures there will be taken when
+the whole set is next remeasured. Nothing below rests on it.
+
 ## Cross-architecture observations
 
 The two machines do not produce the same numbers, and this set is not designed
@@ -177,13 +198,13 @@ cause is attributed here: establishing one would need measurements this set
 does not take.
 
 **Counters are reproducible within one architecture, not across two.** Eight of
-the twelve scenes produce byte-identical counters on both machines. The other
-four differ, by between two ray queries and 0.96% of node tests, for the reason
-already documented for the reference images: `fmadd` is baseline on AArch64, so
-Clang contracts multiply-add without being asked and intersection arithmetic
-differs in the last unit in the last place. Comparing an optimisation's
-counters against a baseline taken on the other machine is not a valid
-comparison.
+the twelve scenes measured on both machines produce byte-identical counters.
+The other four differ, by between two ray queries and 0.96% of node tests, for
+the reason already documented for the reference images: `fmadd` is baseline on
+AArch64, so Clang contracts multiply-add without being asked and intersection
+arithmetic differs in the last unit in the last place. Comparing an
+optimisation's counters against a baseline taken on the other machine is not a
+valid comparison.
 
 **The counters cost 1-4%, and only measurably on x86_64.** The instrumented
 build against the plain one, same machine, same scene: a median of +2.1% on the

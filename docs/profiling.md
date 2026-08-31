@@ -173,10 +173,18 @@ Taken 2026-08-31 on the reference machine described in
 single threaded, one render per scene at manifest settings, roughly ten thousand
 samples each.
 
+`argent_weave` was added on 2026-09-01, same machine and same method. The
+profile covers the whole process, so scene loading and tree construction sit
+inside it. For every other scene that is noise; for this one it is not —
+`BvhBuilder::build_recursive` is 3.5% of its profile and the OBJ parser
+another 1.5%, against a timed record that keeps construction outside the
+measurement entirely.
+
 Heaviest three entries per scene, by self time:
 
 | Scene | | | |
 |---|---|---|---|
+| `argent_weave` | `Bvh::hit` 73.8% | `MeshTriangle::hit` 6.8% | `intersect_triangle` 6.2% |
 | `random_spheres` | `Bvh::hit` 65.4% | `Sphere::intersect` 9.8% | `acos` 3.4% |
 | `neon_cathedral` | `Bvh::hit` 64.1% | `Quad::intersect` 13.2% | `Sphere::intersect` 3.2% |
 | `mesh_showcase` | `Bvh::hit` 59.7% | `intersect_triangle` 8.7% | `MeshTriangle::hit` 4.3% |
@@ -190,12 +198,13 @@ Heaviest three entries per scene, by self time:
 | `cornell_smoke` | `Quad::intersect` 42.9% | `Bvh::hit` 23.0% | `HittableList::hit` 6.1% |
 | `perlin_spheres` | `Perlin::noise` 24.8% | `Bvh::hit` 20.8% | `Sphere::intersect` 10.4% |
 
-![gilded_orrery](profiles/gilded_orrery.svg)
+![argent_weave](profiles/argent_weave.svg)
 
-Five flame graphs are kept in `profiles/`, one per regime the set contains:
-`gilded_orrery` (traversal, nested trees), `cornell_smoke` (volumetric),
-`perlin_spheres` (texture evaluation), `showcase` (mixed), and a reversed view
-of `gilded_orrery`.
+Six flame graphs are kept in `profiles/`, one per regime the set contains:
+`argent_weave` (dense traversal, a single deep tree), `gilded_orrery`
+(traversal, nested trees), `cornell_smoke` (volumetric), `perlin_spheres`
+(texture evaluation), `showcase` (mixed), and a reversed view of
+`gilded_orrery`.
 
 ### The slab test is the hottest code in the engine
 
@@ -215,11 +224,45 @@ of what `Bvh::hit` is credited with. Its neighbour `aabb.hpp:72`, which narrows
 threshold at all. The asymmetry is unexplained and worth a look before that loop
 is rewritten.
 
+Source lines inside `Bvh::hit` for `argent_weave`:
+
+| Line | | Share |
+|---|---|---|
+| `aabb.hpp:62` | `t_near` from the reciprocal | 20.5% |
+| `aabb.hpp:73` | narrow `ray_t.max` | 17.1% |
+| `aabb.hpp:71` | swap on the sign of the reciprocal | 8.0% |
+| `aabb.hpp:75` | empty-interval rejection | 4.7% | 
+| `aabb.hpp` | unattributed | 1.1% |
+
+The slab test takes 51.4% of this scene, and the two heaviest lines have
+swapped places against the scene above. Line attribution under `-O3` is
+approximate enough that the swap is not worth explaining, but the total is
+not: half of one render is four lines of one header.
+
+`aabb.hpp:72` is again below the 0.5% threshold, on a different scene with a
+different tree and a different ray distribution. Whatever hides it is a
+property of the code rather than of one workload.
+
 ### Nested traversal is a quarter of the largest scene
 
 `gilded_orrery` builds fifteen trees, and `Bvh::hit` calling itself accounts for
 23.9% of the run: descending into a mesh leaf starts a fresh traversal of a
 separate tree, with its own root test and its own stack.
+
+### Two indirections show up on their own lines
+
+Two lines outside the slab test are worth naming, both in `argent_weave`,
+because both are dispatch rather than arithmetic.
+
+`bvh.cpp:362` carries 5.1%. It is the `prim->hit()` call inside `hit_leaf`:
+a virtual call through a `const Hittable*`, issued once per primitive the
+traversal reaches. The leaves of this scene hold roughly one primitive each,
+so that is one indirect call per leaf visited.
+
+`mesh.hpp:82` carries 4.0%, one line of `Mesh::triangle`, which reads a
+vertex position through the index buffer. A triangle is a `(Mesh*, index)`
+handle, so fetching its three corners is two dependent loads per corner into
+two separate arrays.
 
 ### The volumetric scene barely touches its tree
 
@@ -243,11 +286,18 @@ more than traversal in both. `Renderer::render` carries 3-10% of self time
 across the set, which is the inlined per-sample setup: constructing a `Sampler`,
 generating the ray, and accumulating the result.
 
-### The scene set is thin on traversal
+### One scene now carries the traversal case
 
-Three scenes put `Bvh::hit` above half the run; in most of the rest the tree is
-too small to matter. Conclusions about traversal in this document rest almost
-entirely on `random_spheres`, `neon_cathedral` and `gilded_orrery`.
+`argent_weave` was authored for this. It puts `Bvh::hit` at 73.8% and the
+slab test alone above half the run, on a single tree of 2.3M nodes — see
+[benchmarks.md](benchmarks.md) for its counters.
+
+The rest of the set has not changed shape. Three of the other twelve scenes
+put `Bvh::hit` above half the run; in most of the remainder the tree is too
+small to matter. What is new is that a traversal result no longer has to
+rest on `random_spheres`, `neon_cathedral` and `gilded_orrery`, whose trees
+are two to four orders of magnitude smaller than the one an optimisation
+will be aimed at.
 
 ## What invalidates a profile
 
@@ -260,3 +310,6 @@ entirely on `random_spheres`, `neon_cathedral` and `gilded_orrery`.
 - A different machine. Only the reference machine is profiled.
 - A busy machine. A sampling profile is a distribution, so interference shifts
   it rather than adding an obvious outlier the way a timing does.
+- A re-framed camera on argent_weave. Its cost per ray query depends on
+  how much of the frame the geometry covers, which is stated in
+  [benchmarks.md](benchmarks.md).

@@ -85,6 +85,11 @@ the only evidence that anything changed.
 
 Each scene earns its place by being the one where some feature dominates the
 image, so a failure points at a short list of suspects.
+One of them is also the only expensive reference in the set: `argent_weave`
+renders in seconds rather than fractions of one, because the thing it
+fingerprints is a tree too large to build quickly. The set is still cheap
+enough to regenerate in one sitting, and a scene that is measured but not
+compared would be the worse trade.
 Two of them are different in kind. `gilded_orrery` and `showcase` combine
 features rather than isolate one, because some defects only surface in the
 interaction — a mesh reused under a transform inside a deep BVH, or two media
@@ -93,6 +98,7 @@ overlapping along a single ray — and no single-feature scene can produce that.
 | Scene | Covers |
 |---|---|
 | `area_lights` | emissive materials against a black background, without importance sampling |
+| `argent_weave` | traversal at scale: a 1.1M triangle mesh in one tree 26 deep, interpolated vertex normals across all of it, and a second mesh instanced under many transforms |
 | `checkered_spheres` | procedural checker texture, sky background |
 | `cornell_box` | dielectrics, boxes, instancing, importance sampling and mixture densities |
 | `cornell_smoke` | constant-density volumes and the isotropic phase function |
