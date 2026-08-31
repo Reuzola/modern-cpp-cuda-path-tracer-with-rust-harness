@@ -7,6 +7,7 @@
 *.exr  binary
 *.hdr  binary
 *.ppm  binary
+*.obj  binary
 
 # Third-party: keep out of language stats and diffs
 external/** linguist-vendored
