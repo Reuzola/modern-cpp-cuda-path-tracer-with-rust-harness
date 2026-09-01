@@ -16,6 +16,10 @@ pub(crate) const MINIMAL_SCENE: &str = r#"{
     ]
 }"#;
 
+// One measured scene, as the two benchmark passes write it: timing from release, counters from release-stats
+pub(crate) const TIMING_RECORD: &str = r#"{"build":{"build_type":"Release","compiler":"18.1.3 (1ubuntu1)","revision":"e28bfde4412b","scalar":"double","stats_enabled":false},"bvh":{"build_ms":0.003538,"leaves":8,"max_depth":6,"nodes":15,"trees":1},"host":{"arch":"x86_64","cpu_model":"11th Gen Intel(R) Core(TM) i7-11700K @ 3.60GHz","logical_cores":16},"memory":{"peak_rss_bytes":9961472},"render":{"height":300,"max_depth":50,"samples_per_pixel":16,"seed":0,"width":300},"runtime":{"threads":1},"scene":"./scenes/cornell_box.json","schema_version":2,"timestamp":"2026-09-01T12:30:24Z","timing":{"primary_rays":1440000,"primary_rays_per_second":847353.7210667474,"render_seconds":[1.710946273,1.705827358,1.699408363],"render_seconds_min":1.699408363,"runs":3},"traversal":null}"#;
+pub(crate) const STATS_RECORD: &str = r#"{"build":{"build_type":"Release","compiler":"18.1.3 (1ubuntu1)","revision":"e28bfde4412b","scalar":"double","stats_enabled":true},"bvh":{"build_ms":0.003826,"leaves":8,"max_depth":6,"nodes":15,"trees":1},"host":{"arch":"x86_64","cpu_model":"11th Gen Intel(R) Core(TM) i7-11700K @ 3.60GHz","logical_cores":16},"memory":{"peak_rss_bytes":9961472},"render":{"height":300,"max_depth":50,"samples_per_pixel":16,"seed":0,"width":300},"runtime":{"threads":1},"scene":"./scenes/cornell_box.json","schema_version":2,"timestamp":"2026-09-01T12:31:15Z","timing":{"primary_rays":1440000,"primary_rays_per_second":841581.9340448895,"render_seconds":[1.767066673,1.713064407,1.711063346],"render_seconds_min":1.711063346,"runs":3},"traversal":{"leaf_tests":10912061,"node_tests":104549521,"ray_queries":7890607}}"#;
+
 pub(crate) fn parse_scene(json: &str) -> Scene {
     serde_json::from_str(json).expect("the document must deserialize")
 }
@@ -23,7 +27,10 @@ pub(crate) fn parse_scene(json: &str) -> Scene {
 /// The minimal scene under a sky. Most rules are unrelated to lighting, and the
 /// black-scene lint would otherwise fire in every fixture derived from it.
 pub(crate) fn lit_scene() -> String {
-    MINIMAL_SCENE.replace(r#""background": [0, 0, 0]"#, r#""background": [0.7, 0.8, 1.0]"#)
+    MINIMAL_SCENE.replace(
+        r#""background": [0, 0, 0]"#,
+        r#""background": [0.7, 0.8, 1.0]"#,
+    )
 }
 
 /// Absolute path to the repository's `scenes/` directory. Derived from the
@@ -42,6 +49,10 @@ pub(crate) fn shipped_scene_files() -> Vec<std::path::PathBuf> {
 
     paths.sort();
 
-    assert!(paths.len() >= 9, "expected the full scene set, found {}", paths.len());
+    assert!(
+        paths.len() >= 9,
+        "expected the full scene set, found {}",
+        paths.len()
+    );
     paths
 }

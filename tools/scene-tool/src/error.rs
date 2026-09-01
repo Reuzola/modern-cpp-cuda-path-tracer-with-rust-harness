@@ -34,9 +34,7 @@ pub enum ToolError {
     },
 
     #[error("unsupported image format '{path}': expected .png or .exr")]
-    UnknownImageFormat {
-        path: PathBuf
-    },
+    UnknownImageFormat { path: PathBuf },
 
     #[error("cannot decode PNG '{path}': {source}")]
     Png {
@@ -55,10 +53,7 @@ pub enum ToolError {
     },
 
     #[error("unsupported PNG in '{path}': {details}")]
-    UnsupportedPng {
-        path: PathBuf,
-        details: String,
-    },
+    UnsupportedPng { path: PathBuf, details: String },
 
     #[error("cannot write PNG '{path}': {source}")]
     PngWrite {
@@ -68,7 +63,9 @@ pub enum ToolError {
         source: png::EncodingError,
     },
 
-    #[error("image dimensions differ: reference '{reference}' is {reference_width}x{reference_height}, actual '{actual}' is {actual_width}x{actual_height}")]
+    #[error(
+        "image dimensions differ: reference '{reference}' is {reference_width}x{reference_height}, actual '{actual}' is {actual_width}x{actual_height}"
+    )]
     DimensionMismatch {
         reference: PathBuf,
         reference_width: u32,
@@ -83,4 +80,30 @@ pub enum ToolError {
 
     #[error("'{path}' contains a non-finite value (NaN or infinity) at channel index {index}")]
     NonFiniteValue { path: PathBuf, index: usize },
+
+    #[error("cannot parse benchmark record at '{path}' line {line}: {source}")]
+    Ndjson {
+        path: PathBuf,
+        line: usize,
+
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error(
+        "'{path}' line {line} has schema_version {found}, expected {expected}; the record must be remeasured"
+    )]
+    UnsupportedSchemaVersion {
+        path: PathBuf,
+        line: usize,
+        found: u32,
+        expected: u32,
+    },
+
+    #[error("inconsistent benchmark record at '{path}' line {line}: {details}")]
+    InconsistentRecord {
+        path: PathBuf,
+        line: usize,
+        details: String,
+    },
 }
