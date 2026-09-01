@@ -25,6 +25,10 @@ struct rusage;
 #define PT_BUILD_TYPE "unknown"
 #endif
 
+#ifndef PT_GIT_REVISION
+#define PT_GIT_REVISION "unknown"
+#endif
+
 namespace pt {
 
 HostInfo detect_host() {
@@ -73,7 +77,9 @@ BuildInfo detect_build() {
     // The type is the source of truth, not the macro that selected it.
     const std::string scalar = std::is_same_v<Float, double> ? "double" : "float";
 
-    return BuildInfo{.compiler = compiler, .build_type = build_type, .scalar = scalar, .stats_enabled = stats_enabled};
+    const std::string revision = PT_GIT_REVISION;
+
+    return BuildInfo{.compiler = compiler, .build_type = build_type, .scalar = scalar, .stats_enabled = stats_enabled, .revision = revision};
 }
 
 std::optional<std::uint64_t> peak_rss_bytes() noexcept {
@@ -111,6 +117,7 @@ void write_record(const BenchmarkRecord& record, std::ostream& out) {
         {"build_type", record.build.build_type},
         {"scalar", record.build.scalar},
         {"stats_enabled", record.build.stats_enabled},
+        {"revision", record.build.revision},
     };
 
     j["render"] = {

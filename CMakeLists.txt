@@ -239,6 +239,45 @@ target_include_directories(pathtracer PRIVATE
 # its include dir is SYSTEM, so -Wconversion/-Werror skip it.
 target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11 nlohmann_json::nlohmann_json)
 
+# Source revision, written into every benchmark record so two runs taken months
+# apart can be told apart. Captured at configure time; the CONFIGURE_DEPENDS
+# below is what keeps it from going stale.
+set(PT_GIT_REVISION "unknown")
+
+# IS_DIRECTORY, not EXISTS: in a worktree or a submodule, .git is a file
+# pointing elsewhere and the paths watched below would not exist.
+if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  find_package(Git QUIET)
+
+  if(Git_FOUND)
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+      OUTPUT_VARIABLE pt_git_revision
+      RESULT_VARIABLE pt_git_result
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+
+    # Fails in a repository with no commits yet; "unknown" stays.
+    if(pt_git_result EQUAL 0)
+      set(PT_GIT_REVISION "${pt_git_revision}")
+    endif()
+  endif()
+
+  # Reconfigure when the checked-out commit moves. HEAD alone is not enough:
+  # committing on the same branch rewrites the ref file, not HEAD. The index is
+  # what commit, checkout, amend and rebase all touch.
+  foreach(pt_git_watch "HEAD" "index")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git/${pt_git_watch}")
+      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/.git/${pt_git_watch}")
+    endif()
+  endforeach()
+endif()
+
+message(STATUS "Source revision: ${PT_GIT_REVISION}")
+
 # Records must state which configuration produced them; a timing from a Debug
 # build next to a Release one is worse than no number at all.
 # Generator expression, not ${CMAKE_BUILD_TYPE}: correct under multi-config generators too.
@@ -247,6 +286,7 @@ target_link_libraries(pathtracer PRIVATE pt::core pt::warnings CLI11::CLI11 nloh
 target_compile_definitions(pathtracer PRIVATE
   PT_BUILD_TYPE="$<CONFIG>"
   PT_VERSION="${PROJECT_VERSION}"
+  PT_GIT_REVISION="${PT_GIT_REVISION}"
 )
 
 # pathtracer_viewer - interactive frontend, opt-in.

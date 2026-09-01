@@ -77,6 +77,11 @@
         "stats_enabled": {
           "type": "boolean",
           "description": "True when traversal counters were compiled in. Such a build carries them in the hot loop and must not be timed."
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short commit hash, captured when CMake last configured. 'unknown' outside a git checkout. It does not know about uncommitted edits."
         }
       }
     },

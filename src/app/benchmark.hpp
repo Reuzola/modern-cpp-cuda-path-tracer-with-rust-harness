@@ -23,6 +23,7 @@ struct BuildInfo {
     std::string build_type;
     std::string scalar; // "double" or "float"
     bool stats_enabled{};
+    std::string revision; // Short commit hash from CMake configure time. Blind to uncommitted edits.
 };
 
 // One primary ray per sample. spp must be the count the renderer used, not the one requested.
