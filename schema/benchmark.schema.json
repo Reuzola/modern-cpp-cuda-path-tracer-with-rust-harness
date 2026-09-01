@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/main/schema/benchmark.schema.json",
+  "title": "Path tracer benchmark record",
+  "description": "One benchmark measurement, as written by 'pathtracer --bench'. Records are stored as NDJSON: this schema validates a single line, not the file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scene",
+    "timestamp",
+    "host",
+    "build",
+    "runtime",
+    "render",
+    "timing",
+    "memory",
+    "bvh",
+    "traversal"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2,
+      "description": "Bumped on any change to the record's shape or to the meaning of a field, additive or not. A consumer requires an exact match rather than tolerating unknown or missing fields."
+    },
+    "scene": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Scene file path as given on the command line, relative to the repository root."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "UTC, second resolution. Captured when the measurement is taken, not when the record is written."
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_model", "arch", "logical_cores"],
+      "properties": {
+        "cpu_model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "From /proc/cpuinfo, or 'unknown' where the kernel does not report one."
+        },
+        "arch": {
+          "enum": ["x86_64", "aarch64", "unknown"],
+          "description": "Compile-time target architecture. Counters are only comparable within one value."
+        },
+        "logical_cores": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cores the machine has, not threads the render used. 0 means the count was unavailable."
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compiler", "build_type", "scalar", "stats_enabled"],
+      "properties": {
+        "compiler": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Compiler identification string, including version."
+        },
+        "build_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CMake configuration name. 'Release' is the only one a timing may be quoted from."
+        },
+        "scalar": {
+          "enum": ["double", "float"],
+          "description": "The engine's Float type. A different scalar type changes both speed and results."
+        },
+        "stats_enabled": {
+          "type": "boolean",
+          "description": "True when traversal counters were compiled in. Such a build carries them in the hot loop and must not be timed."
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threads"],
+      "properties": {
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Worker threads the render actually used."
+        }
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "samples_per_pixel", "max_depth", "seed"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "samples_per_pixel": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The count the renderer used, always a perfect square, never the requested value."
+        },
+        "max_depth": { "type": "integer", "minimum": 1 },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Base sampling seed. Unsigned 64-bit; values above 2^53 lose precision in a consumer that parses JSON numbers as doubles."
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runs", "render_seconds", "render_seconds_min", "primary_rays", "primary_rays_per_second"],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Length of render_seconds. The schema cannot express that equality; a consumer should check it."
+        },
+        "render_seconds": {
+          "type": "array",
+          "items": { "type": "number", "exclusiveMinimum": 0 },
+          "description": "Every timed run, in order. Kept so the spread stays visible behind the reported figure."
+        },
+        "render_seconds_min": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "description": "The reported figure: a slow run means interference, never a faster renderer. Null when nothing was timed."
+        },
+        "primary_rays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "width * height * samples_per_pixel. One primary ray per sample; bounces are not counted here."
+        },
+        "primary_rays_per_second": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "description": "Derived from render_seconds_min, so the two describe the same run. Null when nothing was timed."
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["peak_rss_bytes"],
+      "properties": {
+        "peak_rss_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Process-wide high-water mark. Includes scene loading and BVH construction, which the timed runs exclude. Null where the platform does not report it."
+        }
+      }
+    },
+    "bvh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trees", "nodes", "leaves", "max_depth", "build_ms"],
+      "properties": {
+        "trees": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "BVHs the scene built. A subtree shared by several parents is built once and counted once."
+        },
+        "nodes": { "type": "integer", "minimum": 0, "description": "Entries in the flat node arrays: interior nodes plus leaves." },
+        "leaves": { "type": "integer", "minimum": 0, "description": "Leaf nodes, each holding a contiguous range of primitives." },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longest root-to-node path over all trees. A single-node tree has depth 0."
+        },
+        "build_ms": { "type": "number", "minimum": 0, "description": "Total construction time over all trees." }
+      }
+    },
+    "traversal": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["node_tests", "leaf_tests", "ray_queries"],
+      "description": "Null unless build.stats_enabled is true. Counters and a timing from this record's own build are never both trustworthy.",
+      "properties": {
+        "node_tests": { "type": "integer", "minimum": 0, "description": "Bounding box tests. Both children are tested before descending, leaves included." },
+        "leaf_tests": { "type": "integer", "minimum": 0, "description": "hit() calls the BVH issues on the objects it holds. Tests inside an aggregate object are not counted." },
+        "ray_queries": { "type": "integer", "minimum": 0, "description": "Top-level hit() calls: primary rays plus every bounce." }
+      }
+    }
+  }
+}
