@@ -59,9 +59,11 @@ object to standard output:
 the minimum, since a slow run means interference and never a faster renderer.
 `--output` and `--format` are rejected alongside `--bench` rather than ignored.
 
-Records are self-describing — machine, build, scene settings, timings, BVH
-statistics — so runs taken months apart can be concatenated. The method and the
-recorded baseline are in [benchmarks.md](benchmarks.md).
+Records are self-describing — machine, source revision, build, thread count,
+scene settings, timings, throughput, peak memory, BVH statistics — so runs
+taken months apart can be concatenated. The fields are specified in
+`schema/benchmark.schema.json`; the method and the recorded baseline are in
+[benchmarks.md](benchmarks.md).
 
 ## The viewer
 

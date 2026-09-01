@@ -59,9 +59,34 @@ every scene but two: `earth` at 2.3% and `gilded_orrery` at 3.1%, both on the
 reference machine.
 
 Records are written as one JSON object per line to `out/benchmarks.ndjson`.
-Each object is self-describing — machine, build configuration, scene settings,
-timings, BVH statistics — so runs taken months apart can be concatenated and
-still be told apart.
+Each object is self-describing — machine, source revision, build configuration,
+thread count, scene settings, timings, throughput, peak memory, BVH statistics
+— so runs taken months apart can be concatenated and still be told apart. The
+record's fields are specified in
+[`schema/benchmark.schema.json`](../schema/benchmark.schema.json), which
+validates a single line rather than the file.
+
+### Throughput and memory
+
+Throughput is reported as primary rays per second: one ray per sample, so
+`width × height × samples_per_pixel` divided by the fastest run. It counts no
+bounces. A ray query in the traversal counters is a different quantity —
+primary rays plus every bounce — and the two are not interchangeable. They are
+also never both trustworthy in one record: the counters come from the
+instrumented build, whose timing does not count.
+
+The sample count in that product is the one the renderer used, floored to a
+perfect square, not the one the manifest asked for. Every row of the manifest
+is already square, so the two agree today.
+
+Peak memory is the process-wide high-water mark, and it is not measured over
+the same work as the timing. The timed runs deliberately exclude scene loading
+and BVH construction, which the renderer performs once before any of them; the
+memory figure cannot exclude them, because a high-water mark only rises. For
+`argent_weave` — a 79 MB OBJ and a 2.3M node tree — that difference is most of
+the number. Read it as the footprint the process demanded, not as what the
+render loop allocates. Separating the two needs allocation instrumentation this
+set does not have.
 
 Where that time goes inside the renderer is a separate measurement, in
 [profiling.md](profiling.md).
@@ -94,6 +119,11 @@ remeasured rather than reused:
 - A different build preset. `release-native` enables FMA contraction;
   `release-stats` carries the counters; a Debug figure is worse than none.
 - A different scalar type. `Float = float` changes both speed and results.
+- A different thread count. A figure taken on more threads is not a faster
+  renderer.
+- A different source revision, or a build taken with uncommitted changes. The
+  record names the commit but cannot see a dirty working tree, so this one is
+  discipline rather than a check.
 - A different machine, or the same machine in a different thermal or power
   state.
 
@@ -102,6 +132,15 @@ the same record.
 
 ### Definitions
 
+- **Revision** — the commit the binary was built from, captured when CMake last
+  configured. It says nothing about uncommitted edits.
+- **Threads** — worker threads the render used, which is not the machine's core
+  count. One today.
+- **Primary rays** — one per sample: `width × height × samples_per_pixel`.
+- **Primary rays/s** — primary rays divided by the reported render time,
+  derived from the same run so the two cannot disagree.
+- **Peak RSS** — the process's high-water mark, scene loading and tree
+  construction included.
 - **Trees** — the number of BVHs the scene builds. Meshes and groups get their
   own; a subtree shared by several parents is built and counted once, but
   traversed on every visit.
@@ -119,6 +158,10 @@ the same record.
 - **Depth** — the longest root-to-node path; a single-node tree has depth 0.
 
 ## Baseline: x86_64
+
+These tables predate the throughput, memory and revision fields; they were
+measured from records that did not carry them. Those columns appear when the
+set is next remeasured.
 
 | Scene | Res | spp | Render (s) | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Total | Ray queries |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
