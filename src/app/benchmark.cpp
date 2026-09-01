@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <format>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -15,6 +16,10 @@
 #include <string_view>
 #include <thread>
 #include <type_traits>
+
+// Forward-declare rusage so clangd doesn't demand internal glibc headers.
+#include <sys/resource.h>
+struct rusage;
 
 #ifndef PT_BUILD_TYPE
 #define PT_BUILD_TYPE "unknown"
@@ -71,6 +76,19 @@ BuildInfo detect_build() {
     return BuildInfo{.compiler = compiler, .build_type = build_type, .scalar = scalar, .stats_enabled = stats_enabled};
 }
 
+std::optional<std::uint64_t> peak_rss_bytes() noexcept {
+#if defined(__linux__)
+    rusage usage{};
+    if (getrusage(RUSAGE_SELF, &usage) != 0) return std::nullopt;
+    if (usage.ru_maxrss < 0) return std::nullopt;
+
+    // Linux reports ru_maxrss in kibibytes; the record stores bytes.
+    return static_cast<std::uint64_t>(usage.ru_maxrss) * 1024;
+#else
+    return std::nullopt;
+#endif
+}
+
 std::string utc_timestamp() {
     return std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
 }
@@ -78,7 +96,7 @@ std::string utc_timestamp() {
 void write_record(const BenchmarkRecord& record, std::ostream& out) {
     nlohmann::json j;
 
-    j["schema_version"] = 1;
+    j["schema_version"] = benchmark_schema_version;
     j["scene"] = record.scene;
     j["timestamp"] = record.timestamp;
 
@@ -103,15 +121,26 @@ void write_record(const BenchmarkRecord& record, std::ostream& out) {
         {"seed", record.seed},
     };
 
+    j["runtime"] = {{"threads", record.threads}};
+
     // min() has no answer for an empty range; null says "not measured" instead.
     const std::optional<double> fastest =
         record.render_seconds.empty() ? std::nullopt : std::optional(std::ranges::min(record.render_seconds));
+
+    const std::uint64_t primary_rays = primary_ray_count(record.image_width, record.image_height, record.samples_per_pixel);
+
+    // Derived from the same run as render_seconds_min, so the two cannot disagree.
+    const std::optional<double> rate = fastest ? std::optional(static_cast<double>(primary_rays) / *fastest) : std::nullopt;
 
     j["timing"] = {
         {"runs", record.render_seconds.size()},
         {"render_seconds", record.render_seconds},
         {"render_seconds_min", fastest},
+        {"primary_rays", primary_rays},
+        {"primary_rays_per_second", rate},
     };
+
+    j["memory"] = {{"peak_rss_bytes", record.peak_rss_bytes}};
 
     j["bvh"] = {
         {"trees", record.bvh.bvh_count},

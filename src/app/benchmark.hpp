@@ -2,12 +2,15 @@
 #include "pt/geometry/bvh.hpp"
 #include "pt/util/stats.hpp"
 #include <cstdint>
-#include <optional>
 #include <iosfwd>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace pt {
+
+// Bumped on any change to the record's shape or to the meaning of a field.
+inline constexpr int benchmark_schema_version = 2;
 
 struct HostInfo {
     std::string cpu_model;
@@ -22,6 +25,11 @@ struct BuildInfo {
     bool stats_enabled{};
 };
 
+// One primary ray per sample. spp must be the count the renderer used, not the one requested.
+[[nodiscard]] constexpr std::uint64_t primary_ray_count(int width, int height, int samples_per_pixel) noexcept {
+    return static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height) * static_cast<std::uint64_t>(samples_per_pixel);
+}
+
 struct BenchmarkRecord {
     std::string scene;
     std::string timestamp;
@@ -32,7 +40,9 @@ struct BenchmarkRecord {
     int samples_per_pixel{};
     int max_depth{};
     std::uint64_t seed{};
+    int threads{1};
     std::vector<double> render_seconds;
+    std::optional<std::uint64_t> peak_rss_bytes;
     BvhStats bvh{};
     std::optional<TraversalStats> traversal;
 };
@@ -40,6 +50,10 @@ struct BenchmarkRecord {
 [[nodiscard]] HostInfo detect_host();
 
 [[nodiscard]] BuildInfo detect_build();
+
+// Process-wide high-water mark: includes scene load and
+// BVH build, which the timed runs exclude. Not resettable.
+[[nodiscard]] std::optional<std::uint64_t> peak_rss_bytes() noexcept;
 
 // Captured when the measurement is taken, not when the record is written.
 [[nodiscard]] std::string utc_timestamp();

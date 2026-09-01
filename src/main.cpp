@@ -15,6 +15,7 @@
 #include "pt/util/log.hpp"
 #include "pt/util/stats.hpp"
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -119,6 +120,9 @@ namespace {
     std::optional<pt::TraversalStats> traversal;
     if constexpr (pt::stats_enabled) traversal = pt::traversal_snapshot();
 
+    // Read after the last run: the mark covers load, build and every timed pass.
+    const std::optional<std::uint64_t> peak_rss = pt::peak_rss_bytes();
+
     const pt::BenchmarkRecord record{
         .scene = opts.scene.string(),
         .timestamp = pt::utc_timestamp(),
@@ -129,7 +133,9 @@ namespace {
         .samples_per_pixel = renderer.samples_per_pixel(),
         .max_depth = scene.render.max_depth,
         .seed = scene.render.seed,
+        .threads = renderer.thread_count(),
         .render_seconds = std::move(render_seconds),
+        .peak_rss_bytes = peak_rss,
         .bvh = scene.bvh_stats(),
         .traversal = traversal,
     };

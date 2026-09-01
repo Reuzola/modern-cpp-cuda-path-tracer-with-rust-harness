@@ -29,6 +29,9 @@ public:
 
     [[nodiscard]] int samples_per_pixel() const noexcept { return sqrt_spp_ * sqrt_spp_; }
 
+    // Single threaded today; the record asks the renderer rather than assuming.
+    [[nodiscard]] int thread_count() const noexcept { return 1; }
+
     // Changes the stratification grid, so any samples already accumulated become inconsistent.
     void set_samples_per_pixel(int spp);
 
