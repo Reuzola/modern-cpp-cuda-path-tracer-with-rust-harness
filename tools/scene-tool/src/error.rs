@@ -106,4 +106,17 @@ pub enum ToolError {
         line: usize,
         details: String,
     },
+
+    #[error("'{path}' is not a single benchmark run: {details}")]
+    MalformedRun {
+        path: PathBuf,
+        details: String,
+    },
+
+    #[error("'{baseline}' and '{current}' cannot be compared:\n{details}")]
+    Incomparable {
+        baseline: PathBuf,
+        current: PathBuf,
+        details: String,
+    },
 }

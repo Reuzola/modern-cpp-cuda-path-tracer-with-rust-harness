@@ -5,6 +5,7 @@ pub mod diff;
 pub mod error;
 pub mod image;
 pub mod metrics;
+pub mod regression;
 pub mod report;
 pub mod scene;
 pub mod schema;

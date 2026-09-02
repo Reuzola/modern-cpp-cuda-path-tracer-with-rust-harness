@@ -141,6 +141,19 @@ pub fn load_records(path: &Path) -> Result<Vec<Record>, ToolError> {
             });
         }
 
+        if record.build.stats_enabled != record.traversal.is_some() {
+            let details = if record.build.stats_enabled {
+                "stats_enabled is true but traversal is null"
+            } else {
+                "stats_enabled is false but traversal is present"
+            };
+            return Err(ToolError::InconsistentRecord {
+                path: path.to_path_buf(),
+                line: line_no,
+                details: details.to_string(),
+            });
+        }
+
         records.push(record);
     }
 
