@@ -1,6 +1,7 @@
 //! Library for processing, validating, and managing scene files.
 pub mod benchmark;
 pub mod compare;
+pub mod delta;
 pub mod diff;
 pub mod error;
 pub mod image;

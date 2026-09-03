@@ -1,5 +1,9 @@
 //! Pairs two benchmark runs scene by scene and refuses the ones that cannot be compared.
-use crate::{benchmark::Record, error::ToolError};
+use crate::{
+    benchmark::{Record, load_records},
+    delta::{Comparison, scene_deltas},
+    error::ToolError,
+};
 use std::{collections::BTreeMap, path::Path};
 
 fn scene_name(record: &Record) -> Option<&str> {
@@ -222,10 +226,32 @@ pub fn pair_runs<'a>(
     Ok(pairs)
 }
 
+pub fn compare_benchmarks(
+    baseline_path: &Path,
+    current_path: &Path,
+    threshold: f64,
+) -> Result<Comparison, ToolError> {
+    let baseline_records = load_records(baseline_path)?;
+    let current_records = load_records(current_path)?;
+
+    let baseline_run = Run::from_records(&baseline_records, baseline_path)?;
+    let current_run = Run::from_records(&current_records, current_path)?;
+
+    let pairs = pair_runs(&baseline_run, &current_run, baseline_path, current_path)?;
+
+    let scenes = pairs
+        .iter()
+        .map(|pair| scene_deltas(pair, threshold))
+        .collect();
+
+    Ok(Comparison { scenes, threshold })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{STATS_RECORD, TIMING_RECORD};
+    use tempfile::TempDir;
 
     /// The scene path both fixtures carry, as the renderer wrote it.
     const CORNELL: &str = r#""scene":"./scenes/cornell_box.json""#;
@@ -245,16 +271,28 @@ mod tests {
     }
 
     fn pairs<'a>(baseline: &Run<'a>, current: &Run<'a>) -> Vec<ScenePair<'a>> {
-        pair_runs(baseline, current, Path::new("baseline.ndjson"), Path::new("current.ndjson"))
-            .expect("the runs must be comparable")
+        pair_runs(
+            baseline,
+            current,
+            Path::new("baseline.ndjson"),
+            Path::new("current.ndjson"),
+        )
+        .expect("the runs must be comparable")
     }
 
     /// The violation list from a refused comparison.
     fn refusal<'a>(baseline: &Run<'a>, current: &Run<'a>) -> String {
-        let err = pair_runs(baseline, current, Path::new("baseline.ndjson"), Path::new("current.ndjson"))
-            .expect_err("the runs must not be comparable");
+        let err = pair_runs(
+            baseline,
+            current,
+            Path::new("baseline.ndjson"),
+            Path::new("current.ndjson"),
+        )
+        .expect_err("the runs must not be comparable");
 
-        let ToolError::Incomparable { details, .. } = err else { panic!("{err}") };
+        let ToolError::Incomparable { details, .. } = err else {
+            panic!("{err}")
+        };
         details
     }
 
@@ -266,8 +304,20 @@ mod tests {
 
         assert_eq!(run.scenes.len(), 1);
         let entry = run.scenes["cornell_box"];
-        assert!(!entry.timing.expect("the timing pass is present").build.stats_enabled);
-        assert!(entry.stats.expect("the stats pass is present").build.stats_enabled);
+        assert!(
+            !entry
+                .timing
+                .expect("the timing pass is present")
+                .build
+                .stats_enabled
+        );
+        assert!(
+            entry
+                .stats
+                .expect("the stats pass is present")
+                .build
+                .stats_enabled
+        );
     }
 
     // The renderer records the path as it was invoked, so the same scene reaches
@@ -295,7 +345,9 @@ mod tests {
         let err = Run::from_records(&records, Path::new("run.ndjson"))
             .expect_err("a duplicated pass cannot form one run");
 
-        let ToolError::MalformedRun { details, .. } = err else { panic!("{err}") };
+        let ToolError::MalformedRun { details, .. } = err else {
+            panic!("{err}")
+        };
         assert!(details.contains("cornell_box"), "{details}");
         assert!(details.contains("timing"), "{details}");
     }
@@ -375,7 +427,10 @@ mod tests {
 
         let details = refusal(&baseline, &current);
 
-        assert!(details.contains("quads is missing from the current run"), "{details}");
+        assert!(
+            details.contains("quads is missing from the current run"),
+            "{details}"
+        );
     }
 
     // A changed manifest row is a changed workload, and the older number has to
@@ -383,10 +438,9 @@ mod tests {
     #[test]
     fn a_different_sample_count_is_refused_with_both_values() {
         let baseline_records = [record(TIMING_RECORD)];
-        let current_records = [record(&TIMING_RECORD.replace(
-            r#""samples_per_pixel":16"#,
-            r#""samples_per_pixel":25"#,
-        ))];
+        let current_records = [record(
+            &TIMING_RECORD.replace(r#""samples_per_pixel":16"#, r#""samples_per_pixel":25"#),
+        )];
         let baseline = run(&baseline_records);
         let current = run(&current_records);
 
@@ -401,7 +455,9 @@ mod tests {
     #[test]
     fn a_different_thread_count_is_refused() {
         let baseline_records = [record(TIMING_RECORD)];
-        let current_records = [record(&TIMING_RECORD.replace(r#""threads":1"#, r#""threads":8"#))];
+        let current_records = [record(
+            &TIMING_RECORD.replace(r#""threads":1"#, r#""threads":8"#),
+        )];
         let baseline = run(&baseline_records);
         let current = run(&current_records);
 
@@ -415,8 +471,9 @@ mod tests {
     #[test]
     fn a_different_architecture_is_refused() {
         let baseline_records = [record(TIMING_RECORD)];
-        let current_records =
-            [record(&TIMING_RECORD.replace(r#""arch":"x86_64""#, r#""arch":"aarch64""#))];
+        let current_records = [record(
+            &TIMING_RECORD.replace(r#""arch":"x86_64""#, r#""arch":"aarch64""#),
+        )];
         let baseline = run(&baseline_records);
         let current = run(&current_records);
 
@@ -430,9 +487,10 @@ mod tests {
     #[test]
     fn a_different_revision_is_not_a_violation() {
         let baseline_records = [record(TIMING_RECORD)];
-        let current_records = [record(
-            &TIMING_RECORD.replace(r#""revision":"e28bfde4412b""#, r#""revision":"0123456789ab""#),
-        )];
+        let current_records = [record(&TIMING_RECORD.replace(
+            r#""revision":"e28bfde4412b""#,
+            r#""revision":"0123456789ab""#,
+        ))];
         let baseline = run(&baseline_records);
         let current = run(&current_records);
 
@@ -458,5 +516,62 @@ mod tests {
         assert!(details.contains("threads differs"), "{details}");
         assert_eq!(details.lines().count(), 2, "{details}");
         assert!(details.lines().all(|l| l.starts_with("  ")), "{details}");
+    }
+
+    /// Writes an NDJSON file into `dir` and returns its path.
+    fn ndjson(dir: &TempDir, name: &str, lines: &[&str]) -> std::path::PathBuf {
+        let path = dir.path().join(name);
+        std::fs::write(&path, format!("{}\n", lines.join("\n")))
+            .expect("the fixture must be writable");
+        path
+    }
+
+    #[test]
+    fn two_identical_files_compare_without_a_regression() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let lines = [TIMING_RECORD, STATS_RECORD];
+        let baseline = ndjson(&dir, "baseline.ndjson", &lines);
+        let current = ndjson(&dir, "current.ndjson", &lines);
+
+        let comparison =
+            compare_benchmarks(&baseline, &current, 0.02).expect("the runs are comparable");
+
+        assert_eq!(comparison.scenes.len(), 1);
+        assert_eq!(comparison.scenes[0].scene, "cornell_box");
+        assert_eq!(comparison.threshold, 0.02);
+        assert!(!comparison.has_regression());
+    }
+
+    // The gate sits ahead of every metric: an incomparable pair produces no
+    // comparison at all, not a comparison with a warning attached.
+    #[test]
+    fn an_incomparable_pair_produces_no_comparison() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let baseline = ndjson(&dir, "baseline.ndjson", &[TIMING_RECORD]);
+        let current = ndjson(
+            &dir,
+            "current.ndjson",
+            &[&TIMING_RECORD.replace(r#""threads":1"#, r#""threads":8"#)],
+        );
+
+        let err = compare_benchmarks(&baseline, &current, 0.02)
+            .expect_err("a different thread count is not comparable");
+
+        assert!(matches!(err, ToolError::Incomparable { .. }), "{err}");
+    }
+
+    #[test]
+    fn a_malformed_baseline_stops_before_the_current_run_is_read() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let baseline = ndjson(&dir, "baseline.ndjson", &["{ not json"]);
+        let current = ndjson(&dir, "current.ndjson", &[TIMING_RECORD]);
+
+        let err =
+            compare_benchmarks(&baseline, &current, 0.02).expect_err("the baseline is unreadable");
+
+        let ToolError::Ndjson { path, .. } = err else {
+            panic!("{err}")
+        };
+        assert_eq!(path, baseline);
     }
 }
