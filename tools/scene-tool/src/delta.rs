@@ -1,6 +1,9 @@
 //! Per-metric change between two benchmark runs, and the verdict a threshold assigns to it.
 use crate::{benchmark::Record, regression::ScenePair};
 
+/// Build times under this are timer resolution rather than work.
+const BUILD_MS_FLOOR: f64 = 1.0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     LowerIsBetter,
@@ -31,6 +34,10 @@ pub struct Delta {
     pub baseline: Option<f64>,
     pub current: Option<f64>,
     pub direction: Direction,
+
+    /// A baseline below this yields no verdict: the measurement is too small
+    /// to carry one. Zero disables the check.
+    pub floor: f64,
     pub verdict: Verdict,
 }
 
@@ -46,7 +53,17 @@ impl Delta {
     }
 }
 
-fn verdict(change: Option<f64>, direction: Direction, threshold: f64) -> Verdict {
+fn verdict(
+    baseline: Option<f64>,
+    change: Option<f64>,
+    direction: Direction,
+    floor: f64,
+    threshold: f64,
+) -> Verdict {
+    if baseline.is_none_or(|b| b.abs() < floor) {
+        return Verdict::Unchanged;
+    }
+
     let Some(diff) = change else {
         return Verdict::Unchanged;
     };
@@ -68,6 +85,7 @@ fn metric(
     baseline: Option<f64>,
     current: Option<f64>,
     direction: Direction,
+    floor: f64,
     threshold: f64,
 ) -> Delta {
     let mut delta = Delta {
@@ -75,10 +93,17 @@ fn metric(
         baseline,
         current,
         direction,
+        floor,
         verdict: Verdict::Unchanged,
     };
 
-    delta.verdict = verdict(delta.relative_change(), direction, threshold);
+    delta.verdict = verdict(
+        delta.baseline,
+        delta.relative_change(),
+        direction,
+        floor,
+        threshold,
+    );
     delta
 }
 
@@ -132,6 +157,7 @@ pub fn scene_deltas(pair: &ScenePair, threshold: f64) -> SceneDeltas {
             timing_seconds(tb),
             timing_seconds(tc),
             Direction::LowerIsBetter,
+            0.0,
             threshold,
         ),
         metric(
@@ -139,6 +165,7 @@ pub fn scene_deltas(pair: &ScenePair, threshold: f64) -> SceneDeltas {
             throughput(tb),
             throughput(tc),
             Direction::HigherIsBetter,
+            0.0,
             threshold,
         ),
         metric(
@@ -146,13 +173,17 @@ pub fn scene_deltas(pair: &ScenePair, threshold: f64) -> SceneDeltas {
             peak_rss(tb),
             peak_rss(tc),
             Direction::LowerIsBetter,
+            0.0,
             threshold,
         ),
+        // Below a millisecond the figure is timer resolution, not work: the small
+        // scenes swing tens of percent between two runs of the same binary.
         metric(
             "BVH build (ms)",
             build_ms(tb),
             build_ms(tc),
             Direction::LowerIsBetter,
+            BUILD_MS_FLOOR,
             threshold,
         ),
         metric(
@@ -160,6 +191,7 @@ pub fn scene_deltas(pair: &ScenePair, threshold: f64) -> SceneDeltas {
             tests_per_ray(sb),
             tests_per_ray(sc),
             Direction::LowerIsBetter,
+            0.0,
             threshold,
         ),
         metric(
@@ -167,6 +199,7 @@ pub fn scene_deltas(pair: &ScenePair, threshold: f64) -> SceneDeltas {
             ray_queries(sb),
             ray_queries(sc),
             Direction::LowerIsBetter,
+            0.0,
             threshold,
         ),
     ];
@@ -255,6 +288,7 @@ mod tests {
             Some(100.0),
             Some(99.0),
             Direction::LowerIsBetter,
+            0.0,
             THRESHOLD,
         );
         let slower = metric(
@@ -262,6 +296,7 @@ mod tests {
             Some(100.0),
             Some(101.0),
             Direction::LowerIsBetter,
+            0.0,
             THRESHOLD,
         );
 
@@ -278,6 +313,7 @@ mod tests {
             Some(100.0),
             Some(102.0),
             Direction::LowerIsBetter,
+            0.0,
             THRESHOLD,
         );
 
@@ -291,6 +327,7 @@ mod tests {
             Some(100.0),
             Some(50.0),
             Direction::LowerIsBetter,
+            0.0,
             THRESHOLD,
         );
         let higher = metric(
@@ -298,6 +335,7 @@ mod tests {
             Some(100.0),
             Some(50.0),
             Direction::HigherIsBetter,
+            0.0,
             THRESHOLD,
         );
 
@@ -307,7 +345,14 @@ mod tests {
 
     #[test]
     fn a_value_missing_on_one_side_has_no_change_and_no_verdict() {
-        let delta = metric("m", Some(100.0), None, Direction::LowerIsBetter, THRESHOLD);
+        let delta = metric(
+            "m",
+            Some(100.0),
+            None,
+            Direction::LowerIsBetter,
+            0.0,
+            THRESHOLD,
+        );
 
         assert_eq!(delta.relative_change(), None);
         assert_eq!(delta.verdict, Verdict::Unchanged);
@@ -321,11 +366,31 @@ mod tests {
             Some(0.0),
             Some(0.5),
             Direction::LowerIsBetter,
+            0.0,
             THRESHOLD,
         );
 
         assert_eq!(delta.relative_change(), None);
         assert_eq!(delta.verdict, Verdict::Unchanged);
+    }
+
+    // The floor suppresses the verdict, not the row: the measurement is still
+    // reported, it just cannot claim anything at that scale.
+    #[test]
+    fn a_baseline_below_the_floor_yields_no_verdict() {
+        let delta = metric("m", Some(0.002), Some(0.003), Direction::LowerIsBetter, 1.0, THRESHOLD);
+
+        assert_eq!(delta.verdict, Verdict::Unchanged);
+        assert_close(delta.relative_change().expect("both sides measured"), 0.5);
+    }
+
+    // The counterpart: a floor that silenced everything would be a deleted
+    // metric with extra steps.
+    #[test]
+    fn a_baseline_above_the_floor_is_judged_normally() {
+        let delta = metric("m", Some(700.0), Some(724.0), Direction::LowerIsBetter, 1.0, THRESHOLD);
+
+        assert_eq!(delta.verdict, Verdict::Regression);
     }
 
     // --- metric extraction from real records ---
@@ -535,5 +600,45 @@ mod tests {
             threshold: THRESHOLD,
         };
         assert!(mixed.has_regression());
+    }
+
+    // The floor is wired to the build time and to nothing else. The two
+    // f64 parameters are interchangeable to the compiler, so only a test that
+    // goes through scene_deltas can catch them being swapped.
+    #[test]
+    fn a_build_time_under_a_millisecond_carries_no_verdict() {
+        let baseline = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":0.002"#));
+        let current = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":0.003"#));
+        let pair = pair((Some(&baseline), None), (Some(&current), None));
+
+        let deltas = scene_deltas(&pair, THRESHOLD);
+        let build = find(&deltas, "BVH build (ms)");
+
+        assert_eq!(build.verdict, Verdict::Unchanged);
+        assert_close(build.relative_change().expect("both sides measured"), 0.5);
+    }
+
+    // A scene whose tree takes real time keeps its verdict.
+    #[test]
+    fn a_build_time_above_the_floor_is_still_judged() {
+        let baseline = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":700.0"#));
+        let current = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":724.0"#));
+        let pair = pair((Some(&baseline), None), (Some(&current), None));
+
+        let deltas = scene_deltas(&pair, THRESHOLD);
+
+        assert_eq!(find(&deltas, "BVH build (ms)").verdict, Verdict::Regression);
+    }
+
+    // Only the build time has a floor; the other five judge at any magnitude.
+    #[test]
+    fn the_floor_does_not_reach_the_other_metrics() {
+        let baseline = record(&TIMING_RECORD.replace(r#""render_seconds_min":1.699408363"#, r#""render_seconds_min":0.002"#));
+        let current = record(&TIMING_RECORD.replace(r#""render_seconds_min":1.699408363"#, r#""render_seconds_min":0.003"#));
+        let pair = pair((Some(&baseline), None), (Some(&current), None));
+
+        let deltas = scene_deltas(&pair, THRESHOLD);
+
+        assert_eq!(find(&deltas, "render (s)").verdict, Verdict::Regression);
     }
 }

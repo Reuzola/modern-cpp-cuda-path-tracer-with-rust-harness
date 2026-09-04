@@ -161,7 +161,10 @@ rather than as zero.
 and defaults to `0.02`. It exists because the machines are not isolated
 benchmarking hosts: the observed noise floor is about two percent, and a
 report that called every one percent movement a result would be unreadable.
-The figure the report was produced with is printed under it.
+The figure the report was produced with is printed under it. BVH build times
+under a millisecond carry no verdict at all: at that scale the figure is timer
+resolution rather than work, and the smallest scenes swing tens of percent
+between two runs of the same binary.
 
 All three subcommands use the same exit codes, and so do the scripts built on
 them:
