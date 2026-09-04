@@ -21,6 +21,10 @@ The renderer is single threaded today. Every figure below is one core.
 | Compiler | Clang 18.1.3 | Clang 18.1.3 |
 | Scalar type | `double` | `double` |
 
+These tables were taken while `Float` was `double`, which is no longer the
+default. They stand as the last measurement of that configuration and are not
+the baseline the current build should be compared against.
+
 The reference machine is the one to compare against. The secondary machine is
 recorded because it runs the same code on a different instruction set, which is
 the only cheap way to tell an algorithmic improvement apart from one that

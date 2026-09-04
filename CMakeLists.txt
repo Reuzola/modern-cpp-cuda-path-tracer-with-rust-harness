@@ -23,9 +23,14 @@ option(PT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors in Debug builds"
 #   cmake --preset release -DPT_ENABLE_IPO=OFF
 option(PT_ENABLE_IPO "Enable interprocedural optimization (LTO) in Release builds" ON)
 
-# pt::Float precision. ON=double (default, golden images), OFF=float (perf/GPU).
-#   cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
-option(PT_DOUBLE_PRECISION "Use double as the engine's scalar type (OFF selects float)" ON)
+# pt::Float precision. OFF=float (default: half the memory traffic, and the type
+# the GPU path will use). ON=double, kept as a reference configuration and still
+# built and tested in CI.
+#
+# option() only applies its default when the cache has no entry yet, so the
+# presets pin this too - see CMakePresets.json.
+#   cmake --preset dev -DPT_DOUBLE_PRECISION=ON
+option(PT_DOUBLE_PRECISION "Use double as the engine's scalar type (OFF selects float)" OFF)
 
 # BVH traversal counters; off by default (hot-loop cost).
 #   cmake --preset release-stats

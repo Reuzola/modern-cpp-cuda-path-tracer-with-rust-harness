@@ -74,12 +74,12 @@ Every option is a normal CMake cache variable and can be overridden at
 configure time:
 
 ```bash
-cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
+cmake --preset dev -DPT_DOUBLE_PRECISION=ON
 ```
 
 | Option | Default | Effect |
 |---|---|---|
-| `PT_DOUBLE_PRECISION` | `ON` | `Float` is `double`. `OFF` selects `float`, which changes both speed and pixel values. |
+| `PT_DOUBLE_PRECISION` | `OFF` | `Float` is `float`. `ON` selects `double`, which changes both speed and pixel values. |
 | `PT_WARNINGS_AS_ERRORS` | `ON` | `-Werror`, in Debug builds only. |
 | `PT_ENABLE_IPO` | `ON` | ThinLTO, in Release builds only. |
 | `PT_ENABLE_STATS` | `OFF` | Compiles the traversal counters in. |
@@ -87,6 +87,11 @@ cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
 
 The scalar type is echoed at configure time, because it affects every pixel and
 is easy to forget having changed.
+
+An override placed on the command line applies to that configure only. Every
+preset pins the scalar type, so the next plain `cmake --preset <name>` returns
+the build directory to `float` rather than inheriting whatever the cache last
+held.
 
 ## The viewer
 

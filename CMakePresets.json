@@ -11,7 +11,8 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
-        "PT_BUILD_VIEWER": "OFF"
+        "PT_BUILD_VIEWER": "OFF",
+        "PT_DOUBLE_PRECISION": "OFF"
       }
     },
     {
