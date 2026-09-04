@@ -72,7 +72,11 @@ public:
             if (t_near > ray_t.min) ray_t.min = t_near;
             if (t_far < ray_t.max) ray_t.max = t_far;
 
-            if (ray_t.max <= ray_t.min) return std::nullopt;
+            // Strict: a zero-width overlap is a tangent hit, and this test promises never to
+            // reject one. Rounding can collapse a padded degenerate slab to t_near == t_far
+            // at large ray distances - IEEE round-to-nearest is monotone, so the pair can
+            // meet but never cross, and admitting equality is enough to keep such a box.
+            if (ray_t.max < ray_t.min) return std::nullopt;
         }
         return ray_t.min;
     }

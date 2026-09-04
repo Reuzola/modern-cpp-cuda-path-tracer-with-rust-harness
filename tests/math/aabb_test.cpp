@@ -250,3 +250,17 @@ TEST_CASE("intersect stays conservative when a slab distance is NaN", "[math][aa
         REQUIRE_FALSE(shoot(unit_cube, Point3(-3.0_f, 1.0_f, 0.0_f), Vec3(-1.0_f, 0.0_f, 0.0_f)).has_value());
     }
 }
+
+TEST_CASE("intersect accepts tangent hits when rounding collapses slab bounds", "[math][aabb]") {
+    // At z = 555, padding (0.0001 / 2) is smaller than ulp(555); distance from origin
+    // z = -800 compresses slab thickness to a single ulp, collapsing t_near == t_far in float32.
+    const Aabb box(Point3(0.0_f, 0.0_f, 555.0_f), Point3(555.0_f, 555.0_f, 555.0_f));
+    const Point3 origin(278.0_f, 278.0_f, -800.0_f);
+    const Vec3 inv_dir(infinity, infinity, 1.0_f);
+    const Interval ray_t(0.0_f, infinity);
+
+    const auto result = box.intersect(origin, inv_dir, ray_t);
+
+    REQUIRE(result.has_value());
+    require_near(*result, 1355.0_f);
+}
