@@ -2,7 +2,7 @@
 
 Two executables and one tool. `pathtracer` renders a scene file to an image,
 `pathtracer_viewer` renders it in a window you can move around in, and
-`scene-tool` checks scene files and compares images.
+`scene-tool` checks scene files, compares images, and compares benchmark runs.
 
 Build instructions are in [building.md](building.md); the scene file itself is
 described in [scene-format.md](scene-format.md).
@@ -137,13 +137,40 @@ scene-tool compare tests/golden/cornell_box.png out/cornell.png \
 images must be the same format: PNG is gamma-encoded and EXR is linear, and
 comparing across the two would be comparing two different quantities.
 
-Both subcommands use the same exit codes, and so do the scripts built on them:
+Comparing two benchmark runs:
+
+```bash
+scene-tool bench-compare baseline.ndjson current.ndjson
+```
+
+Both files are NDJSON as written by `--bench`, and both must describe the same
+workload: the same scenes, the same resolution, sample count, depth and seed,
+on the same machine and thread count, from the same scalar type and build type.
+Anything else makes the two runs incomparable, and the tool refuses the whole
+comparison rather than reporting a difference it cannot attribute. The revision
+is the one field expected to differ.
+
+Each scene is reported on its own, over six metrics: render time, throughput,
+peak memory, BVH build time, hit tests per ray query, and ray queries. The
+first four are read from the timing pass only — the instrumented build carries
+the counters in its hot loop and its timing does not count — and the last two
+from the counter pass. A metric that neither run measured is printed as `-`
+rather than as zero.
+
+`--threshold` is the relative change below which a difference counts as noise,
+and defaults to `0.02`. It exists because the machines are not isolated
+benchmarking hosts: the observed noise floor is about two percent, and a
+report that called every one percent movement a result would be unreadable.
+The figure the report was produced with is printed under it.
+
+All three subcommands use the same exit codes, and so do the scripts built on
+them:
 
 | | |
 |---|---|
-| `0` | Clean — valid, or within the threshold |
-| `1` | The input is wrong — invalid scene, or images that differ |
-| `2` | The tool failed — file unreadable, malformed image |
+| `0` | Clean — valid, within the threshold, or no regression |
+| `1` | The input is wrong — invalid scene, images that differ, or a benchmark regression |
+| `2` | The tool failed — file unreadable, malformed image, incomparable runs |
 
 ## Scripts
 
