@@ -75,7 +75,7 @@ impl Report {
     }
 }
 
-fn pluralize(count: usize, singular: &str) -> String {
+pub fn pluralize(count: usize, singular: &str) -> String {
     if count == 1 {
         format!("{count} {singular}")
     } else {

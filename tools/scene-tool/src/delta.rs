@@ -14,6 +14,17 @@ pub enum Verdict {
     Unchanged,
 }
 
+impl Verdict {
+    #[must_use]
+    pub fn marker(self) -> &'static str {
+        match self {
+            Verdict::Gain => "gain",
+            Verdict::Regression => "REGRESSION",
+            Verdict::Unchanged => "",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Delta {
     pub label: &'static str,
@@ -178,6 +189,15 @@ impl Comparison {
         self.scenes
             .iter()
             .any(|s| s.metrics.iter().any(|m| m.verdict == Verdict::Regression))
+    }
+
+    #[must_use]
+    pub fn count(&self, verdict: Verdict) -> usize {
+        self.scenes
+            .iter()
+            .flat_map(|s| &s.metrics)
+            .filter(|m| m.verdict == verdict)
+            .count()
     }
 }
 
