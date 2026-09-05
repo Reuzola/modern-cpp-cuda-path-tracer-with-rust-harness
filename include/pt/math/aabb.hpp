@@ -5,6 +5,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -90,12 +91,28 @@ public:
     }
 
 private:
-    constexpr void pad_to_minimums() noexcept {
-        constexpr Float delta = 0.0001_f;
+    [[nodiscard]] static constexpr Interval padded(const Interval& ax) noexcept {
+        // A planar primitive has one slab of zero width, and both the SAH and the slab
+        // test need it to have some. Floor: near the origin a relative pad shrinks to
+        // nothing. Scale: eight units in the last place of the coordinate itself, which
+        // is what a fixed pad fails to be at both ends - 100,000 ulps wide at 0.01, and rounded
+        // away to nothing past 8192, leaving exactly the degenerate slab it was added to remove.
+        constexpr Float min_padding = 0.0001_f;
+        constexpr Float relative_padding = 8.0_f * std::numeric_limits<Float>::epsilon();
 
-        if (x.size() < delta) x = x.expand(delta);
-        if (y.size() < delta) y = y.expand(delta);
-        if (z.size() < delta) z = z.expand(delta);
+        const Float abs_min = ax.min < 0 ? -ax.min : ax.min;
+        const Float abs_max = ax.max < 0 ? -ax.max : ax.max;
+
+        const Float magnitude = std::max(abs_min, abs_max);
+        const Float delta = std::max(min_padding, relative_padding * magnitude);
+
+        return ax.size() < delta ? ax.expand(delta) : ax;
+    }
+
+    constexpr void pad_to_minimums() noexcept {
+        x = padded(x);
+        y = padded(y);
+        z = padded(z);
     }
 };
 

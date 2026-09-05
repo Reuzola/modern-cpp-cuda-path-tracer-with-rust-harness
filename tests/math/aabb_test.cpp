@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <limits>
 #include <optional>
 
@@ -280,22 +281,20 @@ TEST_CASE("intersect stays conservative when a slab distance is NaN", "[math][aa
     }
 }
 
-TEST_CASE("intersect accepts tangent hits when rounding collapses slab bounds", "[math][aabb]") {
-    // At z = 555, padding (0.0001 / 2) is smaller than ulp(555); distance from origin
-    // z = -800 compresses slab thickness to a single ulp, collapsing t_near == t_far in float32.
-    const Aabb box(Point3(0.0_f, 0.0_f, 555.0_f), Point3(555.0_f, 555.0_f, 555.0_f));
-    const Point3 origin(278.0_f, 278.0_f, -800.0_f);
-    const Vec3 inv_dir(infinity, infinity, 1.0_f);
-    const Interval ray_t(0.0_f, infinity);
+TEST_CASE("intersect accepts a tangent hit along a box edge", "[math][aabb]") {
+    // Grazing the edge x = 0, y = 1: the entry distance from the x slab and the
+    // exit distance from the y slab are the same number, exactly. Two things keep
+    // the hit - the widened exit distance, and a rejection that compares strictly.
+    // The scene-scale collapse this case used to describe is gone: a planar slab
+    // is now padded relative to its own coordinate, so it no longer rounds shut.
+    const Aabb box(Point3(0, 0, 0), Point3(1, 1, 1));
+    const Point3 origin(-1.0_f, 0.0_f, 0.5_f);
+    const Vec3 inv_dir(1.0_f, 1.0_f, infinity);
 
-    const auto result = box.intersect(origin, inv_dir, ray_t);
+    const auto result = box.intersect(origin, inv_dir, Interval(0.0_f, infinity));
 
     REQUIRE(result.has_value());
-
-    // Not a precision tolerance: the entry distance is the *padded* near plane,
-    // so it sits up to one padding width short of 555's true distance. float
-    // collapses it back to exactly 1355 - which is the collapse under test.
-    require_near(*result, 1355.0_f, 1e-4);
+    require_near(*result, 1.0_f);
 }
 
 TEST_CASE("the slab test never rejects a box the reference keeps", "[math][aabb]") {
@@ -334,4 +333,51 @@ TEST_CASE("the slab test never rejects a box the reference keeps", "[math][aabb]
             REQUIRE(box.intersect(origin, inv_dir, Interval(0.0_f, pt::infinity)).has_value());
         }
     }
+}
+
+TEST_CASE("a degenerate slab is padded to a resolvable width at any scale", "[math][aabb]") {
+    // A quad is planar: one slab has zero width and must be given one. The
+    // requirement is not a distance in world units but a distance in ulps of the
+    // coordinate, because that is the resolution the traversal arithmetic has
+    // there. This is the assertion the old fixed pad fails at both ends.
+    for (const Float coordinate : {0.0_f, 0.01_f, 1.0_f, 555.0_f, 10'000.0_f, 1'000'000.0_f}) {
+        const Aabb box(Point3(coordinate, coordinate, coordinate), Point3(coordinate + 2, coordinate + 2, coordinate));
+        const Float ulp = std::nextafter(coordinate, infinity) - coordinate;
+
+        REQUIRE(box.z.min < box.z.max);
+        REQUIRE(box.z.size() >= 4.0_f * ulp);
+    }
+}
+
+TEST_CASE("padding is a floor on width, not an inflation", "[math][aabb]") {
+    // A node's SAH cost is its surface area, so growing a box that is already
+    // resolvable is paid for on every traversal that reaches it.
+    const Aabb near_origin(Point3(0, 0, 0), Point3(0.01_f, 0.01_f, 0.01_f));
+    REQUIRE(near_origin.x.size() == 0.01_f);
+
+    // Out at 10^6 a float coordinate resolves to 0.0625, so half a unit is only
+    // eight ulps and gets padded, while a full unit is left alone.
+    constexpr Float far_away = 1'000'000.0_f;
+    const Aabb thick(Point3(far_away, far_away, far_away), Point3(far_away + 1, far_away + 1, far_away + 1));
+    REQUIRE(thick.x.size() == 1.0_f);
+
+    const Aabb thin(Point3(far_away, far_away, far_away), Point3(far_away + 0.5_f, far_away + 0.5_f, far_away + 0.5_f));
+    REQUIRE(thin.x.size() > 0.5_f);
+}
+
+TEST_CASE("a padded planar box survives a distant hit", "[math][aabb]") {
+    // The case with history: Cornell's back wall is a zero-thickness box at
+    // z = 555 and a bounce reaches it from about 1355 units away, where the two
+    // slab distances used to round onto each other. The strict statement is in
+    // the width case above; this one checks the whole test end to end.
+    const Vec3 along_z(infinity, infinity, 1.0_f);
+
+    const Aabb wall(Point3(0, 0, 555), Point3(555, 555, 555));
+    const auto hit = wall.intersect(Point3(277.5_f, 277.5_f, -800.0_f), along_z, Interval(0.0_f, infinity));
+    REQUIRE(hit.has_value());
+    REQUIRE(*hit > 1354.0_f);
+
+    // And at a scale where the fixed pad rounded away completely.
+    const Aabb distant(Point3(0, 0, 20'000), Point3(20'000, 20'000, 20'000));
+    REQUIRE(distant.intersect(Point3(10'000.0_f, 10'000.0_f, -800.0_f), along_z, Interval(0.0_f, infinity)).has_value());
 }
