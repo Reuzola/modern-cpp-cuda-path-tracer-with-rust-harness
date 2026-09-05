@@ -4,7 +4,10 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
+#include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <limits>
 #include <optional>
 
 namespace {
@@ -16,8 +19,34 @@ using pt::Interval;
 using pt::Point3;
 using pt::Vec3;
 using pt::operator""_f;
+using pt::Sampler;
+using pt_test::make_sampler;
 using pt_test::require_aabb_near;
 using pt_test::require_near;
+using pt_test::widen;
+
+constexpr std::array<Float, 3> scales{1.0_f, 555.0_f, 10'000.0_f};
+
+// The same slab test carried out in double: the reference the float path is not
+// allowed to undershoot. Under a double build the two coincide and the case below
+// only asserts self-consistency; the float build is where it has teeth.
+[[nodiscard]] bool reference_hit(const Aabb& box, const Point3& origin, const Vec3& direction) {
+    double t_min = 0.0;
+    double t_max = std::numeric_limits<double>::infinity();
+
+    for (int axis = 0; axis < 3; ++axis) {
+        const double inv = 1.0 / widen(direction[axis]);
+        double near = (widen(box.axis_interval(axis).min) - widen(origin[axis])) * inv;
+        double far = (widen(box.axis_interval(axis).max) - widen(origin[axis])) * inv;
+
+        if (inv < 0.0) std::swap(near, far);
+        t_min = std::max(t_min, near);
+        t_max = std::min(t_max, far);
+
+        if (t_max < t_min) return false;
+    }
+    return true;
+}
 
 // The unit cube centred on the origin: every face sits at an exactly
 // representable coordinate, which the knife-edge cases below depend on.
@@ -267,4 +296,42 @@ TEST_CASE("intersect accepts tangent hits when rounding collapses slab bounds", 
     // so it sits up to one padding width short of 555's true distance. float
     // collapses it back to exactly 1355 - which is the collapse under test.
     require_near(*result, 1355.0_f, 1e-4);
+}
+
+TEST_CASE("the slab test never rejects a box the reference keeps", "[math][aabb]") {
+    Sampler sampler = make_sampler(401);
+
+    for (const Float scale : scales) {
+        const Aabb box(Point3(scale, scale, scale), Point3(scale + 2, scale + 2, scale + 2));
+
+        for (int i = 0; i < 512; ++i) {
+            // Aimed at a point on one of the box's edges: two axes pinned to a
+            // face, the third free. There the entry distance from one axis meets
+            // the exit distance from another, which is the tie the rounding
+            // decides - and where a shrunk interval turns a real hit into the
+            // crack you see along the seam between two adjacent boxes.
+            const int free_axis = static_cast<int>(sampler.next_below(3));
+            Point3 target;
+            for (int axis = 0; axis < 3; ++axis) {
+                const Interval& ax = box.axis_interval(axis);
+                if (axis == free_axis) {
+                    target[axis] = sampler.next_scalar(ax.min, ax.max);
+                } else {
+                    target[axis] = sampler.next_scalar() < 0.5_f ? ax.min : ax.max;
+                }
+            }
+
+            const Point3 origin = target - 1000.0_f * random_unit_vector(sampler);
+            const Vec3 direction = unit_vector(target - origin);
+            const Vec3 inv_dir(1.0_f / direction.x(), 1.0_f / direction.y(), 1.0_f / direction.z());
+
+            // A tie may legitimately fall either way in float; what may not happen
+            // is the float test being tighter than the exact one.
+            if (!reference_hit(box, origin, direction)) {
+                continue;
+            }
+
+            REQUIRE(box.intersect(origin, inv_dir, Interval(0.0_f, pt::infinity)).has_value());
+        }
+    }
 }

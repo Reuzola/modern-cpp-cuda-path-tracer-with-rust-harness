@@ -41,6 +41,14 @@ inline constexpr Float ray_offset_absolute = 1.0_f / 65536.0_f;
     return result;
 }
 
+// Relative error bound for a chain of n floating-point operations (PBRT 3.9.6):
+// the exact result lies within a factor of (1 +- gamma(n)) of the computed one.
+[[nodiscard]] constexpr Float gamma(int n) noexcept {
+    const Float half_eps = std::numeric_limits<Float>::epsilon() / 2;
+    const Float n_eps = static_cast<Float>(n) * half_eps;
+    return n_eps / (1 - n_eps);
+}
+
 // Contract guards: these fail the build if the offset silently loses constexpr or drops a case.
 static_assert(offset_ray_origin(Point3(555, 555, 555), Vec3(0, 0, 0)).y() == 555.0_f);
 static_assert(offset_ray_origin(Point3(0, 0, 0), Vec3(0, 1, 0)).y() == ray_offset_absolute);

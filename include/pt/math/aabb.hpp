@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
+#include "pt/math/robust.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <algorithm>
@@ -55,6 +56,8 @@ public:
     // (clamped to `ray_t.min` if starting inside) for BVH sorting, or nullopt on miss.
     // Conservative by design: edge cases may yield false accepts, never false rejects.
     [[nodiscard]] constexpr std::optional<Float> intersect(const Point3& origin, const Vec3& inv_dir, Interval ray_t) const noexcept {
+        constexpr Float far_scale = 1.0_f + 2.0_f * gamma(3);
+
         for (int axis = 0; axis < 3; axis++) {
             const Interval& ax = axis_interval(axis);
             const Float inv = inv_dir[axis];
@@ -69,13 +72,18 @@ public:
             // `t_far < ray_t.max` is false and the bound is simply left alone: the box stays
             // conservatively accepted and the primitive test decides.
             if (inv < 0) std::swap(t_near, t_far);
+
+            // Both distances carry up to gamma(3) of relative error, so the computed exit can
+            // fall short of the true one and reject a box the exact arithmetic keeps - the
+            // crack along a shared face between two boxes. Widening the exit by twice that
+            // bound covers the error on both ends (PBRT 6.8.2, Ize 2013). A negative t_far
+            // only grows more negative, and a box behind the origin is rejected either way.
+            t_far *= far_scale;
             if (t_near > ray_t.min) ray_t.min = t_near;
             if (t_far < ray_t.max) ray_t.max = t_far;
 
-            // Strict: a zero-width overlap is a tangent hit, and this test promises never to
-            // reject one. Rounding can collapse a padded degenerate slab to t_near == t_far
-            // at large ray distances - IEEE round-to-nearest is monotone, so the pair can
-            // meet but never cross, and admitting equality is enough to keep such a box.
+            // Strict: equality (t_near == t_far) is a genuine tangent hit, and this
+            // test promises never to reject one.
             if (ray_t.max < ray_t.min) return std::nullopt;
         }
         return ray_t.min;
