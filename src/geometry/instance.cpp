@@ -24,6 +24,7 @@ bool Instance::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     // world-space one under any affine transform, mirroring ones included.
     rec.p = transform_.apply_point(rec.p);
     rec.normal = transform_.apply_normal(rec.normal);
+    rec.geometric_normal = transform_.apply_normal(rec.geometric_normal);
 
     return true;
 }
