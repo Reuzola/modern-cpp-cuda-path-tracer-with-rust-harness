@@ -27,8 +27,8 @@ using pt_test::require_aabb_near;
 using pt_test::require_near;
 using pt_test::require_vec_near;
 
-// The interval the integrator uses; the lower bound is the shadow-acne epsilon.
-const Interval visible{0.001_f, pt::infinity};
+// The interval the renderer uses: intersections are queried from zero, and the spawn origin carries the offset.
+const Interval visible{0.0_f, pt::infinity};
 
 /// A hittable that answers at a fixed distance and records how it was asked.
 ///
@@ -251,7 +251,7 @@ TEST_CASE("the winner's whole record survives, and a miss leaves the record alon
     require_near(untouched.t, 42.0_f);
 }
 
-TEST_CASE("at exactly equal distance the last accepting object wins", "[core][hittable_list]") {
+TEST_CASE("at exactly equal distance the first accepting object wins", "[core][hittable_list]") {
     // Two quads covering the same square in z = 2, parameterised in opposite
     // directions, so the same hit point carries different (u, v) and the record
     // says which one answered. The ray is deliberately off-centre: the centre of
@@ -270,13 +270,13 @@ TEST_CASE("at exactly equal distance the last accepting object wins", "[core][hi
     REQUIRE(list.hit(offset, visible, rec));
     require_near(rec.t, 2.0_f);
 
-    // Quad's interval test is closed, so the second quad accepts a hit at
-    // exactly the closest distance found so far and overwrites the first. The
-    // winner is therefore the last one in the list - which is why changing the
-    // order primitives are visited in (a rebuilt BVH, a different leaf grouping)
-    // changes the image wherever two surfaces are coincident.
-    require_near(rec.u, 0.25_f);
-    require_near(rec.v, 0.375_f);
+    // Every primitive's interval test is open at both ends, so once the list has
+    // narrowed its upper bound to the closest hit so far, a second surface at
+    // exactly that distance is rejected. The winner is the first one visited -
+    // which is why the order primitives are reached in (a rebuilt BVH, a different
+    // leaf grouping) still decides the image wherever two surfaces are coincident.
+    require_near(rec.u, 0.75_f);
+    require_near(rec.v, 0.625_f);
 
     HittableList reversed;
     reversed.add(&second);
@@ -284,6 +284,6 @@ TEST_CASE("at exactly equal distance the last accepting object wins", "[core][hi
 
     HitRecord other;
     REQUIRE(reversed.hit(offset, visible, other));
-    require_near(other.u, 0.75_f);
-    require_near(other.v, 0.625_f);
+    require_near(other.u, 0.25_f);
+    require_near(other.v, 0.375_f);
 }

@@ -27,7 +27,10 @@ std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecor
     else
         direction = refract(unit_direction, rec.normal, ri);
 
-    return ScatterRecord{.attenuation = Color(1.0_f, 1.0_f, 1.0_f), .bounce = SpecularBounce{.scattered = Ray(rec.p, direction, r_in.time())}};
+    return ScatterRecord{
+        .attenuation = Color(1.0_f, 1.0_f, 1.0_f),
+        .bounce = SpecularBounce{.scattered = rec.spawn_ray(direction, r_in.time())},
+    };
 }
 
 Float Dielectric::reflectance(Float cosine, Float refraction_index) {

@@ -30,7 +30,7 @@ using pt_test::require_near;
 using pt_test::require_vec_near;
 using pt_test::widen;
 
-const Interval visible{0.001_f, pt::infinity};
+const Interval visible{0.0_f, pt::infinity};
 
 // Large on purpose: the segment inside is 20 units long, so a sampled free path
 // almost never runs past the far wall and the cases below stay deterministic

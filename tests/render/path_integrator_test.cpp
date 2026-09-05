@@ -331,3 +331,37 @@ TEST_CASE("the same ray and seed give the same radiance", "[render][integrator]"
     REQUIRE(a.g() == b.g());
     REQUIRE(a.b() == b.b());
 }
+
+TEST_CASE("a bounce at scene scale does not shadow itself", "[render][integrator]") {
+    const SolidColor albedo{Color(0.6_f, 0.6_f, 0.6_f)};
+    const Lambertian matte{&albedo};
+
+    // The lambertian estimator above, moved out to where a float coordinate is
+    // coarse. The answer is still exactly the albedo: the quad is finite, so a
+    // bounce leaving it can only meet the uniform background.
+    constexpr Float scale = 10'000.0_f;
+    const Quad surface(Point3(scale - 1, scale - 1, scale), Vec3(2, 0.3_f, 0.7_f), Vec3(0.3_f, 2, -0.4_f), &matte);
+
+    HittableList world;
+    world.add(&surface);
+
+    const PathIntegrator integrator{world, no_media, no_targets, Color(1, 1, 1), 2};
+
+    const Point3 eye(0, 0, 0);
+    const Point3 centre(scale + 0.15_f, scale + 0.15_f, scale + 0.15_f);
+    const Ray incoming(eye, unit_vector(centre - eye));
+
+    Sampler sampler = make_sampler(125);
+    Float total{0};
+    constexpr int samples = 256;
+
+    for (int i = 0; i < samples; ++i) {
+        total += integrator.radiance(incoming, sampler).r();
+    }
+
+    // A self-hit is not a small error: the second bounce lands on the same
+    // surface, spends the depth budget and returns black, so the sample is lost
+    // outright. Averaged over the hemisphere that shows up as a darkened surface,
+    // which is what shadow acne looks like once the pixels are small enough.
+    require_near(total / static_cast<Float>(samples), 0.6_f, 0.02);
+}

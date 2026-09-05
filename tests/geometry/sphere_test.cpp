@@ -28,7 +28,7 @@ using pt_test::require_near;
 using pt_test::require_uv_near;
 using pt_test::require_vec_near;
 
-const Interval visible{0.001_f, pt::infinity};
+const Interval visible{0.0_f, pt::infinity};
 
 // Centred ahead of the origin at distance 5, radius 1: the near root is at 4 and
 // the far one at 6, which keeps every expectation below a round number.
@@ -69,9 +69,9 @@ TEST_CASE("the sphere's interval test is strict", "[geometry][sphere]") {
     HitRecord rec;
 
     // Exactly at the upper bound: rejected, and the far root is out of range too.
-    // Quad accepts the same distance, because it tests with contains() rather
-    // than surrounds() - which is what decides the winner between two coincident
-    // surfaces, and what makes that decision differ by primitive type.
+    // Every primitive agrees on this: the interval is open at both ends, so a
+    // surface at exactly the closest distance found so far never displaces the one
+    // already recorded.
     REQUIRE_FALSE(ahead.hit(forward, Interval(0.001_f, 4.0_f), rec));
     REQUIRE(ahead.hit(forward, Interval(0.001_f, 4.001_f), rec));
 

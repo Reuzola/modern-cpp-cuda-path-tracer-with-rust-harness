@@ -29,7 +29,7 @@ Aabb Quad::bounding_box() const { return bbox_; }
 
 Float Quad::pdf_direction(const Point3& origin, const Vec3& direction) const {
     HitRecord rec;
-    if (!intersect(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
+    if (!intersect(Ray(origin, direction), Interval(0.0_f, infinity), rec)) return 0.0_f;
 
     const Float distance_squared = rec.t * rec.t * direction.length_squared();
     const Float cosine = std::fabs(dot(direction, rec.normal)) / direction.length();
@@ -65,7 +65,7 @@ bool Quad::intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const 
     if (std::fabs(denom) < 1e-8_f) return false;
 
     const Float t = (d_ - dot(normal_, r.origin())) / denom;
-    if (!ray_t.contains(t)) return false;
+    if (!ray_t.surrounds(t)) return false;
 
     const Point3 intersection = r.at(t);
     const Vec3 planar_hitpt_vector = intersection - q_;

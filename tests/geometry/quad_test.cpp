@@ -25,7 +25,7 @@ using pt_test::require_near;
 using pt_test::require_uv_near;
 using pt_test::require_vec_near;
 
-const Interval visible{0.001_f, pt::infinity};
+const Interval visible{0.0_f, pt::infinity};
 
 // A 2x2 square in the plane z = 2, spanning [-1, 1] on both axes. Its normal is
 // +z and its area is 4, which keeps the PDF arithmetic below exact.
@@ -99,15 +99,21 @@ TEST_CASE("a ray parallel to the plane misses", "[geometry][quad]") {
     REQUIRE_FALSE(square.hit(Ray(Point3(0, 0, 0), Vec3(1, 0, 0)), visible, rec));
 }
 
-TEST_CASE("the quad's interval test is closed", "[geometry][quad]") {
+TEST_CASE("the quad's interval test is open at both ends", "[geometry][quad]") {
     HitRecord rec;
 
-    // Accepted at exactly the upper bound, where Sphere rejects. The list narrows
-    // its interval to the closest hit so far, so this is precisely why a later
-    // quad wins a tie against an earlier one and a later sphere does not.
-    REQUIRE(square.hit(forward, Interval(0.001_f, 2.0_f), rec));
-    REQUIRE(square.hit(forward, Interval(2.0_f, 3.0_f), rec));
-    REQUIRE_FALSE(square.hit(forward, Interval(0.001_f, 1.999_f), rec));
+    // Rejected at exactly the upper bound, like Sphere. The list narrows its
+    // interval to the closest hit so far, so an open upper bound is what makes the
+    // first of two coincident surfaces win rather than the last, whatever
+    // primitive types they are.
+    REQUIRE_FALSE(square.hit(forward, Interval(0.0_f, 2.0_f), rec));
+    REQUIRE(square.hit(forward, Interval(0.0_f, 2.001_f), rec));
+
+    // Open at the bottom too: a ray starting exactly on the surface does not find
+    // it again. That is the only guard left now that the integrator queries from
+    // zero - and it is a tie-break rule, not a safety margin, which is why the
+    // offset origin has to do the real work.
+    REQUIRE_FALSE(square.hit(Ray(Point3(0, 0, 2), Vec3(0, 0, 1)), Interval(0.0_f, pt::infinity), rec));
 }
 
 TEST_CASE("uv uses the quad's own basis even when it is not orthogonal", "[geometry][quad]") {

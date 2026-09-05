@@ -47,7 +47,7 @@ const Point3 v2{0.0_f, 1.0_f, 0.0_f};
     return Ray(Point3(x, y, 1.0_f), Vec3(0.0_f, 0.0_f, -1.0_f));
 }
 
-const Interval visible{0.001_f, pt::infinity};
+const Interval visible{0.0_f, pt::infinity};
 
 } // namespace
 

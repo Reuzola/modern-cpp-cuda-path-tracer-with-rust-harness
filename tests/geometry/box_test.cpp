@@ -29,7 +29,7 @@ using pt_test::require_aabb_near;
 using pt_test::require_near;
 using pt_test::require_vec_near;
 
-const Interval visible{0.001_f, pt::infinity};
+const Interval visible{0.0_f, pt::infinity};
 
 } // namespace
 

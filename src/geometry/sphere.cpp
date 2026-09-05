@@ -30,7 +30,7 @@ bool Sphere::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
 
 Float Sphere::pdf_direction(const Point3& origin, const Vec3& direction) const {
     HitRecord rec;
-    if (!intersect(Ray(origin, direction), Interval(0.001_f, infinity), rec)) return 0.0_f;
+    if (!intersect(Ray(origin, direction), Interval(0.0_f, infinity), rec)) return 0.0_f;
 
     const Float distance_squared = (center_.at(0) - origin).length_squared();
     if (distance_squared <= radius_ * radius_) return 0.0_f;

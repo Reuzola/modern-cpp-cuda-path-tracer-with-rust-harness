@@ -20,8 +20,12 @@ std::optional<ScatterRecord> Metal::scatter(const Ray& r_in, const HitRecord& re
     // samples, and letting it run would tie the RNG stream to how many candidates it happened to discard.
     const Vec3 scattered_direction = fuzz_ > 0.0_f ? reflected + fuzz_ * random_unit_vector(sampler) : reflected;
 
-    if (dot(scattered_direction, rec.normal) > 0)
-        return ScatterRecord{.attenuation = albedo_, .bounce = SpecularBounce{.scattered = Ray(rec.p, scattered_direction, r_in.time())}};
+    if (dot(scattered_direction, rec.normal) > 0) {
+        return ScatterRecord{
+            .attenuation = albedo_,
+            .bounce = SpecularBounce{.scattered = rec.spawn_ray(scattered_direction, r_in.time())},
+        };
+    }
 
     return std::nullopt;
 }

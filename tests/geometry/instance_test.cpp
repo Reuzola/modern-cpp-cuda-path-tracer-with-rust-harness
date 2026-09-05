@@ -25,7 +25,7 @@ using pt_test::require_aabb_near;
 using pt_test::require_near;
 using pt_test::require_vec_near;
 
-const Interval visible{0.001_f, pt::infinity};
+const Interval visible{0.0_f, pt::infinity};
 
 // A unit sphere at the origin: every expectation below is about what the
 // transform did to it, never about the sphere itself.

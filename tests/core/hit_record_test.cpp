@@ -28,16 +28,39 @@ using pt_test::require_vec_near;
 // scales where a float coordinate is coarser than the surface detail on it.
 constexpr std::array<Float, 4> scales{1.0_f, 555.0_f, 10'000.0_f, 100'000.0_f};
 
-// A quad tilted off every axis and pushed out to `scale`, so the hit point and
-// the plane test both carry rounding error in all three components. An axis
-// aligned quad at a round coordinate is arithmetically exact and proves nothing.
-[[nodiscard]] Quad tilted_surface(Float scale) {
-    return Quad(Point3(scale - 1, scale - 1, scale), Vec3(2, 0.3_f, 0.7_f), Vec3(0.3_f, 2, -0.4_f), nullptr);
+// The surface under test: a quad tilted off every axis, so both the hit point and
+// the plane test carry rounding error in all three components. An axis aligned
+// quad at a round coordinate is arithmetically exact and proves nothing.
+constexpr Vec3 surface_u(2, 0.3_f, 0.7_f);
+constexpr Vec3 surface_v(0.3_f, 2, -0.4_f);
+constexpr int sweep = 8;
+
+[[nodiscard]] Point3 surface_corner(Float scale) {
+    return Point3(scale - 1, scale - 1, scale);
 }
 
-// Its centre, where the incoming ray is aimed.
-[[nodiscard]] Point3 surface_centre(Float scale) {
-    return Point3(scale + 0.15_f, scale + 0.15_f, scale + 0.15_f);
+[[nodiscard]] Quad tilted_surface(Float scale) {
+    return Quad(surface_corner(scale), surface_u, surface_v, nullptr);
+}
+
+// Hits the surface the way a camera does - unit direction, long t - aiming at
+// (a, b) in the quad's own basis, so the hit point carries the rounding of
+// origin + t * direction rather than an exact coordinate.
+[[nodiscard]] HitRecord hit_at(const Quad& surface, Float scale, Float a, Float b) {
+    const Point3 eye(0, 0, 0);
+    const Point3 target = surface_corner(scale) + a * surface_u + b * surface_v;
+
+    HitRecord rec;
+    REQUIRE(surface.hit(Ray(eye, unit_vector(target - eye)), Interval(0.0_f, infinity), rec));
+    return rec;
+}
+
+// A direction leaving on the outward side of the hit. A plane cannot be hit from
+// the side you are walking away from, so any hit from one of these means the
+// origin sits behind its own surface. That is what acne is.
+[[nodiscard]] Vec3 outward_direction(Sampler& sampler, const Vec3& normal) {
+    const Vec3 direction = random_unit_vector(sampler);
+    return dot(direction, normal) < 0.0_f ? -direction : direction;
 }
 
 // Travelling towards +z, so a normal pointing back at -z faces it.
@@ -120,7 +143,7 @@ TEST_CASE("both orientations resolve at compile time", "[core][hit_record]") {
     }());
 }
 
-TEST_CASE("the geometric normal is stored facing the ray, like the shading one", "[core][hit_record]") {
+TEST_CASE("the geometric normal always faces the ray, the shading one need not", "[core][hit_record]") {
     HitRecord rec;
 
     const Vec3 geometric(0, 0, 1);        // away from the ray: a back face
@@ -128,11 +151,15 @@ TEST_CASE("the geometric normal is stored facing the ray, like the shading one",
 
     rec.set_face_normal(forward, geometric, shading);
 
-    // One convention for both normals is what lets spawn_ray pick the offset side
-    // from the scatter direction alone, with no front_face branch at the call site.
+    // Both are flipped by one sign, decided by the geometric normal. That leaves
+    // the geometric normal facing the ray and, here, the shading normal pointing
+    // away from it: near a silhouette the two disagree by more than a right angle.
+    // Offsetting along the stored shading normal would push the spawn point into
+    // the surface, which is why spawn_ray reads the geometric one.
     REQUIRE_FALSE(rec.front_face);
     require_vec_near(rec.geometric_normal, Vec3(0, 0, -1));
-    REQUIRE(dot(rec.normal, rec.geometric_normal) > 0.0_f);
+    REQUIRE(dot(rec.geometric_normal, forward.direction()) < 0.0_f);
+    REQUIRE(dot(rec.normal, forward.direction()) > 0.0_f);
 
     // The two-argument overload feeds the same vector to both.
     HitRecord flat;
@@ -182,53 +209,46 @@ TEST_CASE("a spawned ray does not re-hit the surface it left", "[core][hit_recor
     for (const Float scale : scales) {
         const Quad surface = tilted_surface(scale);
 
-        // Hit it the way a camera does: unit direction, long t, so the hit point
-        // carries the full rounding error of origin + t * direction.
-        const Point3 eye(0, 0, 0);
-        const Ray incoming(eye, unit_vector(surface_centre(scale) - eye));
+        // Which side of its own plane a hit point lands on is fixed once the point
+        // is computed, so one aim would only sample one draw of the rounding. The
+        // face is swept instead.
+        for (int i = 0; i < sweep; ++i) {
+            for (int j = 0; j < sweep; ++j) {
+                const Float a = (static_cast<Float>(i) + 0.5_f) / static_cast<Float>(sweep);
+                const Float b = (static_cast<Float>(j) + 0.5_f) / static_cast<Float>(sweep);
 
-        HitRecord rec;
-        REQUIRE(surface.hit(incoming, Interval(0.0_f, infinity), rec));
+                const HitRecord rec = hit_at(surface, scale, a, b);
+                const Ray spawned = rec.spawn_ray(outward_direction(sampler, rec.geometric_normal), 0.0_f);
 
-        // Every direction here leaves on the outward side, and a plane cannot be
-        // hit from the side you are walking away from. So any hit at all means the
-        // origin ended up behind its own surface, which is what acne is.
-        for (int i = 0; i < 64; ++i) {
-            Vec3 direction = random_unit_vector(sampler);
-            if (dot(direction, rec.geometric_normal) < 0.0_f) {
-                direction = -direction;
+                HitRecord self;
+                REQUIRE_FALSE(surface.hit(spawned, Interval(0.0_f, infinity), self));
             }
-
-            HitRecord self;
-            REQUIRE_FALSE(surface.hit(rec.spawn_ray(direction, 0.0_f), Interval(0.0_f, infinity), self));
         }
     }
 }
 
-TEST_CASE("the unoffset hit point really does land behind its surface", "[core][hit_record]") {
+TEST_CASE("unoffset hit points do land behind their surface", "[core][hit_record]") {
     // Keeps the case above from going vacuous. Spawning from rec.p itself, at a
-    // scale the renderer actually uses, puts the origin on the wrong side for a
-    // large share of the directions leaving it. The seed is fixed, so this is a
-    // statement about float, not a coin flip.
+    // scale the renderer actually uses, leaves part of the sweep behind the plane
+    // it just hit. The sweep and the seed are fixed, so this is a statement about
+    // float, not a coin flip.
     Sampler sampler = make_sampler(302);
-
     constexpr Float scale = 10'000.0_f;
     const Quad surface = tilted_surface(scale);
-    const Point3 eye(0, 0, 0);
-
-    HitRecord rec;
-    REQUIRE(surface.hit(Ray(eye, unit_vector(surface_centre(scale) - eye)), Interval(0.0_f, infinity), rec));
 
     int self_hits = 0;
-    for (int i = 0; i < 64; ++i) {
-        Vec3 direction = random_unit_vector(sampler);
-        if (dot(direction, rec.geometric_normal) < 0.0_f) {
-            direction = -direction;
-        }
+    for (int i = 0; i < sweep; ++i) {
+        for (int j = 0; j < sweep; ++j) {
+            const Float a = (static_cast<Float>(i) + 0.5_f) / static_cast<Float>(sweep);
+            const Float b = (static_cast<Float>(j) + 0.5_f) / static_cast<Float>(sweep);
 
-        HitRecord self;
-        if (surface.hit(Ray(rec.p, direction), Interval(0.0_f, infinity), self)) {
-            self_hits++;
+            const HitRecord rec = hit_at(surface, scale, a, b);
+            const Ray unoffset(rec.p, outward_direction(sampler, rec.geometric_normal));
+
+            HitRecord self;
+            if (surface.hit(unoffset, Interval(0.0_f, infinity), self)) {
+                self_hits++;
+            }
         }
     }
 

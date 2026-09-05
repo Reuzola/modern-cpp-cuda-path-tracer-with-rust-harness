@@ -35,7 +35,7 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
     if (b2 < 0 || b1 + b2 > 1) return false;
 
     const Float t = dot(e2, qvec) * inv_det;
-    if (!ray_t.contains(t)) return false;
+    if (!ray_t.surrounds(t)) return false;
 
     out.t = t;
     out.b1 = b1;

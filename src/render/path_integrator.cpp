@@ -19,14 +19,6 @@
 
 namespace pt {
 
-namespace {
-
-// Shared by the surface query and the media segment: a medium sampled in front
-// of this epsilon would scatter inside the surface the path just left.
-constexpr Float ray_epsilon = 0.001_f;
-
-} // namespace
-
 Color PathIntegrator::radiance(const Ray& r, Sampler& sampler) const {
     return trace(r, max_depth_, sampler);
 }
@@ -37,7 +29,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     HitRecord rec;
 
     count_ray_query();
-    const bool hit_surface = world_.hit(r, Interval(ray_epsilon, infinity), rec);
+    const bool hit_surface = world_.hit(r, Interval(0.0_f, infinity), rec);
     Float t_limit = hit_surface ? rec.t : infinity;
     bool hit_medium{false};
 
@@ -45,7 +37,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     // the sampler stream advances with the light path, not with traversal order.
     for (const ConstantMedium& medium : media_) {
         HitRecord candidate;
-        if (medium.sample_interaction(r, Interval(ray_epsilon, t_limit), sampler, candidate)) {
+        if (medium.sample_interaction(r, Interval(0.0_f, t_limit), sampler, candidate)) {
             t_limit = candidate.t;
             rec = candidate;
             hit_medium = true;
@@ -58,7 +50,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
 
     if (const auto sr = rec.mat->scatter(r, rec, sampler)) {
         const auto shade = [&](const Pdf& p) -> Color {
-            const Ray scattered(rec.p, p.generate(sampler), r.time());
+            const Ray scattered = rec.spawn_ray(p.generate(sampler), r.time());
             const Float pdf_value = p.value(scattered.direction());
 
             const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);

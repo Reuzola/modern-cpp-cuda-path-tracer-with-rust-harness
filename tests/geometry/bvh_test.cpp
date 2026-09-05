@@ -46,8 +46,8 @@ using pt::Sampler;
 using pt::Vec3;
 using pt::operator""_f;
 
-// The interval the renderer itself uses: the lower bound is the shadow-acne epsilon.
-const Interval visible{0.001_f, pt::infinity};
+// The interval the renderer uses: intersections are queried from zero, and the spawn origin carries the offset.
+const Interval visible{0.0_f, pt::infinity};
 
 // Owns every primitive and material one test scene needs. Arena is the engine's own
 // ownership model, so addresses stay valid as the scene grows - a vector of
