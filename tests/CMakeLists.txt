@@ -14,6 +14,7 @@ add_executable(pathtracer_tests
   math/vec3_test.cpp
   math/interval_test.cpp
   math/aabb_test.cpp
+  math/robust_test.cpp
   math/onb_test.cpp
   math/transform_test.cpp
 
