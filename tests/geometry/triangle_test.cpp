@@ -25,12 +25,11 @@ using pt::Triangle;
 using pt::TriangleHit;
 using pt::Vec3;
 using pt::operator""_f;
+using Catch::Matchers::WithinAbs;
+using pt_test::require_near;
 using pt_test::require_vec_near;
 using pt_test::tolerance;
 using pt_test::widen;
-
-using Catch::Matchers::WithinAbs;
-
 
 // Reference triangle: the unit right triangle in the z = 0 plane, wound so that
 // cross(v1 - v0, v2 - v0) points towards +z.
@@ -225,4 +224,37 @@ TEST_CASE("the hit record carries the triangle's material", "[geometry][triangle
 
     REQUIRE(tri.hit(ray_from_above(0.25_f, 0.25_f), visible, rec));
     REQUIRE(rec.mat == &mat);
+}
+
+TEST_CASE("a small triangle is hit whatever the ray direction is scaled to", "[geometry][triangle]") {
+    // det is proportional to the triangle's area times the length of the ray
+    // direction, and this renderer feeds it all three: a camera ray carries the
+    // focus distance, a bounce carries one, a light sample carries the distance to
+    // the light. A millimetre of detail in a metre-sized scene used to disappear
+    // for two of those three.
+    constexpr Float leg = 0.001_f;
+    const Point3 v_0(0, 0, 1);
+    const Point3 v_1(leg, 0, 1);
+    const Point3 v_2(0, leg, 1);
+    const Point3 origin(leg / 4, leg / 4, 0);
+
+    for (const Float length : {0.001_f, 1.0_f, 1000.0_f}) {
+        TriangleHit hit;
+        REQUIRE(intersect_triangle(Ray(origin, Vec3(0, 0, length)), visible, v_0, v_1, v_2, hit));
+        require_near(hit.t, 1.0_f / length);
+    }
+}
+
+TEST_CASE("a degenerate triangle is rejected", "[geometry][triangle]") {
+    // Collinear vertices at any scale: the determinant is exactly zero and the
+    // normal would be a NaN. The rejection is what the guard is for; that it costs
+    // nothing on the hot path is why the second guard sits on the normal instead.
+    for (const Float scale : {1.0_f, 1000.0_f}) {
+        const Point3 v_0(scale, scale, 1);
+        const Point3 v_1(scale + 1, scale, 1);
+        const Point3 v_2(scale + 2, scale, 1);
+
+        TriangleHit hit;
+        REQUIRE_FALSE(intersect_triangle(Ray(Point3(scale + 1, scale, 0), Vec3(0, 0, 1)), visible, v_0, v_1, v_2, hit));
+    }
 }

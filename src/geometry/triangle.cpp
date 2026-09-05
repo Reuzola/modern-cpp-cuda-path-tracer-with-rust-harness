@@ -15,15 +15,16 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
     // Moller-Trumbore: solves for (t, b1, b2) by Cramer's rule, without ever forming
     // the plane equation. Two-sided - the sign of the determinant is not tested.
 
-    // Rejects both parallel rays and degenerate (zero-area) triangles: the determinant is proportional to the triangle's area.
-    constexpr Float parallel_epsilon = 1e-8_f;
-
     const Vec3 e1 = v1 - v0;
     const Vec3 e2 = v2 - v0;
     const Vec3 pvec = cross(r.direction(), e2);
 
     const Float det = dot(e1, pvec);
-    if (std::fabs(det) < parallel_epsilon) return false;
+
+    // Only det == 0 is rejected; scale dependence makes fixed thresholds arbitrary.
+    // Near-zero values blow up barycentrics and fail downstream range checks,
+    // while any resulting NaNs are safely caught by the interval test.
+    if (det == 0) return false;
     const Float inv_det = 1.0_f / det;
 
     const Vec3 tvec = r.origin() - v0;
@@ -40,7 +41,12 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
     out.t = t;
     out.b1 = b1;
     out.b2 = b2;
-    out.normal = unit_vector(cross(e1, e2));
+
+    // A zero-area triangle has no normal; normalising it would put a NaN in the record.
+    const Vec3 normal = cross(e1, e2);
+    const Float area_squared = normal.length_squared();
+    if (!(area_squared > 0)) return false; // NaN-safe: catches zero area and underflow
+    out.normal = normal / std::sqrt(area_squared);
 
     return true;
 }

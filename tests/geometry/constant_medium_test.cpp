@@ -208,3 +208,21 @@ TEST_CASE("a ray starting inside begins scattering at once", "[geometry][medium]
     REQUIRE(rec.t >= 0.0_f);
     REQUIRE(rec.t <= 10.0_f);
 }
+
+TEST_CASE("a medium far from the origin still finds its exit", "[geometry][constant_medium]") {
+    // The exit search used to start a fixed 1e-4 past the entry, which is below
+    // the resolution of t out here and was doing nothing; the strict interval is
+    // what actually separates the two hits.
+    constexpr Float scale = 100'000.0_f;
+    const Sphere boundary{Point3(scale, scale, scale), 1.0_f, nullptr};
+    const ConstantMedium medium{&boundary, 50.0_f, nullptr};
+
+    const Point3 origin(scale, scale, scale - 10.0_f);
+    const Ray r(origin, Vec3(0, 0, 1));
+
+    Sampler sampler = make_sampler(501);
+    HitRecord rec;
+    REQUIRE(medium.sample_interaction(r, visible, sampler, rec));
+    REQUIRE(rec.t > 9.0_f);
+    REQUIRE(rec.t < 11.0_f);
+}

@@ -355,14 +355,22 @@ TEST_CASE("padding is a floor on width, not an inflation", "[math][aabb]") {
     const Aabb near_origin(Point3(0, 0, 0), Point3(0.01_f, 0.01_f, 0.01_f));
     REQUIRE(near_origin.x.size() == 0.01_f);
 
-    // Out at 10^6 a float coordinate resolves to 0.0625, so half a unit is only
-    // eight ulps and gets padded, while a full unit is left alone.
     constexpr Float far_away = 1'000'000.0_f;
+
+    // A whole unit of width is resolvable at this coordinate under either scalar
+    // type, so it is left exactly as it is.
     const Aabb thick(Point3(far_away, far_away, far_away), Point3(far_away + 1, far_away + 1, far_away + 1));
     REQUIRE(thick.x.size() == 1.0_f);
 
-    const Aabb thin(Point3(far_away, far_away, far_away), Point3(far_away + 0.5_f, far_away + 0.5_f, far_away + 0.5_f));
-    REQUIRE(thin.x.size() > 0.5_f);
+    // A few ulps of it are not. Which term catches this - the relative one under
+    // float, the absolute floor under double - is left to the scalar type on
+    // purpose: the two express the same rule at the resolution each one has.
+    const Float ulp = std::nextafter(far_away, infinity) - far_away;
+    const Float thin_width = 4.0_f * ulp;
+
+    const Aabb thin(Point3(far_away, far_away, far_away),
+                    Point3(far_away + thin_width, far_away + thin_width, far_away + thin_width));
+    REQUIRE(thin.x.size() > thin_width);
 }
 
 TEST_CASE("a padded planar box survives a distant hit", "[math][aabb]") {

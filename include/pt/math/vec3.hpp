@@ -55,6 +55,8 @@ public:
 
     [[nodiscard]] static Vec3 random(Float min, Float max, Sampler& sampler) noexcept;
 
+    // Absolute threshold: only meaningful for vectors of unit order, such as a sum of
+    // normals. Not a test for a small world-space distance.
     [[nodiscard]] bool near_zero() const noexcept {
         constexpr Float s = 1e-8_f;
         return std::fabs(e_[0]) < s && std::fabs(e_[1]) < s && std::fabs(e_[2]) < s;

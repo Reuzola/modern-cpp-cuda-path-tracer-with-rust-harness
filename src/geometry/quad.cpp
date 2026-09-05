@@ -62,7 +62,6 @@ bool Quad::is_interior(Float a, Float b, HitRecord& rec) const {
 
 bool Quad::intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     const Float denom = dot(normal_, r.direction());
-    if (std::fabs(denom) < 1e-8_f) return false;
 
     const Float t = (d_ - dot(normal_, r.origin())) / denom;
     if (!ray_t.surrounds(t)) return false;

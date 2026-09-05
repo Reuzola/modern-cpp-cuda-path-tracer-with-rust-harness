@@ -20,7 +20,10 @@ bool ConstantMedium::sample_interaction(const Ray& r, const Interval& ray_t, Sam
     HitRecord rec2;
 
     if (!boundary_->hit(r, Interval::universe, rec1)) return false;
-    if (!boundary_->hit(r, Interval(rec1.t + 0.0001_f, infinity), rec2)) return false;
+
+    // Open intervals naturally reject the entry hit at its own distance without nudging. This avoids
+    // fixed t-offsets, whose actual world-space distance varies with the ray direction's length.
+    if (!boundary_->hit(r, Interval(rec1.t, infinity), rec2)) return false;
 
     if (rec1.t < ray_t.min) rec1.t = ray_t.min;
     if (rec2.t > ray_t.max) rec2.t = ray_t.max;

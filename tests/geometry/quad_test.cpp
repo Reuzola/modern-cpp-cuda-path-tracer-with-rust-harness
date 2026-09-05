@@ -91,10 +91,11 @@ TEST_CASE("the boundary belongs to the quad", "[geometry][quad]") {
 TEST_CASE("a ray parallel to the plane misses", "[geometry][quad]") {
     HitRecord rec;
 
-    // Inside the plane, pointing along it: the denominator is zero and the
-    // distance would be a division by zero. The guard is on the denominator's
-    // magnitude, so a grazing ray is dropped rather than turned into an infinity
-    // that propagates into rec.p.
+    // Inside the plane and pointing along it: the denominator is zero, so the
+    // distance comes out as an infinity or a NaN by IEEE rules rather than
+    // undefined behaviour, and the interval test drops both. No threshold on the
+    // denominator: it would mean a different grazing angle for every ray direction
+    // length in the renderer.
     REQUIRE_FALSE(square.hit(Ray(Point3(0, 0, 2), Vec3(1, 0, 0)), visible, rec));
     REQUIRE_FALSE(square.hit(Ray(Point3(0, 0, 0), Vec3(1, 0, 0)), visible, rec));
 }
