@@ -262,5 +262,9 @@ TEST_CASE("intersect accepts tangent hits when rounding collapses slab bounds", 
     const auto result = box.intersect(origin, inv_dir, ray_t);
 
     REQUIRE(result.has_value());
-    require_near(*result, 1355.0_f);
+
+    // Not a precision tolerance: the entry distance is the *padded* near plane,
+    // so it sits up to one padding width short of 555's true distance. float
+    // collapses it back to exactly 1355 - which is the collapse under test.
+    require_near(*result, 1355.0_f, 1e-4);
 }
