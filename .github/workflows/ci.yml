@@ -32,6 +32,13 @@ jobs:
           # Debug + -Werror. Tests only: this leg guards the compiler contract.
           - preset: dev
             render: false
+          # The scalar type that is no longer the default, kept compiling and
+          # passing its tests. Same three stages as `dev`. Nothing is rendered:
+          # the reference images are float, and a double render differs from them
+          # by design, so a comparison here would report a difference that means
+          # nothing.
+          - preset: dev-double
+            render: false
           # Optimizer + ThinLTO path, plus one render to prove the shipped
           # binary reads a scene file and produces an image.
           - preset: release

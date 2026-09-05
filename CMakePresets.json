@@ -33,6 +33,14 @@
       }
     },
     {
+      "name": "dev-double",
+      "displayName": "Development + double precision scalar",
+      "inherits": "dev",
+      "cacheVariables": {
+        "PT_DOUBLE_PRECISION": "ON"
+      }
+    },
+    {
       "name": "asan-ubsan",
       "displayName": "Sanitizers (ASan + UBSan)",
       "inherits": "base",
@@ -93,6 +101,10 @@
       "configurePreset": "dev-viewer"
     },
     {
+      "name": "dev-double",
+      "configurePreset": "dev-double"
+    },
+    {
       "name": "asan-ubsan",
       "configurePreset": "asan-ubsan"
     },
@@ -137,6 +149,11 @@
       "name": "dev-viewer",
       "inherits": "test-base",
       "configurePreset": "dev-viewer"
+    },
+    {
+      "name": "dev-double",
+      "inherits": "test-base",
+      "configurePreset": "dev-double"
     },
     {
       "name": "asan-ubsan",

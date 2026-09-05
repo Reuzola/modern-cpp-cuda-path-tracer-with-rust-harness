@@ -48,6 +48,7 @@ at the repository root rather than duplicated per build directory.
 |---|---|---|
 | `dev` | Debug | Everyday work. Warnings are errors. |
 | `dev-viewer` | Debug | `dev` plus the interactive viewer. |
+| `dev-double` | Debug | `dev` with `Float` as `double`. The reference configuration for the non-default scalar type. |
 | `asan-ubsan` | Debug + `-O1` | AddressSanitizer and UndefinedBehaviorSanitizer. |
 | `release` | Release | Optimized and portable. **Reference images and benchmark timings are only valid from this one.** |
 | `release-native` | Release | `release` plus `-march=native`. Faster on this machine, and changes floating-point results. |
@@ -55,9 +56,9 @@ at the repository root rather than duplicated per build directory.
 | `release-stats` | Release | `release` plus BVH traversal counters. For measurement only. |
 | `release-profiling` | Release | `release` plus debug info and frame pointers. For profiling only. |
 
-`ctest` presets exist for `dev`, `dev-viewer`, `asan-ubsan` and `release`.
+`ctest` presets exist for `dev`, `dev-viewer`, `dev-double`, `asan-ubsan` and `release`.
 
-Two presets are not interchangeable with the others and it matters:
+Three presets are not interchangeable with the others and it matters:
 
 - **`release-native`** enables fused multiply-add contraction. Every image it
   produces differs from `release` in the last few bits, so it must not be used
