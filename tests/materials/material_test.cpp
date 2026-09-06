@@ -412,3 +412,26 @@ TEST_CASE("an isotropic medium scatters over the whole sphere", "[materials][iso
     require_near(phase.scattering_pdf(incoming, rec, Ray(rec.p, Vec3(0, 0, -1))), uniform);
     require_near(as_pdf(bounce.sampling_pdf).value(Vec3(0, 1, 0)), uniform);
 }
+
+TEST_CASE("a shading normal facing away still scatters a finite direction", "[materials][dielectric]") {
+    // Not a regression: the configuration itself is untested elsewhere. An
+    // interpolated normal past a silhouette leaves the cosine outside [-1, 1], and
+    // everything downstream of it has to stay finite.
+    const Dielectric glass{1.5_f};
+    const Ray incoming{Point3(0, 0, -1), Vec3(0, 0, 1)};
+
+    HitRecord rec;
+    rec.p = Point3(0, 0, 0);
+    rec.normal = Vec3(0, 0, 1); // pointing the same way the ray travels
+    rec.geometric_normal = Vec3(0, 0, -1);
+    rec.front_face = true;
+
+    Sampler sampler = make_sampler(601);
+    const auto scattered = glass.scatter(incoming, rec, sampler);
+
+    REQUIRE(scattered.has_value());
+    const Ray& out = std::get<pt::SpecularBounce>(scattered->bounce).scattered;
+    REQUIRE(std::isfinite(out.direction().x()));
+    REQUIRE(std::isfinite(out.direction().y()));
+    REQUIRE(std::isfinite(out.direction().z()));
+}
