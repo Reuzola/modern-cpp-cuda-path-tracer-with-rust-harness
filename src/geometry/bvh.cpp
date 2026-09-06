@@ -42,8 +42,9 @@ struct AxisExtent {
     Float extent{};
 };
 
-// Centroid bounds, tracked outside Aabb on purpose: Aabb's point ctor pads degenerate axes by 1e-4,
-// which would hide the "all centroids coincide" case that the binning split must detect.
+// Centroid bounds, tracked outside Aabb on purpose: Aabb's point ctor pads a
+// degenerate axis relative to its own coordinate, which would hide coincident
+// centroids exactly where the split has to detect them.
 struct CentroidBounds {
     Point3 min{+infinity, +infinity, +infinity};
     Point3 max{-infinity, -infinity, -infinity};
