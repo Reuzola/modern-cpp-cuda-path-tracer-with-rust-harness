@@ -74,20 +74,25 @@ Vec3 Sphere::random_to_sphere(Float radius, Float distance_squared, Sampler& sam
 }
 
 bool Sphere::intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    const auto current_center = center_.at(r.time());
-
-    const auto oc = current_center - r.origin();
+    const Point3 current_center = center_.at(r.time());
+    const Vec3 oc = current_center - r.origin();
     const Float a = r.direction().length_squared();
     const Float h = dot(oc, r.direction());
-    const Float c = oc.length_squared() - (radius_ * radius_);
+    const Vec3 offset = oc - (h / a) * r.direction();
 
-    const Float discriminant = h * h - a * c;
+    const Float discriminant = a * (radius_ * radius_ - offset.length_squared());
     if (discriminant < 0) return false;
     const Float sqrtd = std::sqrt(discriminant);
 
-    Float root = (h - sqrtd) / a;
+    const Float c = oc.length_squared() - radius_ * radius_;
+    const Float q = h < 0 ? h - sqrtd : h + sqrtd;
+
+    const Float near_root = std::fmin(q / a, c / q);
+    const Float far_root = std::fmax(q / a, c / q);
+
+    Float root = near_root;
     if (!ray_t.surrounds(root)) {
-        root = (h + sqrtd) / a;
+        root = far_root;
         if (!ray_t.surrounds(root)) {
             return false;
         }

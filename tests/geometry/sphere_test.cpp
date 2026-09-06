@@ -232,3 +232,18 @@ TEST_CASE("sampling a moving sphere aims at its shutter-open centre", "[geometry
     REQUIRE(moving.hit(Ray(origin, direction, 0.0_f), visible, rec));
     REQUIRE_FALSE(moving.hit(Ray(origin, direction, 1.0_f), visible, rec));
 }
+
+TEST_CASE("a distant ray hits a small sphere at the right distance", "[geometry][sphere]") {
+    // At 10^5 units the discriminant written as h*h - a*c collapses to zero in
+    // float: the sphere is reported as grazed at its closest point rather than
+    // entered, one radius short, with a normal to match. This is the camera-in-a
+    // -large-scene case, and nothing in the scene set was far enough away to show it.
+    const Sphere unit{Point3(0, 0, 0), 1.0_f, nullptr};
+    const Ray far_away{Point3(0, 0, -100'000.0_f), Vec3(0, 0, 1)};
+
+    HitRecord rec;
+    REQUIRE(unit.hit(far_away, visible, rec));
+
+    require_near(rec.t, 99'999.0_f, 0.01);
+    require_vec_near(rec.normal, Vec3(0, 0, -1));
+}
