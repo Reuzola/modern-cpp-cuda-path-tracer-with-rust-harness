@@ -79,6 +79,10 @@ reference set rather than by assertion. That mechanism, including how to
 regenerate the references, is documented in
 [golden-images.md](golden-images.md).
 
+Reproducibility is checked on its own rather than as a side effect of that
+comparison, since the comparison now carries a tolerance;
+`scripts/check-determinism.sh` is what asserts it.
+
 ## Scope
 
 The suite covers the engine library (`include/pt/`, `src/`) and the scene tool.
@@ -104,6 +108,10 @@ Every push to `main` runs four independent jobs:
   but not built — the analyser needs the commands and the headers, not an
   artefact. `dev` is not used because the viewer's translation units are absent
   from it and would go unanalysed;
+- a regression job that validates every scene file, checks that the renderer
+  reproduces itself byte for byte across two runs, and compares a full render
+  of the golden set against the references, uploading the difference images
+  when it fails.
 - a regression job that validates every scene file and compares a full render
   of the golden set against the references, uploading the difference images
   when it fails.

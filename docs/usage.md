@@ -131,11 +131,19 @@ scene-tool compare tests/golden/cornell_box.png out/cornell.png \
     --diff out/cornell_diff.png
 ```
 
-`--threshold` is the largest RMSE that still counts as a pass and defaults to
-`0.0`. A difference image is written only on failure, amplified by
-`--diff-gain` (default 10) so that a one-level difference is visible. The two
-images must be the same format: PNG is gamma-encoded and EXR is linear, and
-comparing across the two would be comparing two different quantities.
+Both images are averaged into square blocks before the error is measured, and
+it is that block RMSE the verdict uses. --block-size is the side of the
+block and defaults to 8; --block-size 1 measures per pixel. --threshold
+is the largest block RMSE that still counts as a pass and defaults to 0.0,
+so the tool on its own demands an exact match — the tolerance each reference
+is actually held to sits beside it in tests/golden/manifest.txt, and
+scripts/check-goldens.sh is what applies it. The full-resolution RMSE, the
+largest single-channel difference and PSNR are reported alongside but decide
+nothing. A difference image is written only on failure, at full resolution,
+amplified by --diff-gain (default 10) so that a one-level difference is
+visible. The two images must be the same format: PNG is gamma-encoded and EXR
+is linear, and comparing across the two would be comparing two different
+quantities.
 
 Comparing two benchmark runs:
 
@@ -177,7 +185,7 @@ them:
 
 ## Scripts
 
-All five resolve the repository root from their own location, so they can be
+All six resolve the repository root from their own location, so they can be
 run from anywhere. All accept `PATHTRACER` to point at a renderer outside the
 default build directory.
 
@@ -185,9 +193,10 @@ default build directory.
 |---|---|
 | `scripts/render-scenes.sh <preset> [dir]` | Renders every scene in `scenes/`. Scenes in the golden manifest use its resolution and sample count; the rest use their own settings. Output goes to `out/<preset>/` unless told otherwise. |
 | `scripts/render-goldens.sh [dir]` | Regenerates the reference set. Writes over `tests/golden/` unless given a scratch directory. |
-| `scripts/check-goldens.sh [--threshold V] [--no-build]` | Builds, renders into a scratch directory and compares every reference. Keeps the renders and difference images behind only when something failed. |
+| `scripts/check-goldens.sh [--no-build] [--diff-dir D]` | Builds, renders into a scratch directory and compares every reference against the tolerance its manifest row carries. Keeps the renders and difference images behind only when something failed. |
 | `scripts/run-benchmarks.sh [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, appending NDJSON to `out/benchmarks.ndjson`. `BENCH_RUNS` overrides the repeat count. |
 | `scripts/profile.sh [--out dir] [scene ...]` | Records a sampling profile per benchmark scene and renders a flame graph. Output goes to `out/profiles/`. Needs `perf` and `inferno`; see [profiling.md](profiling.md). |
+| `scripts/check-determinism.sh [scene ...]` | Renders each scene twice from the same binary and compares the two files byte for byte. Defaults to three scenes chosen for what they construct. |
 
 The reference set and the reasoning behind it are in
 [golden-images.md](golden-images.md).
