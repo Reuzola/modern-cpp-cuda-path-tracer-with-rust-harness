@@ -1,7 +1,7 @@
 //! Golden image comparison: loads two images, measures the difference, optionally writes a diff.
 use crate::diff::write_diff_png;
 use crate::error::ToolError;
-use crate::image::{Image, ImageFormat, format_from_path, load_image};
+use crate::image::{Image, ImageFormat, block_mean, format_from_path, load_image};
 use crate::metrics::{Metrics, compute_metrics, first_non_finite, psnr};
 use std::path::Path;
 
@@ -11,27 +11,36 @@ pub struct CompareOutcome {
     pub psnr_db: Option<f64>,
     pub passed: bool,
     pub diff_written: bool,
+    pub block_metrics: Metrics,
+    pub block_size: u32,
 }
 
 fn ensure_finite(image: &Image, path: &Path) -> Result<(), ToolError> {
     if let Some(index) = first_non_finite(image) {
-        return Err(ToolError::NonFiniteValue { path: path.to_path_buf(), index });
+        return Err(ToolError::NonFiniteValue {
+            path: path.to_path_buf(),
+            index,
+        });
     }
     Ok(())
 }
 
-/// Compares two images and reports whether the RMSE stays within the threshold.
+/// Reports whether the block RMSE stays within the threshold.
 pub fn compare_images(
     reference_path: &Path,
     actual_path: &Path,
     threshold: f64,
+    block_size: u32,
     diff_path: Option<&Path>,
     diff_gain: f32,
 ) -> Result<CompareOutcome, ToolError> {
     let reference_format = format_from_path(reference_path);
     let actual_format = format_from_path(actual_path);
     if reference_format != actual_format {
-        return Err(ToolError::FormatMismatch { reference: reference_path.to_path_buf(), actual: actual_path.to_path_buf() });
+        return Err(ToolError::FormatMismatch {
+            reference: reference_path.to_path_buf(),
+            actual: actual_path.to_path_buf(),
+        });
     }
 
     let reference = load_image(reference_path)?;
@@ -44,7 +53,7 @@ pub fn compare_images(
             reference_height: reference.height,
             actual: actual_path.to_path_buf(),
             actual_width: actual.width,
-            actual_height: actual.height
+            actual_height: actual.height,
         });
     }
 
@@ -58,7 +67,12 @@ pub fn compare_images(
         None
     };
 
-    let passed = metrics.rmse <= threshold;
+    let block_metrics = compute_metrics(
+        &block_mean(&reference, block_size),
+        &block_mean(&actual, block_size),
+    );
+
+    let passed = block_metrics.rmse <= threshold;
     let mut diff_written = false;
     if !passed && let Some(diff_path) = diff_path {
         write_diff_png(&reference, &actual, diff_gain, diff_path)?;
@@ -70,16 +84,23 @@ pub fn compare_images(
         psnr_db,
         passed,
         diff_written,
+        block_metrics,
+        block_size,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::image::load_png;
     use tempfile::TempDir;
 
     fn image(width: u32, height: u32, channels: &[f32]) -> Image {
-        Image { width, height, pixels: channels.to_vec() }
+        Image {
+            width,
+            height,
+            pixels: channels.to_vec(),
+        }
     }
 
     /// Writes an image as PNG by diffing it against black, which leaves the
@@ -87,6 +108,23 @@ mod tests {
     fn write_png(path: &Path, source: &Image) {
         let black = image(source.width, source.height, &vec![0.0; source.pixels.len()]);
         write_diff_png(&black, source, 1.0, path).expect("the fixture must be writable");
+    }
+
+    /// A checkerboard and its inverse: every channel differs by the maximum
+    /// possible amount, yet every 2x2 block holds the same mean in both. This
+    /// is Monte Carlo noise in its most extreme form.
+    fn checkerboard() -> (Image, Image) {
+        let reference = image(
+            2,
+            2,
+            &[1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        );
+        let actual = image(
+            2,
+            2,
+            &[0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+        );
+        (reference, actual)
     }
 
     #[test]
@@ -100,7 +138,7 @@ mod tests {
         write_png(&reference, &source);
         write_png(&actual, &source);
 
-        let outcome = compare_images(&reference, &actual, 0.0, Some(&diff), 10.0)
+        let outcome = compare_images(&reference, &actual, 0.0, 1, Some(&diff), 10.0)
             .expect("both images must load");
 
         assert!(outcome.passed);
@@ -120,7 +158,7 @@ mod tests {
         write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
         write_png(&actual, &image(1, 1, &[1.0, 0.0, 0.0]));
 
-        let outcome = compare_images(&reference, &actual, 0.5, Some(&diff), 1.0)
+        let outcome = compare_images(&reference, &actual, 0.5, 1, Some(&diff), 1.0)
             .expect("both images must load");
 
         assert!(!outcome.passed);
@@ -139,8 +177,8 @@ mod tests {
         write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
         write_png(&actual, &image(1, 1, &[1.0, 0.0, 0.0]));
 
-        let lenient = compare_images(&reference, &actual, 0.6, None, 1.0).expect("must load");
-        let strict = compare_images(&reference, &actual, 0.5, None, 1.0).expect("must load");
+        let lenient = compare_images(&reference, &actual, 0.6, 1, None, 1.0).expect("must load");
+        let strict = compare_images(&reference, &actual, 0.5, 1, None, 1.0).expect("must load");
 
         assert!(lenient.passed);
         assert!(!strict.passed);
@@ -156,7 +194,7 @@ mod tests {
         write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
         write_png(&actual, &image(1, 1, &[1.0, 1.0, 1.0]));
 
-        let outcome = compare_images(&reference, &actual, 0.0, None, 1.0).expect("must load");
+        let outcome = compare_images(&reference, &actual, 0.0, 1, None, 1.0).expect("must load");
 
         assert!(!outcome.passed);
         assert!(!outcome.diff_written);
@@ -171,7 +209,7 @@ mod tests {
         write_png(&reference, &image(1, 1, &[0.0, 0.0, 0.0]));
         write_png(&actual, &image(1, 1, &[1.0, 0.0, 0.0]));
 
-        let outcome = compare_images(&reference, &actual, 1.0, None, 1.0).expect("must load");
+        let outcome = compare_images(&reference, &actual, 1.0, 1, None, 1.0).expect("must load");
 
         assert!(outcome.psnr_db.is_some());
     }
@@ -185,7 +223,7 @@ mod tests {
         write_png(&reference, &image(2, 1, &[0.0; 6]));
         write_png(&actual, &image(1, 1, &[0.0; 3]));
 
-        let err = compare_images(&reference, &actual, 0.0, None, 1.0)
+        let err = compare_images(&reference, &actual, 0.0, 8, None, 1.0)
             .expect_err("mismatched dimensions cannot be compared");
 
         assert!(matches!(err, ToolError::DimensionMismatch { .. }), "{err}");
@@ -195,7 +233,7 @@ mod tests {
     // linear, so there is no meaningful metric across the two.
     #[test]
     fn comparing_a_png_against_an_exr_is_an_error() {
-        let err = compare_images(Path::new("a.png"), Path::new("b.exr"), 0.0, None, 1.0)
+        let err = compare_images(Path::new("a.png"), Path::new("b.exr"), 0.0, 8, None, 1.0)
             .expect_err("formats must match");
 
         assert!(matches!(err, ToolError::FormatMismatch { .. }), "{err}");
@@ -205,9 +243,102 @@ mod tests {
     // the loader is the one that refuses.
     #[test]
     fn an_unsupported_extension_is_an_error() {
-        let err = compare_images(Path::new("a.jpg"), Path::new("b.jpg"), 0.0, None, 1.0)
+        let err = compare_images(Path::new("a.jpg"), Path::new("b.jpg"), 0.0, 8, None, 1.0)
             .expect_err("jpg is not a supported format");
 
         assert!(matches!(err, ToolError::UnknownImageFormat { .. }), "{err}");
+    }
+
+    #[test]
+    fn a_zero_mean_difference_is_absorbed_by_the_block_average() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        let (r, a) = checkerboard();
+        write_png(&reference, &r);
+        write_png(&actual, &a);
+
+        let outcome =
+            compare_images(&reference, &actual, 0.0, 2, None, 1.0).expect("both images must load");
+
+        assert!(outcome.passed);
+        assert_eq!(outcome.block_metrics.rmse, 0.0);
+    }
+
+    // The full-resolution figures stay in the report after they stop deciding:
+    // the same pair that passes above is as different as two images can be.
+    #[test]
+    fn the_full_resolution_metrics_are_still_measured() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        let (r, a) = checkerboard();
+        write_png(&reference, &r);
+        write_png(&actual, &a);
+
+        let outcome =
+            compare_images(&reference, &actual, 0.0, 2, None, 1.0).expect("both images must load");
+
+        assert_eq!(outcome.metrics.rmse, 1.0);
+        assert_eq!(outcome.metrics.max_abs_diff, 1.0);
+        assert_eq!(outcome.block_size, 2);
+    }
+
+    // The same pair, gated per pixel: a block size of one turns the new gate
+    // back into the old one.
+    #[test]
+    fn a_block_size_of_one_gates_on_the_full_resolution_error() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        let (r, a) = checkerboard();
+        write_png(&reference, &r);
+        write_png(&actual, &a);
+
+        let outcome =
+            compare_images(&reference, &actual, 0.0, 1, None, 1.0).expect("both images must load");
+
+        assert!(!outcome.passed);
+        assert_eq!(outcome.block_metrics.rmse, outcome.metrics.rmse);
+    }
+
+    // The other half of the contract: a difference that moves the mean is not
+    // averaged away, however large the block.
+    #[test]
+    fn a_systematic_shift_survives_the_block_average() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+
+        write_png(&reference, &image(2, 2, &[0.0; 12]));
+        write_png(&actual, &image(2, 2, &[1.0; 12]));
+
+        let outcome =
+            compare_images(&reference, &actual, 0.5, 2, None, 1.0).expect("both images must load");
+
+        assert!(!outcome.passed);
+        assert_eq!(outcome.block_metrics.rmse, 1.0);
+    }
+
+    // The diff is for a human to look at, so it keeps the resolution the
+    // renderer produced rather than the grid the gate measured on.
+    #[test]
+    fn the_difference_image_is_written_at_full_resolution() {
+        let dir = TempDir::new().expect("a temp dir must be creatable");
+        let reference = dir.path().join("reference.png");
+        let actual = dir.path().join("actual.png");
+        let diff = dir.path().join("diff.png");
+
+        write_png(&reference, &image(2, 2, &[0.0; 12]));
+        write_png(&actual, &image(2, 2, &[1.0; 12]));
+
+        let outcome = compare_images(&reference, &actual, 0.0, 2, Some(&diff), 1.0)
+            .expect("both images must load");
+
+        assert!(outcome.diff_written);
+        assert_eq!(load_png(&diff).expect("readable").dimensions(), (2, 2));
     }
 }

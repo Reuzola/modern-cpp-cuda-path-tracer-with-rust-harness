@@ -33,7 +33,7 @@ fi
 mkdir -p "${output_dir}"
 
 count=0
-while read -r scene width height spp; do
+while read -r scene width height spp tol; do
     # Skip blank lines and comments. The header row starts with '#' too, so
     # its columns never reach the renderer.
     if [[ -z "${scene}" || "${scene}" == \#* ]]; then

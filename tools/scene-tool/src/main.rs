@@ -14,6 +14,17 @@ fn noise_threshold(s: &str) -> Result<f64, String> {
     Ok(val)
 }
 
+fn parse_block_size(s: &str) -> Result<u32, String> {
+    let val: u32 = s
+        .parse()
+        .map_err(|_| format!("'{s}' is not a valid integer"))?;
+
+    if val == 0 {
+        return Err("block size must be greater than zero".to_string());
+    }
+    Ok(val)
+}
+
 #[derive(Parser)]
 #[command(
     name = "scene-tool",
@@ -46,6 +57,10 @@ enum Commands {
         /// Multiplier applied to the difference before it is written
         #[arg(long, default_value_t = 10.0)]
         diff_gain: f32,
+
+        /// Side of the square block averaged before the error is measured
+        #[arg(long, default_value_t = 8, value_parser = parse_block_size)]
+        block_size: u32,
     },
 
     /// Compare two NDJSON benchmark runs scene by scene
@@ -89,11 +104,23 @@ fn main() -> ExitCode {
             threshold,
             diff,
             diff_gain,
-        } => match compare_images(&reference, &actual, threshold, diff.as_deref(), diff_gain) {
+            block_size,
+        } => match compare_images(
+            &reference,
+            &actual,
+            threshold,
+            block_size,
+            diff.as_deref(),
+            diff_gain,
+        ) {
             Ok(outcome) => {
                 eprintln!(
-                    "rmse {:.6}, max abs diff {:.6}",
-                    outcome.metrics.rmse, outcome.metrics.max_abs_diff
+                    "block rmse {:.6} ({}x{}), rmse {:.6}, max abs diff {:.6}",
+                    outcome.block_metrics.rmse,
+                    outcome.block_size,
+                    outcome.block_size,
+                    outcome.metrics.rmse,
+                    outcome.metrics.max_abs_diff,
                 );
 
                 if let Some(db) = outcome.psnr_db {
