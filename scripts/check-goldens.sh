@@ -5,10 +5,14 @@
 # Renders into a scratch directory, so the tracked references are never
 # overwritten: this script answers "did anything change", not "make it match".
 #
+# Each scene carries its own tolerance in the manifest; there is no global
+# threshold to pass here. Why the tolerances differ per scene, and how they
+# were measured, is in docs/golden-images.md.
+#
 # Exit status: 0 every reference matched, 1 at least one differed, 2 the
 # comparison tool itself failed. This mirrors scene-tool's own contract.
 #
-# Usage: scripts/check-goldens.sh [--threshold <value>] [--no-build]
+# Usage: scripts/check-goldens.sh [--no-build] [--diff-dir <dir>]
 
 set -euo pipefail
 
@@ -20,25 +24,28 @@ cd "${repo_root}"
 # run against another preset would report differences that mean nothing.
 preset="release"
 
-threshold="0.0"
+manifest="tests/golden/manifest.txt"
+
+# Stated rather than inherited from the tool's default: every tolerance in the
+# manifest was measured at this block size, so a change to that default must
+# not silently reinterpret all of them.
+block_size=8
+
 do_build=true
+diff_dir=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    --threshold)
-        # An option that takes a value must prove the value is there; without
-        # this check a trailing --threshold silently consumes the next flag.
-        [[ $# -ge 2 ]] || { echo "error: --threshold needs a value" >&2; exit 2; }
-        threshold="$2"
-        # Rejected here rather than 12 times over by the tool: a leading '-' is
-        # also parsed as a flag downstream, so the message would be misleading.
-        [[ "${threshold}" =~ ^[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$ ]] ||
-            { echo "error: --threshold must be a non-negative number, got '${threshold}'" >&2; exit 2; }
-        shift 2
-        ;;
     --no-build)
         do_build=false
         shift
+        ;;
+    --diff-dir)
+        # An option that takes a value must prove the value is there; without
+        # this check a trailing --diff-dir silently consumes the next flag.
+        [[ $# -ge 2 ]] || { echo "error: --diff-dir needs a value" >&2; exit 2; }
+        diff_dir="$2"
+        shift 2
         ;;
     -h | --help)
         sed -n '2,/^$/s/^# \?//p' "${BASH_SOURCE[0]}"
@@ -73,7 +80,12 @@ status=0
 # mktemp picks a name nothing else owns; a fixed /tmp path would collide with a
 # second run and silently compare against the other one's output.
 work_dir=$(mktemp -d)
-diff_dir="${work_dir}/diff"
+
+# Kept outside the scratch directory when the caller named one, so CI can
+# collect the images after this script has cleaned up after itself.
+if [[ -z "${diff_dir}" ]]; then
+    diff_dir="${work_dir}/diff"
+fi
 mkdir -p "${diff_dir}"
 
 cleanup() {
@@ -81,7 +93,8 @@ cleanup() {
         rm -rf "${work_dir}"
     else
         echo
-        echo "renders and difference images kept in ${work_dir}" >&2
+        echo "renders kept in ${work_dir}" >&2
+        echo "difference images in ${diff_dir}" >&2
     fi
 }
 # EXIT fires on normal return, on `set -e`, and on Ctrl-C, so the scratch
@@ -92,24 +105,62 @@ echo "==> rendering"
 scripts/render-goldens.sh "${work_dir}"
 
 echo
-echo "==> comparing (threshold ${threshold})"
+echo "==> comparing (block ${block_size}x${block_size}, per-scene tolerance)"
 
 matched=0
 total=0
 
-for reference in tests/golden/*.png; do
-    name=$(basename "${reference}")
-    actual="${work_dir}/${name}"
+# Names seen in the manifest, so a reference with no row can be reported below.
+declare -A expected=()
+
+# The manifest drives the loop, not the directory listing: the tolerance is a
+# manifest column, and a scene with no row has no tolerance to apply.
+while read -r scene width height spp tol; do
+    # Skip blank lines and comments. The header row starts with '#' too, so
+    # its columns never reach the comparison.
+    if [[ -z "${scene}" || "${scene}" == \#* ]]; then
+        continue
+    fi
+
+    name=$(basename "${scene}" .json).png
+
+    # Two rows for one scene would render twice and compare the second render
+    # against itself, which reads as a pass whatever the first row said.
+    if [[ -n "${expected[${name}]:-}" ]]; then
+        printf '%-28s %-7s %s\n' "${name}" "ERROR" "duplicate manifest row"
+        status=2
+        continue
+    fi
+
+    expected["${name}"]=1
     total=$((total + 1))
 
+    reference="tests/golden/${name}"
+    actual="${work_dir}/${name}"
+
+    # Rejected here rather than by the tool: a malformed column would otherwise
+    # surface as a confusing argument error, once per scene.
+    if [[ ! "${tol}" =~ ^[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$ ]]; then
+        printf '%-28s %-7s %s\n' "${name}" "ERROR" "invalid tolerance '${tol}' in the manifest"
+        status=2
+        continue
+    fi
+
+    if [[ ! -f "${reference}" ]]; then
+        printf '%-28s %-7s %s\n' "${name}" "ERROR" "no reference image (run scripts/render-goldens.sh)"
+        status=1
+        continue
+    fi
+
     if [[ ! -f "${actual}" ]]; then
-        printf '%-28s %-7s %s\n' "${name}" "ERROR" "not rendered (no manifest row)"
+        printf '%-28s %-7s %s\n' "${name}" "ERROR" "not rendered"
         status=1
         continue
     fi
 
     if output=$("${tool}" compare "${reference}" "${actual}" \
-        --threshold "${threshold}" --diff "${diff_dir}/${name}" 2>&1); then
+        --threshold "${tol}" --block-size "${block_size}" \
+        --diff "${diff_dir}/${name}" 2>&1); then
         code=0
     else
         code=$?
@@ -121,11 +172,11 @@ for reference in tests/golden/*.png; do
     *) verdict="ERROR" ;;
     esac
 
-    # The tool's first line already reads "rmse ..., max abs diff ...", so it is
-    # placed beside the verdict verbatim. Nothing here parses or reformats it:
-    # a wording change in the tool must not be able to break this script.
+    # The tool's first line already reads "block rmse ...", so it is placed
+    # beside the verdict verbatim. Nothing here parses or reformats it: a
+    # wording change in the tool must not be able to break this script.
     first_line=${output%%$'\n'*}
-    printf '%-28s %-7s %s\n' "${name}" "${verdict}" "${first_line}"
+    printf '%-28s %-7s tol %-8s %s\n' "${name}" "${verdict}" "${tol}" "${first_line}"
 
     # Anything past the first line is detail (a multi-line clap error), indented
     # under the verdict rather than competing with it.
@@ -140,6 +191,16 @@ for reference in tests/golden/*.png; do
         # The worst code wins: a scene that merely differs (1) must not mask a
         # scene where the tool itself failed (2).
         status="${code}"
+    fi
+done < "${manifest}"
+
+# A reference nobody renders is a reference nobody checks. It would go stale
+# silently, so it is reported rather than ignored.
+for reference in tests/golden/*.png; do
+    name=$(basename "${reference}")
+    if [[ -z "${expected[${name}]:-}" ]]; then
+        printf '%-28s %-7s %s\n' "${name}" "ERROR" "reference has no manifest row"
+        status=1
     fi
 done
 

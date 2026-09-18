@@ -212,26 +212,12 @@ jobs:
             tools/scene-tool/target/release/scene-tool validate "${scene}"
           done
 
-      # Render to a temp path without touching the references.
-      - name: Render the golden scenes
-        run: scripts/render-goldens.sh "${RUNNER_TEMP}/actual"
-
-      # Compare outputs; run the full loop before failing.
-      - name: Compare against the golden set
-        run: |
-          status=0
-          for actual in "${RUNNER_TEMP}"/actual/*.png; do
-            name=$(basename "${actual}")
-            echo "==> ${name}"
-            tools/scene-tool/target/release/scene-tool compare \
-              "tests/golden/${name}" "${actual}" \
-              --threshold "${THRESHOLD}" \
-              --diff "${RUNNER_TEMP}/diff/${name}" || status=1
-          done
-          exit "${status}"
-        env:
-          # Strict bit-identical match threshold.
-          THRESHOLD: "0.0"
+      # Renders into a scratch path and compares every reference against its
+      # own tolerance. --no-build because the two build steps above already
+      # produced exactly what the script would have built, with the caching
+      # and the per-step timing this job wants.
+      - name: Check the golden set
+        run: scripts/check-goldens.sh --no-build --diff-dir "${RUNNER_TEMP}/diff"
 
       # Upload diffs on job failure.
       - name: Upload difference images

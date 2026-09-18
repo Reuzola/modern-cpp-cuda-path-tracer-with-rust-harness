@@ -8,20 +8,28 @@
 # Carlo noise is incompressible, so a PNG here costs ~3 bytes per pixel.
 # spp must be a perfect square: the renderer floors it to sqrt(spp)^2.
 #
+# tol is the largest block-averaged RMSE that still counts as a match, and it
+# is per scene because the noise floor is: at 16 spp these scenes sit three
+# orders of magnitude apart. Each value is 1.5x the error the same scene shows
+# when only the sampling seed changes, which is the upper bound on what a
+# legitimate change in arithmetic order can produce. How they were measured,
+# and which scenes they cannot protect, is in docs/golden-images.md.
+#
 # Regenerate with: scripts/render-goldens.sh
+# Check with:      scripts/check-goldens.sh
 # Reference renders are only valid from the `release` preset.
 
-# scene                          width  height  spp
-scenes/area_lights.json            240     135   16
-scenes/argent_weave.json           240     135   16
-scenes/checkered_spheres.json      240     135   16
-scenes/cornell_box.json            200     200   16
-scenes/cornell_smoke.json          200     200   16
-scenes/earth.json                  240     135   16
-scenes/gilded_orrery.json          240     135   16
-scenes/mesh_showcase.json          240     135   16
-scenes/neon_cathedral.json         240     135   16
-scenes/perlin_spheres.json         240     135   16
-scenes/quads.json                  200     200   16
-scenes/random_spheres.json         240     135   16
-scenes/showcase.json               200     200   16
+# scene                          width  height  spp      tol
+scenes/area_lights.json            240     135   16    0.032
+scenes/argent_weave.json           240     135   16    0.053
+scenes/checkered_spheres.json      240     135   16    0.013
+scenes/cornell_box.json            200     200   16    0.026
+scenes/cornell_smoke.json          200     200   16    0.059
+scenes/earth.json                  240     135   16   0.0018
+scenes/gilded_orrery.json          240     135   16    0.028
+scenes/mesh_showcase.json          240     135   16    0.016
+scenes/neon_cathedral.json         240     135   16    0.049
+scenes/perlin_spheres.json         240     135   16   0.0092
+scenes/quads.json                  200     200   16   0.0076
+scenes/random_spheres.json         240     135   16    0.011
+scenes/showcase.json               200     200   16    0.055
