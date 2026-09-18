@@ -212,6 +212,12 @@ jobs:
             tools/scene-tool/target/release/scene-tool validate "${scene}"
           done
 
+      # Cheaper than the golden sweep and answers a different question, so it
+      # runs first: if the renderer is not reproducible, a golden difference
+      # says nothing about the change that produced it.
+      - name: Check determinism
+        run: scripts/check-determinism.sh
+
       # Renders into a scratch path and compares every reference against its
       # own tolerance. --no-build because the two build steps above already
       # produced exactly what the script would have built, with the caching
