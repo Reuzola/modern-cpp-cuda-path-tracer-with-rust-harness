@@ -233,3 +233,53 @@ jobs:
           name: golden-diffs
           path: ${{ runner.temp }}/diff
           if-no-files-found: ignore
+
+  counter-regression:
+    name: counter regression
+
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Same dependency set as the other core jobs, so the same cache slot.
+      - name: Set up vcpkg
+        uses: ./.github/actions/setup-vcpkg
+        with:
+          cache-key: core
+
+      # The counters are a property of the generated code, so the compiler that
+      # produced them is part of the measurement and is logged with it.
+      - name: Toolchain versions
+        run: clang++ --version
+
+      # release-stats, never release: the counters only exist in this build,
+      # and its timing is worthless by construction.
+      - name: Build the renderer
+        run: |
+          cmake --preset release-stats
+          cmake --build --preset release-stats
+
+      # No timing pass: a shared runner cannot produce a timing worth keeping,
+      # and dropping it halves the work.
+      - name: Measure the counters
+        run: scripts/run-benchmarks.sh --stats-only "${RUNNER_TEMP}/counters.ndjson"
+
+      # Reduced to the deterministic fields, so the log can be read against the
+      # recorded set directly instead of through a 700-character record.
+      - name: Show the counters
+        run: |
+          jq -c '{scene, primary_rays: .timing.primary_rays, traversal,
+                  bvh: {nodes: .bvh.nodes, leaves: .bvh.leaves, max_depth: .bvh.max_depth}}' \
+            "${RUNNER_TEMP}/counters.ndjson"
+
+      # Kept whatever the outcome: a partial file is the evidence for why the
+      # run stopped where it did.
+      - name: Upload the records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: counters
+          path: ${{ runner.temp }}/counters.ndjson
+          if-no-files-found: ignore
