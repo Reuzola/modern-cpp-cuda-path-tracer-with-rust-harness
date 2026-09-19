@@ -68,7 +68,22 @@ impl<'a> Run<'a> {
     }
 }
 
-fn check_record_pair(scene: &str, b: &Record, c: &Record, violations: &mut Vec<String>) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Comparability {
+    /// Assumes same machine; compares all fields.
+    SameMachine,
+
+    /// May be different machines; compares counters only.
+    CountersOnly,
+}
+
+fn check_record_pair(
+    scene: &str,
+    b: &Record,
+    c: &Record,
+    comparability: Comparability,
+    violations: &mut Vec<String>,
+) {
     if b.render.width != c.render.width {
         violations.push(format!(
             "{scene}: width differs (baseline {}, current {})",
@@ -111,7 +126,7 @@ fn check_record_pair(scene: &str, b: &Record, c: &Record, violations: &mut Vec<S
         ));
     }
 
-    if b.host.cpu_model != c.host.cpu_model {
+    if comparability == Comparability::SameMachine && b.host.cpu_model != c.host.cpu_model {
         violations.push(format!(
             "{scene}: cpu_model differs (baseline {}, current {})",
             b.host.cpu_model, c.host.cpu_model
@@ -140,7 +155,11 @@ fn check_record_pair(scene: &str, b: &Record, c: &Record, violations: &mut Vec<S
     }
 }
 
-fn comparability_violations(baseline: &Run, current: &Run) -> Vec<String> {
+fn comparability_violations(
+    baseline: &Run,
+    current: &Run,
+    comparability: Comparability,
+) -> Vec<String> {
     let mut violations = Vec::new();
 
     for scene in baseline.scenes.keys() {
@@ -166,6 +185,14 @@ fn comparability_violations(baseline: &Run, current: &Run) -> Vec<String> {
             ));
         }
 
+        if comparability == Comparability::CountersOnly
+            && (base_records.timing.is_some() || curr_records.timing.is_some())
+        {
+            violations.push(format!(
+                "{scene}: carries a timing pass; a cross-machine comparison can only read counters"
+            ));
+        }
+
         if base_records.stats.is_some() != curr_records.stats.is_some() {
             violations.push(format!(
                 "{scene}: stats pass presence differs between baseline and current"
@@ -173,10 +200,10 @@ fn comparability_violations(baseline: &Run, current: &Run) -> Vec<String> {
         }
 
         if let (Some(b), Some(c)) = (base_records.timing, curr_records.timing) {
-            check_record_pair(scene, b, c, &mut violations);
+            check_record_pair(scene, b, c, comparability, &mut violations);
         }
         if let (Some(b), Some(c)) = (base_records.stats, curr_records.stats) {
-            check_record_pair(scene, b, c, &mut violations);
+            check_record_pair(scene, b, c, comparability, &mut violations);
         }
     }
 
@@ -193,10 +220,11 @@ pub struct ScenePair<'a> {
 pub fn pair_runs<'a>(
     baseline: &Run<'a>,
     current: &Run<'a>,
+    comparability: Comparability,
     baseline_path: &Path,
     current_path: &Path,
 ) -> Result<Vec<ScenePair<'a>>, ToolError> {
-    let violations = comparability_violations(baseline, current);
+    let violations = comparability_violations(baseline, current, comparability);
 
     if !violations.is_empty() {
         let details = violations
@@ -230,6 +258,7 @@ pub fn compare_benchmarks(
     baseline_path: &Path,
     current_path: &Path,
     threshold: f64,
+    comparability: Comparability,
 ) -> Result<Comparison, ToolError> {
     let baseline_records = load_records(baseline_path)?;
     let current_records = load_records(current_path)?;
@@ -237,7 +266,13 @@ pub fn compare_benchmarks(
     let baseline_run = Run::from_records(&baseline_records, baseline_path)?;
     let current_run = Run::from_records(&current_records, current_path)?;
 
-    let pairs = pair_runs(&baseline_run, &current_run, baseline_path, current_path)?;
+    let pairs = pair_runs(
+        &baseline_run,
+        &current_run,
+        comparability,
+        baseline_path,
+        current_path,
+    )?;
 
     let scenes = pairs
         .iter()
@@ -274,6 +309,7 @@ mod tests {
         pair_runs(
             baseline,
             current,
+            Comparability::SameMachine,
             Path::new("baseline.ndjson"),
             Path::new("current.ndjson"),
         )
@@ -285,6 +321,24 @@ mod tests {
         let err = pair_runs(
             baseline,
             current,
+            Comparability::SameMachine,
+            Path::new("baseline.ndjson"),
+            Path::new("current.ndjson"),
+        )
+        .expect_err("the runs must not be comparable");
+
+        let ToolError::Incomparable { details, .. } = err else {
+            panic!("{err}")
+        };
+        details
+    }
+
+    /// The violation list from a refused comparison, in a named mode.
+    fn refusal_in<'a>(baseline: &Run<'a>, current: &Run<'a>, mode: Comparability) -> String {
+        let err = pair_runs(
+            baseline,
+            current,
+            mode,
             Path::new("baseline.ndjson"),
             Path::new("current.ndjson"),
         )
@@ -497,6 +551,63 @@ mod tests {
         assert_eq!(pairs(&baseline, &current).len(), 1);
     }
 
+    // Measured rather than assumed: the counters reproduce bit for bit on a
+    // second x86_64 machine, so the model a run was taken on says nothing about
+    // whether two runs can be compared.
+    #[test]
+    fn a_different_cpu_model_is_not_a_violation_for_counters() {
+        let baseline_records = [record(STATS_RECORD)];
+        let current_records = [record(&STATS_RECORD.replace(
+            r#""cpu_model":"11th Gen Intel(R) Core(TM) i7-11700K @ 3.60GHz""#,
+            r#""cpu_model":"AMD EPYC 7763 64-Core Processor""#,
+        ))];
+        let baseline = run(&baseline_records);
+        let current = run(&current_records);
+
+        let pairs = pair_runs(
+            &baseline,
+            &current,
+            Comparability::CountersOnly,
+            Path::new("baseline.ndjson"),
+            Path::new("current.ndjson"),
+        )
+        .expect("counters from two machines of one architecture are comparable");
+
+        assert_eq!(pairs.len(), 1);
+    }
+
+    // The exemption is scoped to that mode: a timing taken on another machine
+    // is still a timing taken on another machine.
+    #[test]
+    fn a_different_cpu_model_is_refused_on_the_same_machine() {
+        let baseline_records = [record(TIMING_RECORD)];
+        let current_records = [record(&TIMING_RECORD.replace(
+            r#""cpu_model":"11th Gen Intel(R) Core(TM) i7-11700K @ 3.60GHz""#,
+            r#""cpu_model":"AMD EPYC 7763 64-Core Processor""#,
+        ))];
+        let baseline = run(&baseline_records);
+        let current = run(&current_records);
+
+        let details = refusal_in(&baseline, &current, Comparability::SameMachine);
+
+        assert!(details.contains("cpu_model differs"), "{details}");
+    }
+
+    // Both runs carry a timing pass, so the presence check is satisfied and the
+    // refusal can only come from the mode: two machines cannot be timed against
+    // each other, however well their counters agree.
+    #[test]
+    fn a_timing_pass_is_refused_in_a_counters_only_comparison() {
+        let records = [record(TIMING_RECORD), record(STATS_RECORD)];
+        let baseline = run(&records);
+        let current = run(&records);
+
+        let details = refusal_in(&baseline, &current, Comparability::CountersOnly);
+
+        assert!(details.contains("timing"), "{details}");
+        assert_eq!(details.lines().count(), 1, "{details}");
+    }
+
     // Every violation is collected before the refusal, so one fix does not
     // reveal the next only on the following run.
     #[test]
@@ -533,8 +644,8 @@ mod tests {
         let baseline = ndjson(&dir, "baseline.ndjson", &lines);
         let current = ndjson(&dir, "current.ndjson", &lines);
 
-        let comparison =
-            compare_benchmarks(&baseline, &current, 0.02).expect("the runs are comparable");
+        let comparison = compare_benchmarks(&baseline, &current, 0.02, Comparability::SameMachine)
+            .expect("the runs are comparable");
 
         assert_eq!(comparison.scenes.len(), 1);
         assert_eq!(comparison.scenes[0].scene, "cornell_box");
@@ -554,7 +665,7 @@ mod tests {
             &[&TIMING_RECORD.replace(r#""threads":1"#, r#""threads":8"#)],
         );
 
-        let err = compare_benchmarks(&baseline, &current, 0.02)
+        let err = compare_benchmarks(&baseline, &current, 0.02, Comparability::SameMachine)
             .expect_err("a different thread count is not comparable");
 
         assert!(matches!(err, ToolError::Incomparable { .. }), "{err}");
@@ -566,8 +677,8 @@ mod tests {
         let baseline = ndjson(&dir, "baseline.ndjson", &["{ not json"]);
         let current = ndjson(&dir, "current.ndjson", &[TIMING_RECORD]);
 
-        let err =
-            compare_benchmarks(&baseline, &current, 0.02).expect_err("the baseline is unreadable");
+        let err = compare_benchmarks(&baseline, &current, 0.02, Comparability::SameMachine)
+            .expect_err("the baseline is unreadable");
 
         let ToolError::Ndjson { path, .. } = err else {
             panic!("{err}")

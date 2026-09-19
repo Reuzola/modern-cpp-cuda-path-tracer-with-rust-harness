@@ -68,7 +68,9 @@ fn verdict(
         return Verdict::Unchanged;
     };
 
-    if diff.abs() < threshold {
+    // Exact equality is unchanged at any threshold: a zero threshold would
+    // otherwise fall through and be read as a gain.
+    if diff.abs() < threshold || diff.abs() == 0.0 {
         return Verdict::Unchanged;
     }
 
@@ -320,6 +322,56 @@ mod tests {
         assert_eq!(delta.verdict, Verdict::Regression);
     }
 
+    // The counter gate compares at a zero threshold, where `< threshold` alone
+    // is never true and an exact match would fall through to a direction.
+    #[test]
+    fn an_exact_match_is_unchanged_at_a_zero_threshold() {
+        let lower = metric(
+            "m",
+            Some(14.6),
+            Some(14.6),
+            Direction::LowerIsBetter,
+            0.0,
+            0.0,
+        );
+        let higher = metric(
+            "m",
+            Some(14.6),
+            Some(14.6),
+            Direction::HigherIsBetter,
+            0.0,
+            0.0,
+        );
+
+        assert_eq!(lower.verdict, Verdict::Unchanged);
+        assert_eq!(higher.verdict, Verdict::Unchanged);
+    }
+
+    // The counterpart: at that threshold the smallest representable movement in
+    // a counter is a finding, which is the whole point of measuring one.
+    #[test]
+    fn the_smallest_difference_counts_at_a_zero_threshold() {
+        let worse = metric(
+            "m",
+            Some(1_000_000.0),
+            Some(1_000_001.0),
+            Direction::LowerIsBetter,
+            0.0,
+            0.0,
+        );
+        let better = metric(
+            "m",
+            Some(1_000_000.0),
+            Some(999_999.0),
+            Direction::LowerIsBetter,
+            0.0,
+            0.0,
+        );
+
+        assert_eq!(worse.verdict, Verdict::Regression);
+        assert_eq!(better.verdict, Verdict::Gain);
+    }
+
     #[test]
     fn the_direction_decides_which_way_is_a_gain() {
         let lower = metric(
@@ -378,7 +430,14 @@ mod tests {
     // reported, it just cannot claim anything at that scale.
     #[test]
     fn a_baseline_below_the_floor_yields_no_verdict() {
-        let delta = metric("m", Some(0.002), Some(0.003), Direction::LowerIsBetter, 1.0, THRESHOLD);
+        let delta = metric(
+            "m",
+            Some(0.002),
+            Some(0.003),
+            Direction::LowerIsBetter,
+            1.0,
+            THRESHOLD,
+        );
 
         assert_eq!(delta.verdict, Verdict::Unchanged);
         assert_close(delta.relative_change().expect("both sides measured"), 0.5);
@@ -388,7 +447,14 @@ mod tests {
     // metric with extra steps.
     #[test]
     fn a_baseline_above_the_floor_is_judged_normally() {
-        let delta = metric("m", Some(700.0), Some(724.0), Direction::LowerIsBetter, 1.0, THRESHOLD);
+        let delta = metric(
+            "m",
+            Some(700.0),
+            Some(724.0),
+            Direction::LowerIsBetter,
+            1.0,
+            THRESHOLD,
+        );
 
         assert_eq!(delta.verdict, Verdict::Regression);
     }
@@ -607,8 +673,10 @@ mod tests {
     // goes through scene_deltas can catch them being swapped.
     #[test]
     fn a_build_time_under_a_millisecond_carries_no_verdict() {
-        let baseline = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":0.002"#));
-        let current = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":0.003"#));
+        let baseline =
+            record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":0.002"#));
+        let current =
+            record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":0.003"#));
         let pair = pair((Some(&baseline), None), (Some(&current), None));
 
         let deltas = scene_deltas(&pair, THRESHOLD);
@@ -621,8 +689,10 @@ mod tests {
     // A scene whose tree takes real time keeps its verdict.
     #[test]
     fn a_build_time_above_the_floor_is_still_judged() {
-        let baseline = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":700.0"#));
-        let current = record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":724.0"#));
+        let baseline =
+            record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":700.0"#));
+        let current =
+            record(&TIMING_RECORD.replace(r#""build_ms":0.003538"#, r#""build_ms":724.0"#));
         let pair = pair((Some(&baseline), None), (Some(&current), None));
 
         let deltas = scene_deltas(&pair, THRESHOLD);
@@ -633,8 +703,14 @@ mod tests {
     // Only the build time has a floor; the other five judge at any magnitude.
     #[test]
     fn the_floor_does_not_reach_the_other_metrics() {
-        let baseline = record(&TIMING_RECORD.replace(r#""render_seconds_min":1.699408363"#, r#""render_seconds_min":0.002"#));
-        let current = record(&TIMING_RECORD.replace(r#""render_seconds_min":1.699408363"#, r#""render_seconds_min":0.003"#));
+        let baseline = record(&TIMING_RECORD.replace(
+            r#""render_seconds_min":1.699408363"#,
+            r#""render_seconds_min":0.002"#,
+        ));
+        let current = record(&TIMING_RECORD.replace(
+            r#""render_seconds_min":1.699408363"#,
+            r#""render_seconds_min":0.003"#,
+        ));
         let pair = pair((Some(&baseline), None), (Some(&current), None));
 
         let deltas = scene_deltas(&pair, THRESHOLD);

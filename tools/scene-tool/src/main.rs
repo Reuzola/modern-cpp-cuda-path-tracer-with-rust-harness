@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use scene_tool::regression::Comparability;
 use scene_tool::validate::validate_scene_file;
 use scene_tool::{compare::compare_images, regression::compare_benchmarks};
 use std::{path::PathBuf, process::ExitCode};
@@ -71,6 +72,11 @@ enum Commands {
         /// Relative change below which a difference counts as noise
         #[arg(long, default_value_t = 0.02, value_parser = noise_threshold)]
         threshold: f64,
+
+        /// Compare counters only; the two runs may come from
+        /// different machines of the same architecture.
+        #[arg(long)]
+        counters_only: bool,
     },
 }
 
@@ -147,7 +153,17 @@ fn main() -> ExitCode {
             baseline,
             current,
             threshold,
-        } => match compare_benchmarks(&baseline, &current, threshold) {
+            counters_only,
+        } => match compare_benchmarks(
+            &baseline,
+            &current,
+            threshold,
+            if counters_only {
+                Comparability::CountersOnly
+            } else {
+                Comparability::SameMachine
+            },
+        ) {
             Ok(comparison) => {
                 println!("{comparison}");
 
