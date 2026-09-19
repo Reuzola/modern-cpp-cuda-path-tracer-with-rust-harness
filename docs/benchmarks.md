@@ -1,37 +1,39 @@
 # Benchmarks
 
-The performance baseline the renderer is measured against, recorded before any
-optimisation work on the render loop begins. Every later measurement is only
-meaningful next to these numbers, so this file also states what a comparison
-requires and what invalidates one.
+The performance baseline the renderer is measured against, and the rules a
+comparison against it has to follow. Every later measurement is only meaningful
+next to these numbers, so this file also states what invalidates one.
 
 This is not a comparison against other renderers. It measures this renderer
-against itself, over a fixed workload, on named machines.
+against itself, over a fixed workload, on one named machine.
 
-The renderer is single threaded today. Every figure below is one core.
+The figures below were taken on 2026-09-19 from revision `40e55a0e61ca`, with
+`Float = float`, from the `release` and `release-stats` presets, single
+threaded. They replace an earlier set taken while `Float` was `double`; what
+moved between the two, and why, is in
+[What changed since the previous measurement](#what-changed-since-the-previous-measurement).
 
-## Machines
+## Machine
 
-| | Reference | Secondary |
-|---|---|---|
-| CPU | Intel Core i7-11700K @ 3.60 GHz (Rocket Lake) | Snapdragon X X1E-26-100 (Qualcomm Oryon) |
-| Architecture | x86_64 | aarch64 |
-| Logical cores | 16 | 8 |
-| OS | Ubuntu 24.04 (WSL2) | Ubuntu 24.04 (WSL2) |
-| Compiler | Clang 18.1.3 | Clang 18.1.3 |
-| Scalar type | `double` | `double` |
+| | Reference |
+|---|---|
+| CPU | Intel Core i7-11700K @ 3.60 GHz (Rocket Lake) |
+| Architecture | x86_64 |
+| Logical cores | 16 |
+| OS | Ubuntu 24.04 (WSL2) |
+| Compiler | Clang 18.1.3 |
+| Scalar type | `float` |
 
-These tables were taken while `Float` was `double`, which is no longer the
-default. They stand as the last measurement of that configuration and are not
-the baseline the current build should be compared against.
+This set was measured from a bare login shell on an otherwise idle machine,
+with the editor closed. That is a condition of the measurement, not a detail:
+the machine is a desktop running a general purpose OS, not an isolated
+benchmarking host, and anything else running competes for the same cores and
+the same cache.
 
-The reference machine is the one to compare against. The secondary machine is
-recorded because it runs the same code on a different instruction set, which is
-the only cheap way to tell an algorithmic improvement apart from one that
-happens to suit a single microarchitecture.
-
-Both are laptops or desktops running a general purpose OS, not isolated
-benchmarking hosts. Treat differences under about two percent as noise.
+A second machine on a different instruction set is the only cheap way to tell
+an algorithmic improvement apart from one that happens to suit a single
+microarchitecture. It is not recorded here; its measurement is deliberately
+infrequent and is taken once the current optimisation work is finished.
 
 ## Method
 
@@ -40,35 +42,37 @@ resolution and sample count. Everything else — maximum depth, seed, background
 tone mapping — comes from the scene file, so a record describes exactly the
 work the renderer was asked to do.
 
-Sample counts were chosen so that each scene takes roughly ten seconds: much
-below that and scheduler noise hides the improvements worth finding, much above
-it and a full sweep stops getting run. Both machines use the file unchanged,
-since adjusting a row per machine would make the two tables incomparable.
-
 Each scene is measured twice, from two different builds:
 
-- The `release` build supplies timing. Three runs; the **minimum** is reported,
-  because a slow run means interference and never a faster renderer. The full
-  set of runs is kept in the raw record.
+- The `release` build supplies timing. Five runs; the **minimum** is reported,
+  because a slow run means interference and never a faster renderer. Every run
+  is kept in the raw record. Five rather than the usual three because this set
+  is the figure every later measurement is subtracted from; routine
+  measurements keep the default.
 - The `release-stats` build supplies the traversal counters. One run: the
   counters are deterministic under a fixed seed, so repeating them costs time
   and adds nothing.
 
 They are separate builds because the counters sit in the traversal hot loop. A
-build carrying them cannot also be timed honestly — see the measured cost
-below.
+build carrying them cannot also be timed honestly. Measured here, the
+instrumented build was 0.6% slower than the plain one at the median and 4.5%
+slower at the worst, on `argent_weave`. Read that as an upper bound rather than
+a cost: it compares one instrumented run against the minimum of five plain
+ones, so part of it is the spread of a single sample.
 
-Observed spread across the three timed runs was under 1.4% on both machines for
-every scene but two: `earth` at 2.3% and `gilded_orrery` at 3.1%, both on the
-reference machine.
+The spread across the five timed runs is in the timing table. It reaches 5.6%
+on `checkered_spheres` and stays under 2% on eight of the thirteen scenes. The
+two percent figure quoted as this machine's noise floor — and used as the
+default threshold by `scene-tool bench-compare` — is therefore optimistic for
+the short scenes, and a one-scene movement near that size is not a result.
 
-Records are written as one JSON object per line to `out/benchmarks.ndjson`.
-Each object is self-describing — machine, source revision, build configuration,
-thread count, scene settings, timings, throughput, peak memory, BVH statistics
-— so runs taken months apart can be concatenated and still be told apart. The
-record's fields are specified in
-[`schema/benchmark.schema.json`](../schema/benchmark.schema.json), which
-validates a single line rather than the file.
+### Threads
+
+The renderer is single threaded today, and every figure below is one core.
+Measurements are taken at both one thread and the full thread count; while
+those are the same configuration, the record carries `threads: 1` and one
+number is reported. When the renderer becomes parallel this whole set is
+remeasured, because a figure taken on more threads is not a faster renderer.
 
 ### Throughput and memory
 
@@ -95,19 +99,37 @@ set does not have.
 Where that time goes inside the renderer is a separate measurement, in
 [profiling.md](profiling.md).
 
+### The record
+
+Records are written as one JSON object per line to the file named on the
+command line. Each object is self-describing — machine, source revision, build
+configuration, thread count, scene settings, every timed run, throughput, peak
+memory, BVH statistics — so runs taken months apart can be concatenated and
+still be told apart. The fields are specified in
+[`schema/benchmark.schema.json`](../schema/benchmark.schema.json), which
+validates a single line rather than the file.
+
+The raw records behind the tables below are kept at
+`benchmarks/baseline.ndjson`, so a later run can be compared against this one
+without remeasuring it:
+
+```bash
+scene-tool bench-compare benchmarks/baseline.ndjson out/benchmarks.ndjson
+```
+
 ### Reproduce
 
 ```bash
 cmake --preset release       && cmake --build --preset release
 cmake --preset release-stats && cmake --build --preset release-stats
-scripts/run-benchmarks.sh
+BENCH_RUNS=5 scripts/run-benchmarks.sh out/benchmarks.ndjson
 ```
 
 A single scene, without the script:
 
 ```bash
 ./build/release/pathtracer scenes/cornell_box.json \
-    --width 400 --height 400 --spp 49 --bench --bench-runs 3
+    --width 400 --height 400 --spp 49 --bench --bench-runs 5
 ```
 
 The flags are described in [usage.md](usage.md).
@@ -122,14 +144,15 @@ remeasured rather than reused:
 - A changed scene file, including geometry, materials, seed or maximum depth.
 - A different build preset. `release-native` enables FMA contraction;
   `release-stats` carries the counters; a Debug figure is worse than none.
-- A different scalar type. `Float = float` changes both speed and results.
-- A different thread count. A figure taken on more threads is not a faster
-  renderer.
+- A different scalar type. `Float = double` changes both speed and results.
+- A different thread count.
+- A change to the intersection arithmetic itself. It moves the counters, not
+  just the timings, and the tables below record exactly such a change.
 - A different source revision, or a build taken with uncommitted changes. The
   record names the commit but cannot see a dirty working tree, so this one is
   discipline rather than a check.
-- A different machine, or the same machine in a different thermal or power
-  state.
+- A different machine, or the same machine in a different thermal, power or
+  load state.
 
 Statistics and timing may be quoted from the same run only when both come from
 the same record.
@@ -140,8 +163,11 @@ the same record.
   configured. It says nothing about uncommitted edits.
 - **Threads** — worker threads the render used, which is not the machine's core
   count. One today.
+- **Spread** — the slowest of the timed runs against the fastest, as a
+  percentage. It stays in the table so the reported minimum is never read as a
+  measurement without variance.
 - **Primary rays** — one per sample: `width × height × samples_per_pixel`.
-- **Primary rays/s** — primary rays divided by the reported render time,
+- **Mray/s** — millions of primary rays divided by the reported render time,
   derived from the same run so the two cannot disagree.
 - **Peak RSS** — the process's high-water mark, scene loading and tree
   construction included.
@@ -159,262 +185,160 @@ the same record.
 - **Total** — the sum of the two, and the comparable aggregate: the number of
   hit tests one ray query issues.
 - **Ray queries** — top-level `hit()` calls: primary rays plus every bounce.
+- **Queries/primary** — ray queries divided by primary rays: the average number
+  of hit tests a single sample sets off, and therefore a direct measure of path
+  length. A scene whose paths terminate on the first bounce sits near one.
 - **Depth** — the longest root-to-node path; a single-node tree has depth 0.
 
-## Baseline: x86_64
+## Baseline
 
-These tables predate the throughput, memory and revision fields; they were
-measured from records that did not carry them. Those columns appear when the
-set is next remeasured.
+### Timing and throughput
 
-| Scene | Res | spp | Render (s) | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Total | Ray queries |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `area_lights` | 480x270 | 225 | 8.18 | 1 | 7 | 4 | 3 | 0.003 | 4.1 | 0.91 | 5.0 | 46,369,309 |
-| `argent_weave` | 480x270 | 9 | 9.94 | 7 | 2,297,221 | 1,148,614 | 26 | 779.495 | 118.7 | 7.84 | 126.5 | 4,835,354 |
-| `checkered_spheres` | 480x270 | 121 | 8.75 | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.80 | 4.8 | 52,536,489 |
-| `cornell_box` | 400x400 | 49 | 9.92 | 1 | 15 | 8 | 6 | 0.004 | 13.2 | 1.38 | 14.6 | 42,910,672 |
-| `cornell_smoke` | 400x400 | 36 | 12.22 | 1 | 11 | 6 | 4 | 0.003 | 9.4 | 0.84 | 10.2 | 33,294,066 |
-| `earth` | 480x270 | 484 | 7.84 | 1 | 1 | 1 | 0 | 0.001 | 1.0 | 0.74 | 1.7 | 88,192,212 |
-| `gilded_orrery` | 480x270 | 16 | 9.28 | 15 | 168,397 | 84,206 | 19 | 37.347 | 52.8 | 5.90 | 58.7 | 9,475,994 |
-| `mesh_showcase` | 480x270 | 169 | 9.19 | 3 | 39 | 21 | 6 | 0.007 | 10.8 | 2.13 | 13.0 | 50,692,911 |
-| `neon_cathedral` | 480x270 | 16 | 9.17 | 6 | 86 | 46 | 5 | 0.014 | 45.1 | 6.32 | 51.4 | 14,075,424 |
-| `perlin_spheres` | 480x270 | 144 | 9.45 | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.24 | 4.2 | 42,436,119 |
-| `quads` | 400x400 | 225 | 8.10 | 1 | 9 | 5 | 4 | 0.004 | 7.0 | 0.45 | 7.4 | 65,572,484 |
-| `random_spheres` | 480x270 | 81 | 8.48 | 1 | 967 | 484 | 12 | 0.181 | 26.2 | 1.63 | 27.8 | 28,048,162 |
-| `showcase` | 400x400 | 81 | 12.36 | 3 | 2,811 | 1,407 | 13 | 0.501 | 17.6 | 1.28 | 18.9 | 31,812,306 |
+From the `release` build. Five runs per scene, minimum reported.
 
-Three entries in the table are worth reading before drawing conclusions from it.
+| Scene | Res | spp | Render (s) | Spread | Mray/s | Peak RSS (MB) |
+|---|---|---|---|---|---|---|
+| `area_lights` | 480x270 | 225 | 32.06 | 0.2% | 0.91 | 8.0 |
+| `argent_weave` | 480x270 | 9 | 12.14 | 4.2% | 0.10 | 250.9 |
+| `checkered_spheres` | 480x270 | 121 | 6.50 | 5.6% | 2.41 | 7.9 |
+| `cornell_box` | 400x400 | 49 | 9.37 | 0.8% | 0.84 | 8.7 |
+| `cornell_smoke` | 400x400 | 36 | 12.28 | 0.9% | 0.47 | 8.8 |
+| `earth` | 480x270 | 484 | 5.48 | 1.6% | 11.44 | 35.1 |
+| `gilded_orrery` | 480x270 | 16 | 12.14 | 2.1% | 0.17 | 46.7 |
+| `mesh_showcase` | 480x270 | 169 | 6.91 | 4.0% | 3.17 | 8.3 |
+| `neon_cathedral` | 480x270 | 16 | 10.30 | 0.7% | 0.20 | 8.0 |
+| `perlin_spheres` | 480x270 | 144 | 29.09 | 0.3% | 0.64 | 8.0 |
+| `quads` | 400x400 | 225 | 5.47 | 3.3% | 6.58 | 8.8 |
+| `random_spheres` | 480x270 | 81 | 15.57 | 1.1% | 0.67 | 9.0 |
+| `showcase` | 400x400 | 81 | 11.89 | 1.6% | 1.09 | 36.2 |
 
-`argent_weave` is the traversal workload the rest of the set does not
-provide. One tree of 2.3M nodes over a 1.1M triangle mesh, 126.5 hit tests
-per ray query against 58.7 for the next heaviest scene, and the fewest ray
-queries in the set. Ninety-four percent of those tests are box tests: the
-geometry is interlaced tube strands whose bounds overlap heavily, which is
-the case a hierarchy of axis-aligned boxes handles worst. Its build time is
-also the only one large enough to move between runs — 649 to 934 ms across
-four measurements — so the figure in the table is one sample, not a
-converged one.
+The slowest of the five runs was the first one on four of the thirteen scenes
+and scattered over the rest, so nothing here is a warm-up effect that reporting
+the minimum hides.
 
-Its numbers are the most fragile in the set, and for a reason that is not
-visible in the scene file. Coverage of the frame sets the ratio, because a
-ray that escapes into the background costs about two tests; the same
-geometry measures 106 tests per query from a camera sixteen units further
-back. The camera there is a measured setting rather than only a
-composition, and re-framing the shot is a change of workload.
+### Tree and traversal
 
-`gilded_orrery` is the only scene where BVH construction is visible at all:
-37 ms, four orders of magnitude above every other scene, across fifteen trees
-and 168k nodes. It is also the only scene whose render time is dominated by
-traversal rather than shading — 58.7 hit tests per ray query, the highest in
-the set, against just 9.5M ray queries.
+Tree shape and build time from the `release` record; the per-ray counters from
+the `release-stats` one.
 
-`cornell_smoke` is the slowest scene per sample despite an eleven-node tree.
-Its cost is volumetric: free-flight sampling runs per segment, and the BVH is
-close to irrelevant to its total.
+| Scene | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Total | Ray queries | Queries/primary |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `area_lights` | 1 | 7 | 4 | 3 | 0.003 | 3.3 | 1.0 | 4.3 | 144,689,285 | 4.96 |
+| `argent_weave` | 7 | 2,297,221 | 1,148,614 | 26 | 532.104 | 118.7 | 8.0 | 126.7 | 4,855,966 | 4.16 |
+| `checkered_spheres` | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.8 | 4.8 | 52,571,828 | 3.35 |
+| `cornell_box` | 1 | 15 | 8 | 6 | 0.003 | 13.2 | 1.6 | 14.8 | 43,007,501 | 5.49 |
+| `cornell_smoke` | 1 | 11 | 6 | 4 | 0.003 | 9.3 | 1.1 | 10.4 | 33,101,843 | 5.75 |
+| `earth` | 1 | 1 | 1 | 0 | 0.001 | 1.0 | 0.7 | 1.7 | 88,192,214 | 1.41 |
+| `gilded_orrery` | 15 | 168,397 | 84,206 | 19 | 27.401 | 53.6 | 6.1 | 59.7 | 9,509,310 | 4.59 |
+| `mesh_showcase` | 3 | 39 | 21 | 6 | 0.005 | 11.4 | 2.5 | 13.9 | 48,857,664 | 2.23 |
+| `neon_cathedral` | 6 | 86 | 46 | 5 | 0.012 | 43.8 | 6.4 | 50.1 | 14,065,679 | 6.78 |
+| `perlin_spheres` | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.1 | 4.1 | 124,543,231 | 6.67 |
+| `quads` | 1 | 9 | 5 | 4 | 0.003 | 7.0 | 0.5 | 7.5 | 65,572,769 | 1.82 |
+| `random_spheres` | 1 | 967 | 484 | 12 | 0.146 | 10.5 | 1.2 | 11.7 | 80,513,606 | 7.67 |
+| `showcase` | 3 | 2,811 | 1,407 | 13 | 0.525 | 17.8 | 1.3 | 19.1 | 31,824,353 | 2.46 |
 
-## Baseline: aarch64
+`Build (ms)` is one sample per scene. Construction runs once per process, so
+the two records of a scene supply two independent samples, and those agree to
+within about one percent everywhere except `argent_weave`, where the figure has
+been seen to move by tens of percent between runs of the same binary. Treat
+that one as an order of magnitude rather than a measurement.
 
-Same workload, same source, same compiler version.
+### Reading the tables
 
-| Scene | Res | spp | Render (s) | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Total | Ray queries |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `area_lights` | 480x270 | 225 | 7.17 | 1 | 7 | 4 | 3 | 0.005 | 4.1 | 0.91 | 5.0 | 46,369,309 |
-| `checkered_spheres` | 480x270 | 121 | 7.94 | 1 | 3 | 2 | 1 | 0.003 | 3.0 | 1.80 | 4.8 | 52,536,489 |
-| `cornell_box` | 400x400 | 49 | 9.59 | 1 | 15 | 8 | 6 | 0.006 | 13.2 | 1.38 | 14.6 | 42,910,672 |
-| `cornell_smoke` | 400x400 | 36 | 10.58 | 1 | 11 | 6 | 4 | 0.006 | 9.4 | 0.84 | 10.2 | 33,294,066 |
-| `earth` | 480x270 | 484 | 7.09 | 1 | 1 | 1 | 0 | 0.002 | 1.0 | 0.74 | 1.7 | 88,192,212 |
-| `gilded_orrery` | 480x270 | 16 | 8.67 | 15 | 168,397 | 84,206 | 19 | 45.107 | 53.3 | 5.93 | 59.2 | 9,475,994 |
-| `mesh_showcase` | 480x270 | 169 | 8.88 | 3 | 39 | 21 | 6 | 0.010 | 10.8 | 2.13 | 13.0 | 50,693,021 |
-| `neon_cathedral` | 480x270 | 16 | 8.41 | 6 | 86 | 46 | 5 | 0.017 | 45.1 | 6.32 | 51.4 | 14,075,424 |
-| `perlin_spheres` | 480x270 | 144 | 7.95 | 1 | 3 | 2 | 1 | 0.003 | 3.0 | 1.24 | 4.2 | 42,436,119 |
-| `quads` | 400x400 | 225 | 7.24 | 1 | 9 | 5 | 4 | 0.005 | 7.0 | 0.45 | 7.4 | 65,572,484 |
-| `random_spheres` | 480x270 | 81 | 7.96 | 1 | 967 | 484 | 12 | 0.215 | 26.2 | 1.63 | 27.8 | 28,048,164 |
-| `showcase` | 400x400 | 81 | 11.91 | 3 | 2,811 | 1,407 | 13 | 0.587 | 17.6 | 1.28 | 18.9 | 31,812,306 |
+`argent_weave` is the traversal workload the rest of the set does not provide:
+one tree of 2.3M nodes over a 1.1M triangle mesh, 126.7 hit tests per ray query
+against 59.7 for the next heaviest scene, and the fewest ray queries in the
+set. Ninety-four percent of those tests are box tests, because the geometry is
+interlaced tube strands whose bounds overlap heavily — the case a hierarchy of
+axis-aligned boxes handles worst. Its cost per ray query also depends on how
+much of the frame the geometry covers: a ray that escapes into the background
+costs about two tests, and the same geometry measured 106 tests per query from
+a camera sixteen units further back. The camera there is a measured setting
+rather than only a composition, and re-framing the shot is a change of
+workload.
 
-`argent_weave` is absent from this table. Its figures there will be taken when
-the whole set is next remeasured. Nothing below rests on it.
+`gilded_orrery` is the only scene where BVH construction is visible at all: 27
+ms across fifteen trees and 168k nodes, three orders of magnitude above every
+scene but `argent_weave`.
 
-## Cross-architecture observations
+`cornell_smoke` costs what it costs volumetrically rather than geometrically.
+Free-flight sampling runs per segment against an eleven-node tree, so the BVH
+is close to irrelevant to its total.
 
-The two machines do not produce the same numbers, and this set is not designed
-to explain why. Three things matter for reading the tables above.
+The set no longer sits in one timing range. Sample counts were originally
+chosen so that each scene took roughly ten seconds; they now span 5.5 to 32
+seconds, because the intersection work per sample has changed since they were
+chosen. The rows are kept unchanged anyway: re-tuning them would invalidate
+every profile and every record taken against them, and the spread within each
+scene is small enough that the short scenes are still measured well above the
+noise.
 
-**Timing differs in both directions.** The secondary machine renders every
-scene faster, by 3% to 16%, and builds the largest trees about 20% slower. No
-cause is attributed here: establishing one would need measurements this set
-does not take.
+## What changed since the previous measurement
 
-**Counters are reproducible within one architecture, not across two.** Eight of
-the twelve scenes measured on both machines produce byte-identical counters.
-The other four differ, by between two ray queries and 0.96% of node tests, for
-the reason already documented for the reference images: `fmadd` is baseline on
-AArch64, so Clang contracts multiply-add without being asked and intersection
-arithmetic differs in the last unit in the last place. Comparing an
-optimisation's counters against a baseline taken on the other machine is not a
-valid comparison.
+The previous set was taken with `Float = double` and before the intersection
+arithmetic was made robust. Two things moved between the two measurements — the
+scalar type, and the ray origin offset together with the widened slab test — so
+a timing difference cannot be attributed to either one alone. The counters can
+be attributed, and were.
 
-**The counters cost 1-4%, and only measurably on x86_64.** The instrumented
-build against the plain one, same machine, same scene: a median of +2.1% on the
-reference machine and +0.4% on the secondary, where five of the twelve scenes
-came out *faster* with the counters compiled in — which is only possible if
-their cost sits below that machine's noise floor. That is the concrete argument
-for taking timing and counters from two separate builds. A single instrumented
-run would have produced a table claiming the counters speed up rendering.
+**Three scenes now trace paths roughly three times as long.** `area_lights`,
+`perlin_spheres` and `random_spheres` moved from 1.59, 2.27 and 2.67 ray
+queries per primary ray to 4.96, 6.67 and 7.67. That was isolated by building
+the commit before the robustness work with the current scalar type and counting
+again on the same scenes: it reproduced the old ratios to three digits — 1.60,
+2.29, 2.70 — which leaves the robustness work as the whole of the difference
+and the scalar type as none of it. The direction is the useful part. Paths that
+used to end early now continue, and the same change made the affected images
+brighter, so the earlier numbers were counting rays that should never have been
+lost. These three are the whole of the set that scatters off a sphere of radius 1000,
+and a surface that large is where a fixed epsilon along `t` stops being an
+offset at all. The only larger sphere in the set bounds a participating medium
+rather than scattering, and its scene did not move.
 
----
+Two consequences are easy to misread. Their *ratios* per ray query fell —
+`random_spheres` from 26.2 to 10.5 node tests per query — purely because the
+denominator grew; its absolute test count rose by about 15%, and the tree did
+not improve. And their render times grew with the extra work rather than with
+any loss of speed.
 
-# Historical record: BVH construction and traversal
+**The other ten scenes count what they counted before.** Every one of them is
+within 0.6% of its previous ray query total, which is the last-bit drift
+expected from changing the scalar type. The exception is `mesh_showcase` at
+−3.6%, a scene whose single dielectric is already on record as sensitive to
+visiting order and to arithmetic at that precision.
 
-Two instrumented measurements of the BVH taken during the acceleration work,
-kept for the record. **These numbers are frozen and are not the baseline.**
-Compare new work against the tables above, not against these.
+**Among those ten, the timing moved in both directions, ordered by how much
+box testing the scene does.** The four scenes with the fewest node tests per
+ray — `quads`, `earth`, `checkered_spheres`, `mesh_showcase`, all at or below
+11 — render in 68% to 75% of their previous time. The three heaviest —
+`neon_cathedral`, `gilded_orrery`, `argent_weave`, all at or above 44 — take
+12% to 31% longer, while issuing the same number of tests as before. That is
+what a widened slab test costs: not more tests, but a more expensive one, paid
+once per box and therefore in proportion to how many boxes a scene touches.
+This is an observation rather than a result. The earlier timings were taken on
+the same machine in an unrecorded load state, which is exactly the comparison
+this document's own rules call invalid; the counters are what carry weight
+here, and they say the work did not change in these scenes.
 
-They are also stale in two specific ways, and were already stale when frozen:
+## Earlier measurements
 
-- `cornell_smoke` and `showcase` were measured while volumes still participated
-  in BVH traversal. Media sampling has since moved into the integrator, so
-  their tree shapes and counters no longer describe the same renderer.
-- `gilded_orrery` did not exist yet and does not appear.
+Three earlier tables were removed from this file when the baseline above was
+taken: the `double` measurement of this workload, and two instrumented
+measurements of the BVH taken while the acceleration structure was being built,
+comparing a midpoint split with a pointer tree against a binned SAH with a flat
+depth-first array. All three are in the file's history. Three findings from them
+are worth keeping:
 
-What remains useful is the comparison between the two configurations and the
-reasoning about which columns can be subtracted, which is why this is kept
-rather than deleted.
-
-Shared setup: `release-stats` preset, i7-11700K, Clang 18.1.3, `Float = double`,
-one run per scene, resolutions and sample counts from the golden image set.
-
-- **Configuration A** — midpoint split on the longest axis, pointer-based tree,
-  recursive traversal. Measured 2026-08-13.
-- **Configuration B** — binned SAH split (12 bins, traversal cost 1,
-  intersection cost 8, maximum leaf size 4), flat depth-first node array,
-  iterative distance-ordered traversal with multi-primitive leaves. Measured
-  2026-08-23.
-
-## Configuration A
-
-| Scene | Res | spp | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Ray queries | Render (s) |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| area_lights | 240x135 | 16 | 1 | 3 | 4 | 1 | 0.001 | 3.0 | 2.5 | 825,054 | 0.13 |
-| checkered_spheres | 240x135 | 16 | 1 | 1 | 2 | 0 | 0.000 | 1.0 | 2.0 | 1,737,766 | 0.21 |
-| cornell_box | 200x200 | 16 | 1 | 7 | 8 | 2 | 0.004 | 6.9 | 6.4 | 3,504,869 | 0.81 |
-| cornell_smoke | 200x200 | 16 | 1 | 7 | 8 | 2 | 0.001 | 6.9 | 7.0 | 3,696,923 | 1.32 |
-| earth | 240x135 | 16 | 1 | 1 | 2 | 0 | 0.001 | 1.0 | 1.5 | 728,854 | 0.05 |
-| neon_cathedral | 240x135 | 16 | 6 | 52 | 58 | 3 | 0.006 | 43.4 | 24.0 | 3,520,104 | 4.21 |
-| perlin_spheres | 240x135 | 16 | 1 | 1 | 2 | 0 | 0.000 | 1.0 | 2.0 | 1,178,512 | 0.22 |
-| quads | 200x200 | 16 | 1 | 5 | 6 | 2 | 0.001 | 4.2 | 2.9 | 1,167,037 | 0.12 |
-| random_spheres | 240x135 | 16 | 1 | 511 | 512 | 8 | 0.132 | 45.3 | 5.2 | 1,382,099 | 0.57 |
-| mesh_showcase | 240x135 | 16 | 3 | 23 | 26 | 3 | 0.005 | 9.8 | 8.0 | 1,155,723 | 0.20 |
-| showcase | 240x135 | 16 | 3 | 1547 | 1550 | 9 | 0.544 | 21.2 | 4.9 | 1,198,040 | 0.61 |
-
-## Configuration B
-
-| Scene | Res | spp | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Ray queries | Render (s) |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| area_lights | 240x135 | 16 | 1 | 7 | 4 | 3 | 0.003 | 4.1 | 0.9 | 825,054 | 0.17 |
-| checkered_spheres | 240x135 | 16 | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.8 | 1,737,766 | 0.33 |
-| cornell_box | 200x200 | 16 | 1 | 15 | 8 | 6 | 0.005 | 13.2 | 1.4 | 3,504,869 | 0.90 |
-| cornell_smoke | 200x200 | 16 | 1 | 15 | 8 | 6 | 0.004 | 13.2 | 1.2 | 3,695,015 | 1.09 |
-| earth | 240x135 | 16 | 1 | 1 | 1 | 0 | 0.001 | 1.0 | 0.7 | 728,854 | 0.08 |
-| neon_cathedral | 240x135 | 16 | 6 | 86 | 46 | 5 | 0.017 | 45.1 | 7.3 | 3,520,143 | 2.95 |
-| perlin_spheres | 240x135 | 16 | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.2 | 1,178,512 | 0.30 |
-| quads | 200x200 | 16 | 1 | 9 | 5 | 4 | 0.003 | 7.0 | 0.5 | 1,167,037 | 0.17 |
-| random_spheres | 240x135 | 16 | 1 | 967 | 484 | 12 | 0.206 | 26.2 | 1.6 | 1,382,099 | 0.46 |
-| mesh_showcase | 240x135 | 16 | 3 | 39 | 21 | 6 | 0.007 | 10.8 | 2.1 | 1,199,628 | 0.24 |
-| showcase | 240x135 | 16 | 3 | 2815 | 1409 | 13 | 0.528 | 17.3 | 2.1 | 1,198,040 | 0.51 |
-
-## Which columns can be compared
-
-`Nodes` and `Leaves` count different things in the two tables and must not be
-subtracted. In A a node is an interior node and a leaf is a *child link*, with
-a single-primitive node linking the same object twice. In B a node is an entry
-in the flat array — interior or leaf — and a leaf is a real leaf node holding a
-range of primitives. `earth` reads as 1 node / 2 leaves in A and 1 node /
-1 leaf in B for the same single sphere.
-
-`Depth`, `Ray queries` and `Build (ms)` mean the same thing in both.
-
-`Node tests/ray` and `Leaf tests/ray` share a unit but the split between them
-moved. In A, descending into a child that was a primitive cost no box test: the
-primitive was tested directly. In B every child's box is tested before
-descending, leaves included. Work therefore migrates from the leaf column into
-the node column, which is why the node column rises almost everywhere without
-the tree getting worse. The comparable aggregate is their sum.
-
-## Total tests per ray
-
-| Scene | A | B | Change |
-|---|---|---|---|
-| earth | 2.5 | 1.7 | -32% |
-| checkered_spheres | 3.0 | 4.8 | +60% |
-| perlin_spheres | 3.0 | 4.2 | +40% |
-| quads | 7.1 | 7.5 | +6% |
-| area_lights | 5.5 | 5.0 | -9% |
-| cornell_box | 13.3 | 14.6 | +10% |
-| cornell_smoke | 13.9 | 14.4 | +4% |
-| mesh_showcase | 17.8 | 12.9 | -28% |
-| showcase | 26.1 | 19.4 | -26% |
-| neon_cathedral | 67.4 | 52.4 | -22% |
-| random_spheres | 50.5 | 27.8 | -45% |
-
-The result splits by scene size, and the split is structural rather than
-incidental.
-
-**Below roughly four primitives the tree costs more than it saves.**
-`checkered_spheres` holds two spheres: A tested the root box and then both
-spheres, B tests the root box, both child boxes and then whichever spheres
-survive. The extra box tests cannot pay for themselves when there is almost
-nothing to cull. `earth` is the exception among the small scenes only because
-its root is itself a leaf, so it has no child boxes to test and it also sheds
-the double-linked second test.
-
-**Above that, the gain grows with primitive count and with spatial spread.**
-`random_spheres` nearly halves its work; `showcase`, with three times the nodes
-but clustered geometry, gains a comparable fraction; `neon_cathedral` improves
-by a fifth and remains the worst case, still visiting about half of its nodes
-per ray because its nested group bounds overlap heavily.
-
-`Leaf tests/ray` falls in every scene, for three separate reasons that should
-not be conflated: single-primitive nodes no longer link the same object twice,
-a leaf's own box can now reject it before its primitives are touched, and the
-SAH groups primitives that are actually near each other. Only the third is an
-improvement in the tree itself.
-
-Build time grew by roughly 4x at equal primitive counts, which is what a binned
-SAH sweep costs over a midpoint split. At 0.5 ms for the largest scene there it
-was not a figure worth optimising.
-
-## A divergence found while measuring
-
-`mesh_showcase` was the one scene whose ray queries moved materially between
-the two configurations: 1,155,723 to 1,199,628, or +3.8%. Every other scene was
-either bit-identical or differed by less than a tenth of a percent —
-`cornell_smoke` because volumes then drew from the sampler inside `hit()`, so a
-change in visiting order changed the draw order, and `neon_cathedral` because
-it contains exactly coincident quads whose winner depends on visiting order.
-
-Neither explanation covers `mesh_showcase`. Bisecting against the Configuration
-A render located the first diverging commit exactly:
-
-- `a197726` (builder extraction) — bit-identical
-- `e6b7194` (binned SAH) — bit-identical
-- `3802963` (iterative distance-ordered traversal) — **diverges**
-
-The SAH commit being bit-identical is itself evidence: it rewrote the primitive
-permutation and leaf grouping wholesale, so a scene sensitive to visiting order
-would have moved there.
-
-The difference was confined to the scene's only dielectric and looked like
-scattered per-pixel noise rather than a displaced edge: paths diverged,
-geometry did not move. With deep recursion and total internal reflection, a
-single hit resolved differently reroutes an entire bounce chain, which accounts
-for the extra ray queries.
-
-The same commit also replaced per-node division with a per-ray reciprocal, and
-`x * (1/y)` is not bit-identical to `x / y`. Reverting that arithmetic while
-keeping the new traversal reproduced the divergence to eight digits, so the
-reciprocal was not the cause. What remains is the culling and ordering change.
-
-The current traversal is verified against brute-force intersection over the
-same assets, including rays cast from inside the mesh. No such verification
-exists for the earlier one, so the honest statement is that the two disagree
-and only the current one has been checked — not that the earlier one was wrong.
+- The SAH tree changes the total tests per ray query by between −22% and −45%
+  above roughly four primitives per scene, and *increases* it below that, where
+  the extra child box tests cannot pay for themselves.
+- `Nodes` and `Leaves` counted different things in the two configurations and
+  must not be subtracted across them; `Depth`, `Ray queries` and `Build` mean
+  the same in both, and the comparable traversal figure is the sum of the two
+  test columns.
+- One scene's ray queries moved by 3.8% between those configurations.
+  Bisecting located it in the iterative distance-ordered traversal commit, and
+  reverting the per-ray reciprocal while keeping the new traversal reproduced
+  the divergence, which leaves the culling and ordering change as the cause.
+  Only the current traversal has been verified against brute-force
+  intersection over the same assets.

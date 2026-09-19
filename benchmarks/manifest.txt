@@ -2,8 +2,11 @@
 #
 # One row per measured scene. Unlike the golden manifest this set is not a
 # correctness fingerprint: the resolution and sample count exist to put every
-# scene in a timing range where scheduler noise does not dominate. The target
-# is roughly ten seconds per run on the reference machine.
+# scene in a timing range where scheduler noise does not dominate. They were
+# chosen for roughly ten seconds per run; the intersection work per sample has
+# changed since, and the set now spans five to thirty-two seconds. The rows are
+# kept as they are anyway, because re-tuning them invalidates every profile and
+# every record taken against them.
 #
 # Everything else -- max depth, seed, background -- comes from the scene file,
 # so a record describes exactly what the renderer was asked to do.
