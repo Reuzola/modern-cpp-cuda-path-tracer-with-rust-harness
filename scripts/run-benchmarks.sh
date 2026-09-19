@@ -5,6 +5,13 @@
 # Two passes per scene: the release build supplies timing, the release-stats
 # build supplies BVH traversal counters. They are separate because the counters
 # sit in the hot loop, so a build that carries them cannot also be timed.
+#
+# --stats-only drops the timing pass and requires only the instrumented build.
+# The counters are a property of the source and the workload rather than of the
+# machine, so that pass is the only one a shared host can produce a meaningful
+# record from.
+#
+# Usage: scripts/run-benchmarks.sh [--stats-only] [output]
 
 set -euo pipefail
 
@@ -16,23 +23,62 @@ cd "${repo_root}"
 
 manifest="benchmarks/manifest.txt"
 
+stats_only=false
+
 # Records are appended as NDJSON: one self-describing object per line, so a run
 # can be concatenated with an older one and still be parsed.
-output="${1:-out/benchmarks.ndjson}"
+output=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --stats-only)
+        stats_only=true
+        shift
+        ;;
+    -h | --help)
+        sed -n '2,/^$/s/^# \?//p' "${BASH_SOURCE[0]}"
+        exit 0
+        ;;
+    -*)
+        echo "error: unknown option '$1'" >&2
+        exit 1
+        ;;
+    *)
+        # One positional only. A second one is a typo rather than a second
+        # output file, and accepting it would discard the first run.
+        if [[ -n "${output}" ]]; then
+            echo "error: unexpected argument '$1'" >&2
+            exit 1
+        fi
+        output="$1"
+        shift
+        ;;
+    esac
+done
+
+output="${output:-out/benchmarks.ndjson}"
 
 # Timed repeats. The record keeps every run; the minimum is the reported figure,
 # since a slow run means interference, never a faster renderer.
 runs="${BENCH_RUNS:-3}"
 
-# Both builds are required. Overridable for out-of-tree builds, matching
-# render-goldens.sh.
+# Overridable for out-of-tree builds, matching render-goldens.sh.
 timing_renderer="${PATHTRACER:-build/release/pathtracer}"
 stats_renderer="${PATHTRACER_STATS:-build/release-stats/pathtracer}"
 
-for renderer in "${timing_renderer}" "${stats_renderer}"; do
+# Only the builds this run invokes are required: --stats-only has to work on a
+# host that never configured the timing preset.
+required=("${timing_renderer}" "${stats_renderer}")
+if [[ "${stats_only}" == true ]]; then
+    required=("${stats_renderer}")
+fi
+
+for renderer in "${required[@]}"; do
     if [[ ! -x "${renderer}" ]]; then
         echo "error: renderer not found at '${renderer}'" >&2
-        echo "hint:  cmake --preset release       && cmake --build --preset release" >&2
+        if [[ "${stats_only}" == false ]]; then
+            echo "hint:  cmake --preset release       && cmake --build --preset release" >&2
+        fi
         echo "hint:  cmake --preset release-stats && cmake --build --preset release-stats" >&2
         exit 1
     fi
@@ -52,14 +98,18 @@ while read -r scene width height spp; do
     fi
 
     name=$(basename "${scene}" .json)
-    echo "==> ${name}  ${width}x${height}  ${spp} spp  (${runs} timed runs)"
 
     # Shared arguments. An array, not a string: every element stays one argument.
     args=(--width "${width}" --height "${height}" --spp "${spp}" --log-level warning)
 
     # Timing pass. stdout carries the record, stderr carries diagnostics, so the
     # redirection needs no filtering.
-    "${timing_renderer}" "${scene}" "${args[@]}" --bench --bench-runs "${runs}" >> "${output}"
+    if [[ "${stats_only}" == false ]]; then
+        echo "==> ${name}  ${width}x${height}  ${spp} spp  (${runs} timed runs)"
+        "${timing_renderer}" "${scene}" "${args[@]}" --bench --bench-runs "${runs}" >> "${output}"
+    else
+        echo "==> ${name}  ${width}x${height}  ${spp} spp  (counters only)"
+    fi
 
     # Counter pass. One run: the counters are deterministic under a fixed seed,
     # so repeating them adds time and no information.
@@ -68,4 +118,9 @@ while read -r scene width height spp; do
     count=$((count + 1))
 done < "${manifest}"
 
-echo "wrote $((count * 2)) records to ${output}"
+records_per_scene=2
+if [[ "${stats_only}" == true ]]; then
+    records_per_scene=1
+fi
+
+echo "wrote $((count * records_per_scene)) records to ${output}"
