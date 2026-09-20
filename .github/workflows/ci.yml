@@ -249,6 +249,9 @@ jobs:
         with:
           cache-key: core
 
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+
       # The counters are a property of the generated code, so the compiler that
       # produced them is part of the measurement and is logged with it.
       - name: Toolchain versions
@@ -266,13 +269,21 @@ jobs:
       - name: Measure the counters
         run: scripts/run-benchmarks.sh --stats-only "${RUNNER_TEMP}/counters.ndjson"
 
-      # Reduced to the deterministic fields, so the log can be read against the
-      # recorded set directly instead of through a 700-character record.
-      - name: Show the counters
+      # No --release: this compares thirteen pairs of integers, so the debug
+      # build is quicker to produce than it is slow to run.
+      - name: Build scene-tool
+        run: cargo build --locked
+        working-directory: tools/scene-tool
+
+      # --threshold 0: the counters are deterministic and were measured to
+      # reproduce bit for bit on this runner, so any movement at all is either
+      # a change in the work or a change in the arithmetic. Exit 1 is a
+      # regression, exit 2 means the two runs describe different workloads.
+      - name: Compare against the recorded counters
         run: |
-          jq -c '{scene, primary_rays: .timing.primary_rays, traversal,
-                  bvh: {nodes: .bvh.nodes, leaves: .bvh.leaves, max_depth: .bvh.max_depth}}' \
-            "${RUNNER_TEMP}/counters.ndjson"
+          tools/scene-tool/target/debug/scene-tool bench-compare \
+            --counters-only --threshold 0 \
+            benchmarks/counter-baseline.ndjson "${RUNNER_TEMP}/counters.ndjson"
 
       # Kept whatever the outcome: a partial file is the evidence for why the
       # run stopped where it did.
