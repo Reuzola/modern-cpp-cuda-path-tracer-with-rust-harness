@@ -153,6 +153,8 @@ remeasured rather than reused:
   discipline rather than a check.
 - A different machine, or the same machine in a different thermal, power or
   load state.
+- The machine is the one exemption a counter-only comparison makes; see
+  [The counter regression gate](#the-counter-regression-gate).
 
 Statistics and timing may be quoted from the same run only when both come from
 the same record.
@@ -189,6 +191,74 @@ the same record.
   of hit tests a single sample sets off, and therefore a direct measure of path
   length. A scene whose paths terminate on the first bounce sits near one.
 - **Depth** — the longest root-to-node path; a single-node tree has depth 0.
+
+## The counter regression gate
+
+The traversal counters are checked on every push to `main`, against a recorded
+set kept at `benchmarks/counter-baseline.ndjson`. Timings are not checked there
+and are not worth checking there: a shared runner's wall clock measures its
+neighbours as much as it measures this renderer, while the counters measure the
+work itself.
+
+The workload is `benchmarks/manifest.txt` unchanged — the same rows the tables
+below were measured from. Only the instrumented pass runs, one run per scene,
+which is the whole of the measurement: the counters are deterministic under a
+fixed seed, so a second run would cost time and say nothing.
+
+### Why the threshold is zero
+
+The counters were measured to reproduce exactly on the runner: thirteen scenes,
+every node test, leaf test and ray query identical to the figures taken on the
+reference machine at the same revision. That is expected rather than lucky. The
+baseline ISA carries no FMA, so the compiler cannot fold a multiply and an add
+into a single rounding; nothing in the build relaxes floating point; and both
+hosts run the same Clang and the same libm. It is a measurement nonetheless,
+and the threshold rests on the measurement rather than on the argument.
+
+The consequence is that the CPU model is left out of the comparison, and only
+there. Every other rule above still holds: architecture, scalar type, thread
+count, resolution, sample count, seed and maximum depth all have to match, and
+a record carrying a timing is refused outright, because two machines cannot be
+timed against each other however well their counters agree. A run taken on a
+different thread count will refuse the comparison rather than quietly report
+the difference as a result.
+
+### What it catches, and what it does not
+
+Two figures carry a verdict: hit tests per ray query, and ray queries. Between
+them they pin the absolute work — a test count that moves while the ratio holds
+has to have moved the denominator with it, and that is the second figure. A
+different tree, a different traversal order, a path that terminates somewhere
+else: all three move one of the two.
+
+It says nothing about speed. A change that halves the cost of a box test moves
+no counter at all, and neither does one that doubles it — the widening of the
+slab test recorded below is exactly that case. Tree shape is recorded in the
+same file but not compared, so a build that reshapes the tree without changing
+what traversal touches passes unremarked. Both gaps are deliberate: this gate
+exists because timings cannot be trusted on a runner, not because counters are
+the whole of performance. The timings are taken here, by hand, on the machine
+named above.
+
+### Refreshing the baseline
+
+A falling counter is reported as a gain and does not fail the run, so an
+improvement leaves the recorded set describing work the renderer no longer
+does. Refreshing it is deliberate, and the commit that refreshes it is where
+the change is accounted for:
+
+```bash
+cmake --preset release-stats && cmake --build --preset release-stats
+scripts/run-benchmarks.sh --stats-only benchmarks/counter-baseline.ndjson
+```
+
+Regenerate from a clean tree at the commit being recorded. NDJSON carries no
+comments, so the file cannot say which revision produced it beyond the
+`revision` field in each record, and that field is blind to uncommitted edits.
+
+A refresh is warranted when the counters moved because the work genuinely
+changed, and never to make a red job green. The two are told apart by the same
+question the rest of this document asks: is the new number explained.
 
 ## Baseline
 

@@ -99,10 +99,10 @@ stayed behind.
 
 ## Continuous integration
 
-Every push to `main` runs four independent jobs:
+Every push to `main` runs five independent jobs:
 
-- the C++ suite under `dev`, `release` and `asan-ubsan`, with the latter two
-  also rendering one scene end to end;
+- the C++ suite under `dev`, `dev-double`, `release` and `asan-ubsan`, with the
+  latter two also rendering one scene end to end;
 - the Rust suite, plus `cargo clippy` with warnings denied;
 - clang-tidy over the `dev-viewer` compilation database, which is configured
   but not built — the analyser needs the commands and the headers, not an
@@ -111,9 +111,11 @@ Every push to `main` runs four independent jobs:
 - a regression job that validates every scene file, checks that the renderer
   reproduces itself byte for byte across two runs, and compares a full render
   of the golden set against the references, uploading the difference images
-  when it fails.
-- a regression job that validates every scene file and compares a full render
-  of the golden set against the references, uploading the difference images
-  when it fails.
+  when it fails;
+- a performance job that measures the BVH traversal counters over the benchmark
+  set and compares them against a recorded baseline. It gates on counters
+  rather than on time, because a shared runner's wall clock measures its
+  neighbours as much as this renderer. The method and the policy are in
+  [benchmarks.md](benchmarks.md).
 
 See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
