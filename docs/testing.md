@@ -43,6 +43,7 @@ question.
 |---|---|
 | `dev` | Debug, warnings as errors. The everyday build. |
 | `asan-ubsan` | AddressSanitizer and UndefinedBehaviorSanitizer, with `-fno-sanitize-recover=all` so the first report fails the run. |
+| `tsan` | ThreadSanitizer: data races and lock-order inversions, stopping at the first report. It cannot share a build with `asan-ubsan`, and no CI job runs it; it is run locally. |
 | `release` | Optimizer and ThinLTO. Catches issues that only appear once the compiler is allowed to transform the code. |
 
 Both scalar precisions are worth exercising, since tolerances and a few

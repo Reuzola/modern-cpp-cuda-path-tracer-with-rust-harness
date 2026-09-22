@@ -50,13 +50,15 @@ at the repository root rather than duplicated per build directory.
 | `dev-viewer` | Debug | `dev` plus the interactive viewer. |
 | `dev-double` | Debug | `dev` with `Float` as `double`. The reference configuration for the non-default scalar type. |
 | `asan-ubsan` | Debug + `-O1` | AddressSanitizer and UndefinedBehaviorSanitizer. |
+| `tsan` | Debug + `-O1` | ThreadSanitizer. Cannot be combined with `asan-ubsan`. |
 | `release` | Release | Optimized and portable. **Reference images and benchmark timings are only valid from this one.** |
 | `release-native` | Release | `release` plus `-march=native`. Faster on this machine, and changes floating-point results. |
 | `release-viewer` | Release | `release` plus the viewer. |
 | `release-stats` | Release | `release` plus BVH traversal counters. For measurement only. |
 | `release-profiling` | Release | `release` plus debug info and frame pointers. For profiling only. |
 
-`ctest` presets exist for `dev`, `dev-viewer`, `dev-double`, `asan-ubsan` and `release`.
+`ctest` presets exist for `dev`, `dev-viewer`, `dev-double`, `asan-ubsan`,
+`tsan` and `release`.
 
 Three presets are not interchangeable with the others and it matters:
 
@@ -68,6 +70,33 @@ Three presets are not interchangeable with the others and it matters:
 - **`release-profiling`** carries debug info and keeps frame pointers, so a
   profile describes the same code generation `release` is timed with. It is not
   a timing build: the frame pointer costs a register.
+
+## Sanitizers
+
+The two sanitizer presets are separate builds because the runtimes cannot
+coexist: AddressSanitizer and ThreadSanitizer both reserve most of the address
+space for shadow memory.
+
+```bash
+cmake --workflow --preset asan-ubsan
+cmake --workflow --preset tsan
+```
+
+Both instrument this project only. Dependencies come from the shared vcpkg
+tree and are not rebuilt, so a race or overflow inside a dependency is not
+reported. Standard library synchronisation is still understood, since TSan
+intercepts the underlying pthread calls.
+
+The `tsan` test preset stops at the first report (`halt_on_error=1`).
+
+On some recent kernels the TSan runtime aborts at startup with
+`unexpected memory mapping`: the kernel's address-space randomisation is wider
+than the runtime's memory layout allows. Reducing it for the session works
+around it:
+
+```bash
+sudo sysctl vm.mmap_rnd_bits=28
+```
 
 ## Options
 

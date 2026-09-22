@@ -50,6 +50,15 @@
       }
     },
     {
+      "name": "tsan",
+      "displayName": "Sanitizer (TSan)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-O1 -fno-omit-frame-pointer -fsanitize=thread"
+      }
+    },
+    {
       "name": "release",
       "displayName": "Release (optimized, portable)",
       "inherits": "base",
@@ -92,42 +101,16 @@
     }
   ],
   "buildPresets": [
-    {
-      "name": "dev",
-      "configurePreset": "dev"
-    },
-    {
-      "name": "dev-viewer",
-      "configurePreset": "dev-viewer"
-    },
-    {
-      "name": "dev-double",
-      "configurePreset": "dev-double"
-    },
-    {
-      "name": "asan-ubsan",
-      "configurePreset": "asan-ubsan"
-    },
-    {
-      "name": "release",
-      "configurePreset": "release"
-    },
-    {
-      "name": "release-native",
-      "configurePreset": "release-native"
-    },
-    {
-      "name": "release-viewer",
-      "configurePreset": "release-viewer"
-    },
-    {
-      "name": "release-stats",
-      "configurePreset": "release-stats"
-    },
-    {
-      "name": "release-profiling",
-      "configurePreset": "release-profiling"
-    }
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "dev-viewer", "configurePreset": "dev-viewer" },
+    { "name": "dev-double", "configurePreset": "dev-double" },
+    { "name": "asan-ubsan", "configurePreset": "asan-ubsan" },
+    { "name": "tsan", "configurePreset": "tsan" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "release-native", "configurePreset": "release-native" },
+    { "name": "release-viewer", "configurePreset": "release-viewer" },
+    { "name": "release-stats", "configurePreset": "release-stats" },
+    { "name": "release-profiling", "configurePreset": "release-profiling" }
   ],
   "testPresets": [
     {
@@ -140,65 +123,43 @@
         "noTestsAction": "error"
       }
     },
+    { "name": "dev", "inherits": "test-base", "configurePreset": "dev" },
+    { "name": "dev-viewer", "inherits": "test-base", "configurePreset": "dev-viewer" },
+    { "name": "dev-double", "inherits": "test-base", "configurePreset": "dev-double" },
+    { "name": "asan-ubsan", "inherits": "test-base", "configurePreset": "asan-ubsan" },
     {
-      "name": "dev",
+      "name": "tsan",
       "inherits": "test-base",
-      "configurePreset": "dev"
+      "configurePreset": "tsan",
+      "environment": {
+        "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1"
+      }
     },
-    {
-      "name": "dev-viewer",
-      "inherits": "test-base",
-      "configurePreset": "dev-viewer"
-    },
-    {
-      "name": "dev-double",
-      "inherits": "test-base",
-      "configurePreset": "dev-double"
-    },
-    {
-      "name": "asan-ubsan",
-      "inherits": "test-base",
-      "configurePreset": "asan-ubsan"
-    },
-    {
-      "name": "release",
-      "inherits": "test-base",
-      "configurePreset": "release"
-    }
+    { "name": "release", "inherits": "test-base", "configurePreset": "release" }
   ],
   "workflowPresets": [
     {
       "name": "dev",
       "steps": [
-        {
-          "type": "configure",
-          "name": "dev"
-        },
-        {
-          "type": "build",
-          "name": "dev"
-        },
-        {
-          "type": "test",
-          "name": "dev"
-        }
+        { "type": "configure", "name": "dev" },
+        { "type": "build", "name": "dev" },
+        { "type": "test", "name": "dev" }
       ]
     },
     {
       "name": "asan-ubsan",
       "steps": [
-        {
-          "type": "configure",
-          "name": "asan-ubsan"
-        },
-        {
-          "type": "build",
-          "name": "asan-ubsan"
-        },
-        {
-          "type": "test",
-          "name": "asan-ubsan"
-        }
+        { "type": "configure", "name": "asan-ubsan" },
+        { "type": "build", "name": "asan-ubsan" },
+        { "type": "test", "name": "asan-ubsan" }
+      ]
+    },
+    {
+      "name": "tsan",
+      "steps": [
+        { "type": "configure", "name": "tsan" },
+        { "type": "build", "name": "tsan" },
+        { "type": "test", "name": "tsan" }
       ]
     }
   ]
