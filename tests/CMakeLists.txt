@@ -9,6 +9,7 @@ add_executable(pathtracer_tests
   util/log_test.cpp
   util/overloaded_test.cpp
   util/stats_test.cpp
+  util/thread_pool_test.cpp
 
   math/sampler_test.cpp
   math/vec3_test.cpp
