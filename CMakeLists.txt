@@ -125,9 +125,15 @@ find_package(nlohmann_json CONFIG REQUIRED)
 # tinyobjloader - OBJ parsing. REQUIRED: mesh loading is compiled-in.
 find_package(tinyobjloader CONFIG REQUIRED)
 
+# Threads - std::jthread in pt/util/thread_pool.hpp. Prefer -pthread over
+# -lpthread: it is a compile flag as well as a link flag.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 # pathtracer_core - the engine. Sources listed inline for greppability.
 add_library(pathtracer_core STATIC
   src/util/log.cpp
+  src/util/thread_pool.cpp
 
   src/io/color.cpp
   src/io/exr_writer.cpp
@@ -216,6 +222,13 @@ message(STATUS "Scalar precision: ${CMAKE_PROJECT_NAME} Float = ${PT_SCALAR_TYPE
 # static lib's PRIVATE deps still reach consumers via $<LINK_ONLY:>.
 target_link_libraries(pathtracer_core
   PRIVATE pt::stb pt::warnings OpenEXR::OpenEXR nlohmann_json::nlohmann_json tinyobjloader::tinyobjloader
+)
+
+# PUBLIC, unlike the list above: std::jthread appears in a public header, so every
+# consumer compiles threading code. A static library's PRIVATE deps reach consumers
+# only as $<LINK_ONLY:>, which would drop the -pthread compile flag.
+target_link_libraries(pathtracer_core
+  PUBLIC Threads::Threads
 )
 
 # CLI11 - kept near its consumer (the driver), not with the engine's deps.
