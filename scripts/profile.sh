@@ -5,11 +5,17 @@
 # The workload is benchmarks/manifest.txt, unchanged: a profile exists to
 # explain the timings in docs/benchmarks.md, so it has to measure the same work.
 #
+# One thread unless --threads says otherwise. A single-threaded profile shows
+# the render loop without the pool's waiting frames, and stays comparable with
+# the profiles recorded before rendering went parallel. A profile taken at
+# another thread count should go to its own --out directory: the file names
+# do not carry the thread count.
+#
 # Output per scene: a raw perf record, a folded stack file, a flame graph, and a
 # flat self-time report. The raw record is kept so a profile can be re-examined
 # without re-running it.
 #
-# Usage: scripts/profile.sh [--out <dir>] [scene-name ...]
+# Usage: scripts/profile.sh [--out <dir>] [--threads <n>] [scene-name ...]
 
 set -euo pipefail
 
@@ -19,6 +25,9 @@ cd "${repo_root}"
 
 manifest="benchmarks/manifest.txt"
 output_dir="out/profiles"
+
+# Stated, not left to the renderer, whose default is every hardware thread.
+threads=1
 
 # The profiling build, never the timing one: release carries no debug info and
 # omits frame pointers, so its stacks cannot be unwound.
@@ -38,6 +47,13 @@ while [[ $# -gt 0 ]]; do
     --out)
         [[ $# -ge 2 ]] || { echo "error: --out needs a value" >&2; exit 2; }
         output_dir="$2"
+        shift 2
+        ;;
+    --threads)
+        # Taken verbatim even when it starts with a dash: -1 is a valid value,
+        # and the renderer is what validates it.
+        [[ $# -ge 2 ]] || { echo "error: --threads needs a value" >&2; exit 2; }
+        threads="$2"
         shift 2
         ;;
     -*)
@@ -84,7 +100,7 @@ while read -r scene width height spp; do
         [[ "${wanted}" == true ]] || continue
     fi
 
-    echo "==> ${name}  ${width}x${height}  ${spp} spp"
+    echo "==> ${name}  ${width}x${height}  ${spp} spp  threads: ${threads}"
 
     data="${output_dir}/${name}.data"
 
@@ -92,7 +108,8 @@ while read -r scene width height spp; do
     # loop and not the image encoder. One run: a second one would double the
     # sample count without changing the distribution.
     # Records go to stdout and are discarded here; this script measures, it does
-    # not report timings.
+    # not report timings. perf follows every thread the process starts, so a
+    # multi-threaded profile folds all workers into one graph.
     perf record \
         --event "${event}" \
         --freq "${frequency}" \
@@ -100,6 +117,7 @@ while read -r scene width height spp; do
         --output "${data}" \
         -- "${renderer}" "${scene}" \
         --width "${width}" --height "${height}" --spp "${spp}" \
+        --threads "${threads}" \
         --bench --bench-runs 1 --log-level error >/dev/null
 
     # perf script expands each sample into a stack, inferno folds identical
@@ -113,7 +131,7 @@ while read -r scene width height spp; do
 
     inferno-flamegraph \
         --title "${name}" \
-        --subtitle "release-profiling · ${width}x${height} · ${spp} spp · ${event} @ ${frequency} Hz" \
+        --subtitle "release-profiling · ${width}x${height} · ${spp} spp · threads ${threads} · ${event} @ ${frequency} Hz" \
         "${output_dir}/${name}.folded" \
         > "${output_dir}/${name}.svg"
 
@@ -124,7 +142,7 @@ while read -r scene width height spp; do
     inferno-flamegraph \
         --reverse \
         --title "${name} (reversed)" \
-        --subtitle "merged from the leaf up · release-profiling · ${width}x${height} · ${spp} spp" \
+        --subtitle "merged from the leaf up · release-profiling · ${width}x${height} · ${spp} spp · threads ${threads}" \
         "${output_dir}/${name}.folded" \
         > "${output_dir}/${name}-reversed.svg"
 
