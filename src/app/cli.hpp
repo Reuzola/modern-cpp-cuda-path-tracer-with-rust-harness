@@ -21,11 +21,14 @@ struct CliOptions { // CLI options with default values
     std::optional<int> max_depth;
     std::optional<std::uint64_t> seed;
     bool benchmark{false};
+    std::optional<int> threads; // Unset: hardware default. -1: all but one.
     int bench_runs{3};
 };
 
 [[nodiscard]] std::variant<CliOptions, int> parse_command_line(int argc, char** argv);
 
 void apply_overrides(Scene& scene, const CliOptions& opts);
+
+[[nodiscard]] int resolve_thread_count(std::optional<int> requested) noexcept;
 
 } // namespace pt

@@ -153,7 +153,9 @@ namespace {
 
     pt::set_log_level(opts.log_level);
 
-    pt::ThreadPool pool(0);
+    const int threads = pt::resolve_thread_count(opts.threads);
+    pt::ThreadPool pool(static_cast<unsigned>(threads - 1));
+    pt::log_info("Threads: {}", threads);
 
     std::optional<pt::Scene> scene;
     try {
