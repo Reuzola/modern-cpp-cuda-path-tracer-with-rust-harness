@@ -12,6 +12,7 @@
 #include "pt/scene/scene_error.hpp"
 #include "pt/scene/scene_loader.hpp"
 #include "pt/util/log.hpp"
+#include "pt/util/thread_pool.hpp"
 #include "viewer/camera_controller.hpp"
 #include "viewer/cli.hpp"
 #include "viewer/controls.hpp"
@@ -103,7 +104,10 @@ int main(int argc, char** argv) {
         pt::CameraController controller(scene.camera);
         pt::Camera camera(controller.settings(), img_w, img_h);
         pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
-        pt::Renderer renderer(camera, integrator, scene.render);
+        pt::ThreadPool pool(0);
+
+        // No workers: every pass runs on this thread, between frames.
+        pt::Renderer renderer(camera, integrator, scene.render, pool);
         pt::ViewerControls controls{
             .tone_map = scene.render.tone_map,
             .max_depth = scene.render.max_depth,

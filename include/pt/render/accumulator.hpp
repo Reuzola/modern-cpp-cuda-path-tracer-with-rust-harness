@@ -17,6 +17,8 @@ public:
         assert(width > 0 && height > 0);
     }
 
+    // Safe to call concurrently for distinct pixels.
+    // end_pass(), reset() and resolve() must not overlap any add_sample().
     void add_sample(int x, int y, const Color& value) noexcept {
         sum_[index(x, y)] += value;
     }

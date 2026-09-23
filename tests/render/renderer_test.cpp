@@ -10,7 +10,11 @@
 #include "pt/render/progress.hpp"
 #include "pt/render/renderer.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/util/thread_pool.hpp"
+#include <atomic>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -29,6 +33,7 @@ using pt::Renderer;
 using pt::RenderProgress;
 using pt::RenderSettings;
 using pt::Sampler;
+using pt::ThreadPool;
 using pt::Vec3;
 using pt::operator""_f;
 
@@ -48,7 +53,7 @@ constexpr CameraSettings straight_ahead{
 class StubIntegrator final : public Integrator {
 public:
     [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override {
-        ++calls_;
+        calls_.fetch_add(1, std::memory_order_relaxed);
 
         // Reads the stream, so two samples that were seeded identically produce
         // identical pixels - which is exactly what must not happen between
@@ -57,10 +62,10 @@ public:
         return Color(value, r.direction().x(), r.time());
     }
 
-    [[nodiscard]] int calls() const noexcept { return calls_; }
+    [[nodiscard]] int calls() const noexcept { return calls_.load(std::memory_order_relaxed); }
 
 private:
-    mutable int calls_ = 0;
+    mutable std::atomic<int> calls_{0};
 };
 
 [[nodiscard]] RenderSettings settings_for(int width, int height, int spp, std::uint64_t seed) {
@@ -91,23 +96,25 @@ private:
 TEST_CASE("the sample count is rounded down to a square", "[render][renderer]") {
     const Camera camera(straight_ahead, 4, 4);
     const StubIntegrator integrator;
+    ThreadPool serial(0);
 
     // Samples are stratified on a sqrt(n) by sqrt(n) grid, so the requested count
     // is floored to the nearest square. Reporting the requested number instead
     // would make the accumulator's divisor disagree with the number of samples
     // actually added, and darken the whole image by a few percent.
-    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 16, 1)).samples_per_pixel() == 16);
-    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 20, 1)).samples_per_pixel() == 16);
-    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 24, 1)).samples_per_pixel() == 16);
-    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 25, 1)).samples_per_pixel() == 25);
-    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 1, 1)).samples_per_pixel() == 1);
-    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 3, 1)).samples_per_pixel() == 1);
+    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 16, 1), serial).samples_per_pixel() == 16);
+    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 20, 1), serial).samples_per_pixel() == 16);
+    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 24, 1), serial).samples_per_pixel() == 16);
+    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 25, 1), serial).samples_per_pixel() == 25);
+    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 1, 1), serial).samples_per_pixel() == 1);
+    REQUIRE(Renderer(camera, integrator, settings_for(4, 4, 3, 1), serial).samples_per_pixel() == 1);
 }
 
 TEST_CASE("every pixel gets every sample", "[render][renderer]") {
     const Camera camera(straight_ahead, 5, 3);
     const StubIntegrator integrator;
-    const Renderer renderer(camera, integrator, settings_for(5, 3, 9, 1));
+    ThreadPool serial(0);
+    const Renderer renderer(camera, integrator, settings_for(5, 3, 9, 1), serial);
 
     const Film film = renderer.render();
 
@@ -125,24 +132,26 @@ TEST_CASE("the same seed gives the same image", "[render][renderer]") {
     const StubIntegrator first;
     const StubIntegrator second;
     const StubIntegrator third;
+    ThreadPool serial(0);
 
-    const Film a = Renderer(camera, first, settings_for(8, 6, 4, 12345)).render();
-    const Film b = Renderer(camera, second, settings_for(8, 6, 4, 12345)).render();
+    const Film a = Renderer(camera, first, settings_for(8, 6, 4, 12345), serial).render();
+    const Film b = Renderer(camera, second, settings_for(8, 6, 4, 12345), serial).render();
 
     // Bit for bit, not within a tolerance: the sampler is seeded per pixel and
     // per pass from the scene's seed alone, with nothing accumulated between
-    // samples. This is what makes a golden image possible at all, and it is the
-    // property the parallel renderer will have to preserve.
+    // samples. This is what makes a golden image possible at all, and what keeps
+    // the result independent of how the tiles are shared out between threads.
     REQUIRE(identical(a, b));
 
-    const Film c = Renderer(camera, third, settings_for(8, 6, 4, 999)).render();
+    const Film c = Renderer(camera, third, settings_for(8, 6, 4, 999), serial).render();
     REQUIRE_FALSE(identical(a, c));
 }
 
 TEST_CASE("neighbouring pixels do not share a sample sequence", "[render][renderer]") {
     const Camera camera(straight_ahead, 4, 4);
     const StubIntegrator integrator;
-    const Film film = Renderer(camera, integrator, settings_for(4, 4, 1, 7)).render();
+    ThreadPool serial(0);
+    const Film film = Renderer(camera, integrator, settings_for(4, 4, 1, 7), serial).render();
 
     // The seed mixes in the pixel's linear index, so the first channel - which is
     // a raw draw from the stream - differs between pixels. If it did not, the
@@ -160,29 +169,79 @@ TEST_CASE("the tile size is invisible in the result", "[render][renderer]") {
     const StubIntegrator by_default;
     const StubIntegrator by_pixel;
     const StubIntegrator in_one_go;
+    ThreadPool serial(0);
 
-    const Film standard = Renderer(camera, by_default, settings_for(10, 7, 4, 3)).render();
-    const Film per_pixel = Renderer(camera, by_pixel, settings_for(10, 7, 4, 3), 1).render();
-    const Film whole_image = Renderer(camera, in_one_go, settings_for(10, 7, 4, 3), 1000).render();
+    const Film standard = Renderer(camera, by_default, settings_for(10, 7, 4, 3), serial).render();
+    const Film per_pixel = Renderer(camera, by_pixel, settings_for(10, 7, 4, 3), serial, 1).render();
+    const Film whole_image = Renderer(camera, in_one_go, settings_for(10, 7, 4, 3), serial, 1000).render();
 
     // Tiles decide the order pixels are visited and nothing else: each sample is
     // seeded from its own coordinates, so no state crosses a tile boundary. This
-    // is the precondition for handing the tile loop to a thread pool - and the
-    // test that will catch the first accidental shared accumulator when that
-    // happens.
+    // is what lets the tile loop run on a thread pool; the thread-count cases
+    // below rest on it.
     REQUIRE(identical(standard, per_pixel));
     REQUIRE(identical(standard, whole_image));
+}
+
+TEST_CASE("the thread count is the pool's workers plus the caller", "[render][renderer]") {
+    const unsigned workers = GENERATE(0U, 1U, 3U);
+
+    const Camera camera(straight_ahead, 4, 4);
+    const StubIntegrator integrator;
+    ThreadPool pool(workers);
+    const Renderer renderer(camera, integrator, settings_for(4, 4, 1, 1), pool);
+
+    // The waiting thread runs tasks too, so it is counted. Benchmark records
+    // take their thread count from here, not from the command line.
+    REQUIRE(renderer.thread_count() == static_cast<int>(workers) + 1);
+}
+
+TEST_CASE("every pixel gets every sample on any thread count", "[render][renderer]") {
+    const unsigned workers = GENERATE(0U, 1U, 3U);
+    const int tile_size = GENERATE(1, 4, 16);
+    CAPTURE(workers, tile_size);
+
+    const Camera camera(straight_ahead, 10, 7);
+    const StubIntegrator integrator;
+    ThreadPool pool(workers);
+    const Renderer renderer(camera, integrator, settings_for(10, 7, 4, 1), pool, tile_size);
+
+    static_cast<void>(renderer.render());
+
+    // Uneven splits on purpose: 70 or 6 tiles over four threads, and at size 16
+    // a single tile, so most threads are handed nothing. A tile dropped between
+    // two blocks shows up as a count that is too low, one claimed by both as too high.
+    REQUIRE(integrator.calls() == 10 * 7 * 4);
+}
+
+TEST_CASE("the thread count is invisible in the result", "[render][renderer]") {
+    const Camera camera(straight_ahead, 10, 7);
+    const StubIntegrator on_one;
+    const StubIntegrator on_four;
+    ThreadPool serial(0);
+    ThreadPool parallel(3);
+
+    // Tile size 1 splits seventy tiles into four uneven blocks whose boundaries
+    // fall mid-row, so adjacent pixels are written by different threads.
+    const Film one = Renderer(camera, on_one, settings_for(10, 7, 4, 3), serial, 1).render();
+    const Film four = Renderer(camera, on_four, settings_for(10, 7, 4, 3), parallel, 1).render();
+
+    // Each pixel is written by exactly one task per pass, and passes run in
+    // order, so every pixel sums the same samples in the same order on any
+    // thread count. Bit for bit, not within a tolerance.
+    REQUIRE(identical(one, four));
 }
 
 TEST_CASE("render is the pass loop written out", "[render][renderer]") {
     const Camera camera(straight_ahead, 6, 4);
     const StubIntegrator batch;
     const StubIntegrator progressive;
+    ThreadPool serial(0);
 
-    const Renderer batch_renderer(camera, batch, settings_for(6, 4, 9, 21));
+    const Renderer batch_renderer(camera, batch, settings_for(6, 4, 9, 21), serial);
     const Film all_at_once = batch_renderer.render();
 
-    const Renderer progressive_renderer(camera, progressive, settings_for(6, 4, 9, 21));
+    const Renderer progressive_renderer(camera, progressive, settings_for(6, 4, 9, 21), serial);
     Accumulator acc(6, 4);
     for (int pass = 0; pass < progressive_renderer.samples_per_pixel(); ++pass) {
         progressive_renderer.render_pass(acc, pass);
@@ -198,7 +257,8 @@ TEST_CASE("render is the pass loop written out", "[render][renderer]") {
 TEST_CASE("a partial render is an unbiased estimate", "[render][renderer]") {
     const Camera camera(straight_ahead, 4, 4);
     const StubIntegrator integrator;
-    const Renderer renderer(camera, integrator, settings_for(4, 4, 16, 5));
+    ThreadPool serial(0);
+    const Renderer renderer(camera, integrator, settings_for(4, 4, 16, 5), serial);
 
     Accumulator acc(4, 4);
     renderer.render_pass(acc, 0);
@@ -218,7 +278,8 @@ TEST_CASE("a partial render is an unbiased estimate", "[render][renderer]") {
 TEST_CASE("changing the sample count restratifies the grid", "[render][renderer]") {
     const Camera camera(straight_ahead, 4, 4);
     const StubIntegrator integrator;
-    Renderer renderer(camera, integrator, settings_for(4, 4, 4, 8));
+    ThreadPool serial(0);
+    Renderer renderer(camera, integrator, settings_for(4, 4, 4, 8), serial);
 
     REQUIRE(renderer.samples_per_pixel() == 4);
 
@@ -237,7 +298,8 @@ TEST_CASE("changing the sample count restratifies the grid", "[render][renderer]
 TEST_CASE("progress is reported once before and once per pass", "[render][renderer]") {
     const Camera camera(straight_ahead, 3, 3);
     const StubIntegrator integrator;
-    const Renderer renderer(camera, integrator, settings_for(3, 3, 9, 11));
+    ThreadPool serial(0);
+    const Renderer renderer(camera, integrator, settings_for(3, 3, 9, 11), serial);
 
     std::vector<RenderProgress> reports;
     static_cast<void>(renderer.render([&reports](RenderProgress progress) { reports.push_back(progress); }));
@@ -259,9 +321,10 @@ TEST_CASE("rendering without a callback is the same render", "[render][renderer]
     const Camera camera(straight_ahead, 4, 4);
     const StubIntegrator silent;
     const StubIntegrator watched;
+    ThreadPool serial(0);
 
-    const Film without = Renderer(camera, silent, settings_for(4, 4, 4, 13)).render();
-    const Film with = Renderer(camera, watched, settings_for(4, 4, 4, 13)).render([](RenderProgress) {});
+    const Film without = Renderer(camera, silent, settings_for(4, 4, 4, 13), serial).render();
+    const Film with = Renderer(camera, watched, settings_for(4, 4, 4, 13), serial).render([](RenderProgress) {});
 
     // An empty std::function is a valid argument, checked rather than called. The
     // reporting path must not perturb the result in any way.

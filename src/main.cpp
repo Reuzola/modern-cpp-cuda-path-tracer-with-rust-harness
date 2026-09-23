@@ -14,6 +14,7 @@
 #include "pt/scene/scene_loader.hpp"
 #include "pt/util/log.hpp"
 #include "pt/util/stats.hpp"
+#include "pt/util/thread_pool.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -31,13 +32,13 @@
 
 namespace {
 
-[[nodiscard]] int render_scene(const pt::Scene& scene, const pt::CliOptions& opts) {
+[[nodiscard]] int render_scene(const pt::Scene& scene, const pt::CliOptions& opts, pt::ThreadPool& pool) {
     const int image_width = scene.render.image_width;
     const int image_height = scene.render.image_height;
 
     const pt::Camera camera(scene.camera, image_width, image_height);
     const pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
-    const pt::Renderer renderer(camera, integrator, scene.render);
+    const pt::Renderer renderer(camera, integrator, scene.render, pool);
     pt::ConsoleProgressReporter reporter;
 
     std::error_code ec;
@@ -88,13 +89,13 @@ namespace {
 
 // Benchmark path: renders repeatedly without writing an image. The camera,
 // integrator and renderer are built once, so setup is outside every timing.
-[[nodiscard]] int run_benchmark(const pt::Scene& scene, const pt::CliOptions& opts) {
+[[nodiscard]] int run_benchmark(const pt::Scene& scene, const pt::CliOptions& opts, pt::ThreadPool& pool) {
     const int image_width = scene.render.image_width;
     const int image_height = scene.render.image_height;
 
     const pt::Camera camera(scene.camera, image_width, image_height);
     const pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
-    const pt::Renderer renderer(camera, integrator, scene.render);
+    const pt::Renderer renderer(camera, integrator, scene.render, pool);
 
     std::vector<double> render_seconds;
     render_seconds.reserve(static_cast<std::size_t>(opts.bench_runs));
@@ -152,6 +153,8 @@ namespace {
 
     pt::set_log_level(opts.log_level);
 
+    pt::ThreadPool pool(0);
+
     std::optional<pt::Scene> scene;
     try {
         scene = pt::load_scene(opts.scene);
@@ -171,9 +174,9 @@ namespace {
         stats.max_depth,
         std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(stats.build_time).count());
 
-    if (opts.benchmark) return run_benchmark(*scene, opts);
+    if (opts.benchmark) return run_benchmark(*scene, opts, pool);
 
-    return render_scene(*scene, opts);
+    return render_scene(*scene, opts, pool);
 }
 
 } // namespace

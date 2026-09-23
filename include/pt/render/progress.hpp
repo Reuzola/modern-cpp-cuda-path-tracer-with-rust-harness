@@ -16,6 +16,7 @@ struct RenderProgress {
 // each completed unit, so the final call always has completed == total.
 // The unit is defined by the renderer; it is currently one sample pass over the image.
 // RenderProgress is only 8 bytes. No need to use reference.
+// Always called on the thread that called render(), between passes.
 using ProgressCallback = std::function<void(RenderProgress)>;
 
 class ConsoleProgressReporter final {

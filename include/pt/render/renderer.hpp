@@ -12,25 +12,31 @@ namespace pt {
 class Accumulator;
 class Camera;
 class Integrator;
+class ThreadPool;
 struct RenderSettings;
 
-// Lifetime contract: camera and integrator must outlive Renderer.
-// Both may be mutated or reassigned between passes; they are read per sample.
-// Reference members implicitly delete copy assignment.
+// Lifetime contract: camera, integrator and pool must outlive Renderer.
+// render_pass() returns only once every tile of the pass is done, so camera, integrator and
+// settings may be changed between passes from the calling thread, never during one.
 class Renderer final {
 public:
     static constexpr int default_tile_size = 16;
 
-    Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int tile_size = default_tile_size);
+    Renderer(const Camera& camera,
+             const Integrator& integrator,
+             const RenderSettings& settings,
+             ThreadPool& pool,
+             int tile_size = default_tile_size);
 
     [[nodiscard]] Film render(const ProgressCallback& progress = {}) const;
 
+    // Blocks until the pass is complete. Tiles are split into one contiguous block per thread.
     void render_pass(Accumulator& acc, int pass_index) const;
 
     [[nodiscard]] int samples_per_pixel() const noexcept { return sqrt_spp_ * sqrt_spp_; }
 
-    // Single threaded today; the record asks the renderer rather than assuming.
-    [[nodiscard]] int thread_count() const noexcept { return 1; }
+    // The pool's workers plus the calling thread, which runs tasks while it waits.
+    [[nodiscard]] int thread_count() const noexcept;
 
     // Changes the stratification grid, so any samples already accumulated become inconsistent.
     void set_samples_per_pixel(int spp);
@@ -38,6 +44,7 @@ public:
 private:
     const Camera& camera_;
     const Integrator& integrator_;
+    ThreadPool& pool_;
     int image_width_{};
     int image_height_{};
     int sqrt_spp_{};

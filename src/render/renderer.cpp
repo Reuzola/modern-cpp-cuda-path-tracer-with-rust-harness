@@ -11,9 +11,12 @@
 #include "pt/render/progress.hpp"
 #include "pt/render/tile.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/util/thread_pool.hpp"
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace pt {
 
@@ -25,11 +28,20 @@ namespace {
     return Vec3(px, py, 0.0_f);
 }
 
+// Contiguous blocks, one per thread: the simplest split to measure other schedules against.
+[[nodiscard]] std::span<const Tile> static_block(std::span<const Tile> tiles, std::size_t part, std::size_t parts) noexcept {
+    const std::size_t n = tiles.size();
+    const std::size_t begin = n * part / parts;
+    const std::size_t end = n * (part + 1) / parts;
+    return tiles.subspan(begin, end - begin);
+}
+
 } // namespace
 
-Renderer::Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, int tile_size)
+Renderer::Renderer(const Camera& camera, const Integrator& integrator, const RenderSettings& settings, ThreadPool& pool, int tile_size)
     : camera_(camera),
       integrator_(integrator),
+      pool_(pool),
       image_width_(settings.image_width),
       image_height_(settings.image_height),
       sqrt_spp_(sqrt_spp_from(settings.samples_per_pixel)),
@@ -55,10 +67,26 @@ Film Renderer::render(const ProgressCallback& progress) const {
 }
 
 void Renderer::render_pass(Accumulator& acc, int pass_index) const {
-    for (const Tile& tile : tiles_) {
-        render_tile(acc, tile, pass_index);
+    TaskGroup group(pool_);
+    const std::size_t parts = static_cast<std::size_t>(thread_count());
+
+    for (std::size_t part = 0; part < parts; ++part) {
+        const std::span<const Tile> block = static_block(tiles_, part, parts);
+        if (block.empty()) continue;
+
+        group.run([this, &acc, pass_index, block] {
+            for (const auto& tile : block) {
+                render_tile(acc, tile, pass_index);
+            }
+        });
     }
+
+    group.wait();
     acc.end_pass();
+}
+
+int Renderer::thread_count() const noexcept {
+    return static_cast<int>(pool_.worker_count() + 1);
 }
 
 void Renderer::set_samples_per_pixel(int spp) {
