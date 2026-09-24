@@ -17,13 +17,14 @@ described in [scene-format.md](scene-format.md).
 |---|---|---|
 | `<scene>` | — | Path to the scene file. Required. |
 | `-o`, `--output` | `out/image.png` | Missing parent directories are created. |
-| `--format` | `png` | `ppm`, `png` or `exr`. |
-| `--width`, `--height` | from the scene | Must be given together. |
-| `--spp` | from the scene | Samples per pixel. |
-| `--max-depth` | from the scene | Maximum bounces along a path. |
-| `--seed` | from the scene | Base seed for sampling. |
-| `--log-level` | `info` | `info`, `warning`, `error` or `off`. |
-| `--bench` | off | Measure instead of rendering. See below. |
+| `-f`, `--format` | `png` | `ppm`, `png` or `exr`. |
+| `-w`, `--width`, `-H`, `--height` | from the scene | Must be given together. |
+| `-s`, `--spp` | from the scene | Samples per pixel. |
+| `-d`, `--max-depth` | from the scene | Maximum bounces along a path. |
+| `-S`, `--seed` | from the scene | Base seed for sampling. |
+| `-t`, `--threads` | every hardware thread | Threads to render with, the calling one included. `-1` leaves one free. |
+| `-l`, `--log-level` | `info` | `info`, `warning`, `error` or `off`. |
+| `-b`, `--bench` | off | Measure instead of rendering. See below. |
 | `--version`, `--help` | | |
 
 Everything except the output path and the format overrides a value the scene
@@ -31,7 +32,7 @@ file already carries, so the scene stays the description and the command line
 stays the invocation. The overridden value is used for that run only; nothing
 is written back.
 
-Three things are worth knowing before the first surprise:
+Four things are worth knowing before the first surprise:
 
 - **Samples per pixel are rounded down to a perfect square.** Sample positions
   are stratified on an `N × N` grid inside each pixel, so `--spp 50` renders
@@ -41,9 +42,14 @@ Three things are worth knowing before the first surprise:
   the same image rather than a different image.
 - **EXR skips tone mapping.** It is written from the linear film. PNG and PPM
   go through the operator the scene selected.
+- **The thread count never changes the image.** Every sample is seeded from its
+  pixel and pass, and each pixel is written by one thread per pass, so any
+  `--threads` value renders the same image bit for bit. The instrumented
+  `release-stats` build counts per thread and accepts only `--threads 1`, which
+  is also its default there.
 
-Diagnostics — the progress line, the BVH summary, the render time — go to
-standard error. The progress line is drawn only at `info`.
+Diagnostics — the progress line, the thread count, the BVH summary, the render
+time — go to standard error. The progress line is drawn only at `info`.
 
 ### Benchmark mode
 
@@ -194,8 +200,8 @@ default build directory.
 | `scripts/render-scenes.sh <preset> [dir]` | Renders every scene in `scenes/`. Scenes in the golden manifest use its resolution and sample count; the rest use their own settings. Output goes to `out/<preset>/` unless told otherwise. |
 | `scripts/render-goldens.sh [dir]` | Regenerates the reference set. Writes over `tests/golden/` unless given a scratch directory. |
 | `scripts/check-goldens.sh [--no-build] [--diff-dir D]` | Builds, renders into a scratch directory and compares every reference against the tolerance its manifest row carries. Keeps the renders and difference images behind only when something failed. |
-| `scripts/run-benchmarks.sh [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, appending NDJSON to `out/benchmarks.ndjson`. `BENCH_RUNS` overrides the repeat count. |
-| `scripts/profile.sh [--out dir] [scene ...]` | Records a sampling profile per benchmark scene and renders a flame graph. Output goes to `out/profiles/`. Needs `perf` and `inferno`; see [profiling.md](profiling.md). |
+| `scripts/run-benchmarks.sh [--stats-only \| --threads N] [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, writing NDJSON to `out/benchmarks.ndjson`. `--threads` sets the timing pass and defaults to every hardware thread; the counter pass always runs on one. One file holds one thread count, so a second count goes to a second file. `BENCH_RUNS` overrides the repeat count. |
+| `scripts/profile.sh [--out dir] [--threads N] [scene ...]` | Records a sampling profile per benchmark scene and renders a flame graph. One thread unless told otherwise. Output goes to `out/profiles/`. Needs `perf` and `inferno`; see [profiling.md](profiling.md). |
 | `scripts/check-determinism.sh [scene ...]` | Renders each scene twice from the same binary and compares the two files byte for byte. Defaults to three scenes chosen for what they construct. |
 
 The reference set and the reasoning behind it are in

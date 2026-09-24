@@ -122,6 +122,16 @@ ones. A single scene, or several:
 scripts/profile.sh gilded_orrery cornell_smoke
 ```
 
+Profiles run on one thread unless `--threads` says otherwise. A single-threaded
+profile shows the render loop itself. On more threads `perf` folds every worker
+into the same graph, and the pool's scheduling and waiting frames appear beside
+the work. The output names do not carry the thread count, so a profile taken
+at another one belongs in its own directory:
+
+```bash
+scripts/profile.sh --threads 16 --out out/profiles-16t argent_weave
+```
+
 Four files land in `out/profiles/` per scene:
 
 | | |
@@ -307,6 +317,9 @@ will be aimed at.
 - A changed row in `benchmarks/manifest.txt`, or a changed scene file. Both make
   the profile describe work that is no longer being timed.
 - A different scalar type.
+- A different thread count. The recorded profiles are single threaded; a
+  parallel one adds the pool's frames and changes how the cores share cache
+  and memory bandwidth.
 - A different machine. Only the reference machine is profiled.
 - A busy machine. A sampling profile is a distribution, so interference shifts
   it rather than adding an obvious outlier the way a timing does.

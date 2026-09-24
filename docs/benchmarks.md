@@ -68,11 +68,24 @@ the short scenes, and a one-scene movement near that size is not a result.
 
 ### Threads
 
-The renderer is single threaded today, and every figure below is one core.
-Measurements are taken at both one thread and the full thread count; while
-those are the same configuration, the record carries `threads: 1` and one
-number is reported. When the renderer becomes parallel this whole set is
-remeasured, because a figure taken on more threads is not a faster renderer.
+Every figure below was taken on one thread, before the renderer could use
+more, and the set remains the reference for one-thread measurements. The
+renderer now splits each sample pass across a thread pool and defaults to every
+hardware thread, so the thread count is part of the workload rather than a
+constant.
+
+- Timing is measured at one thread and at the full thread count, into separate
+  files. `scene-tool bench-compare` pairs records by scene and build, so a file
+  holds a single thread count and is only compared against a file taken at the
+  same one.
+- Counters come from one thread. The work a sample does is the same on any
+  thread count, but the instrumented build keeps a count per thread and does
+  not yet add them up, so it accepts only `--threads 1`.
+
+The two thread counts answer different questions and are not read against each
+other across revisions. Scaling is the ratio between them within one revision;
+whether the renderer itself got faster is the one-thread figure across
+revisions. A figure taken on more threads is not a faster renderer.
 
 ### Throughput and memory
 
@@ -114,7 +127,7 @@ The raw records behind the tables below are kept at
 without remeasuring it:
 
 ```bash
-scene-tool bench-compare benchmarks/baseline.ndjson out/benchmarks.ndjson
+scene-tool bench-compare benchmarks/baseline.ndjson out/benchmarks-1t.ndjson
 ```
 
 ### Reproduce
@@ -122,14 +135,18 @@ scene-tool bench-compare benchmarks/baseline.ndjson out/benchmarks.ndjson
 ```bash
 cmake --preset release       && cmake --build --preset release
 cmake --preset release-stats && cmake --build --preset release-stats
-BENCH_RUNS=5 scripts/run-benchmarks.sh out/benchmarks.ndjson
+BENCH_RUNS=5 scripts/run-benchmarks.sh --threads 1 out/benchmarks-1t.ndjson
+BENCH_RUNS=5 scripts/run-benchmarks.sh out/benchmarks-all.ndjson
 ```
+
+The first file is the one comparable with the baseline below; the second
+measures the same revision at every hardware thread.
 
 A single scene, without the script:
 
 ```bash
 ./build/release/pathtracer scenes/cornell_box.json \
-    --width 400 --height 400 --spp 49 --bench --bench-runs 5
+    --width 400 --height 400 --spp 49 --threads 1 --bench --bench-runs 5
 ```
 
 The flags are described in [usage.md](usage.md).
@@ -163,8 +180,8 @@ the same record.
 
 - **Revision** — the commit the binary was built from, captured when CMake last
   configured. It says nothing about uncommitted edits.
-- **Threads** — worker threads the render used, which is not the machine's core
-  count. One today.
+- **Threads** — threads the render used, the calling one included. Not the
+  machine's core count.
 - **Spread** — the slowest of the timed runs against the fastest, as a
   percentage. It stays in the table so the reported minimum is never read as a
   measurement without variance.

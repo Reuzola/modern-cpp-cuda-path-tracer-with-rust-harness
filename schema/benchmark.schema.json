@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Reuzola/modern-cpp-cuda-path-tracer-with-rust-harness/main/schema/benchmark.schema.json",
   "title": "Path tracer benchmark record",
-  "description": "One benchmark measurement, as written by 'pathtracer --bench'. Records are stored as NDJSON: this schema validates a single line, not the file.",
+  "description": "Threads the render used, the calling thread included. Not the machine's core count.",
   "type": "object",
   "additionalProperties": false,
   "required": [
