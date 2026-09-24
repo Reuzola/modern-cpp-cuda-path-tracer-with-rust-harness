@@ -67,9 +67,13 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
 
     app.add_option("-S,--seed", opts.seed, "random seed");
 
-    constexpr const char* stats = "threads to render with; instrumented builds count per thread and accept only 1 (default: 1)";
-    constexpr const char* normal = "threads to render with, including the caller; -1 = all but one (default: all hardware threads)";
-    app.add_option("-t,--threads", opts.threads, stats_enabled ? stats : normal);
+    if constexpr (stats_enabled) {
+        app.add_option("-t,--threads", opts.threads,
+                       "threads to render with; instrumented builds count per thread and accept only 1 (default: 1)");
+    } else {
+        app.add_option("-t,--threads", opts.threads,
+                       "threads to render with, including the caller; -1 = all but one (default: all hardware threads)");
+    }
 
     // Benchmark mode writes one JSON record to stdout; diagnostics stay on the log
     // sink (stderr), so a caller can append records without filtering.
