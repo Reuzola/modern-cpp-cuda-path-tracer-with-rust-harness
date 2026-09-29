@@ -87,6 +87,18 @@ other across revisions. Scaling is the ratio between them within one revision;
 whether the renderer itself got faster is the one-thread figure across
 revisions. A figure taken on more threads is not a faster renderer.
 
+Rendering on several threads lets neighbouring tiles, written by different
+threads, share a cache line in the accumulator. That false sharing was measured
+rather than assumed, on `earth` and `quads` at this set's resolutions: with
+tiles handed out round-robin so that neighbours always render at the same time
+— a worse case than any schedule the renderer uses — the cross-core transfers
+counted by `mem_load_l3_hit_retired.xsnp_hitm` rose more than twentyfold, yet
+neither aligning the buffer to a cache line, which removes them at tile sizes of
+16 and above, nor padding every pixel to a line of its own made a full-thread
+render measurably faster; padding made it 1–4% slower through its larger
+footprint. The accumulator therefore stays packed, and the tile size can be
+chosen without regard to it.
+
 ### Throughput and memory
 
 Throughput is reported as primary rays per second: one ray per sample, so
