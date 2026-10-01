@@ -11,6 +11,7 @@
 #include "pt/render/progress.hpp"
 #include "pt/render/tile.hpp"
 #include "pt/scene/scene.hpp"
+#include "pt/util/parallel_for.hpp"
 #include "pt/util/thread_pool.hpp"
 #include <cassert>
 #include <cmath>
@@ -26,14 +27,6 @@ namespace {
     const Float px = ((static_cast<Float>(s_i) + sampler.next_scalar()) * recip_sqrt_spp) - 0.5_f;
     const Float py = ((static_cast<Float>(s_j) + sampler.next_scalar()) * recip_sqrt_spp) - 0.5_f;
     return Vec3(px, py, 0.0_f);
-}
-
-// Contiguous blocks, one per thread: the simplest split to measure other schedules against.
-[[nodiscard]] std::span<const Tile> static_block(std::span<const Tile> tiles, std::size_t part, std::size_t parts) noexcept {
-    const std::size_t n = tiles.size();
-    const std::size_t begin = n * part / parts;
-    const std::size_t end = n * (part + 1) / parts;
-    return tiles.subspan(begin, end - begin);
 }
 
 } // namespace
@@ -67,21 +60,12 @@ Film Renderer::render(const ProgressCallback& progress) const {
 }
 
 void Renderer::render_pass(Accumulator& acc, int pass_index) const {
-    TaskGroup group(pool_);
-    const std::size_t parts = static_cast<std::size_t>(thread_count());
-
-    for (std::size_t part = 0; part < parts; ++part) {
-        const std::span<const Tile> block = static_block(tiles_, part, parts);
-        if (block.empty()) continue;
-
-        group.run([this, &acc, pass_index, block] {
-            for (const auto& tile : block) {
-                render_tile(acc, tile, pass_index);
-            }
-        });
-    }
-
-    group.wait();
+    // A thread that drew cheap tiles, or ran faster, takes more of them. The image does not
+    // depend on who rendered what: samples are seeded by (pixel, pass), and each pixel is
+    // written by one tile.
+    parallel_for(pool_, tiles_.size(), [this, &acc, pass_index](std::size_t i) {
+        render_tile(acc, tiles_[i], pass_index);
+    });
     acc.end_pass();
 }
 

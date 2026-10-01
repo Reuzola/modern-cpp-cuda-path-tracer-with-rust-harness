@@ -30,7 +30,7 @@ public:
 
     [[nodiscard]] Film render(const ProgressCallback& progress = {}) const;
 
-    // Blocks until the pass is complete. Tiles are split into one contiguous block per thread.
+    // Blocks until the pass is complete. Tiles are handed out one at a time to whichever thread is free.
     void render_pass(Accumulator& acc, int pass_index) const;
 
     [[nodiscard]] int samples_per_pixel() const noexcept { return sqrt_spp_ * sqrt_spp_; }

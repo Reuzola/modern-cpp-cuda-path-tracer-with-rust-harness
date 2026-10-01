@@ -208,9 +208,9 @@ TEST_CASE("every pixel gets every sample on any thread count", "[render][rendere
 
     static_cast<void>(renderer.render());
 
-    // Uneven splits on purpose: 70 or 6 tiles over four threads, and at size 16
-    // a single tile, so most threads are handed nothing. A tile dropped between
-    // two blocks shows up as a count that is too low, one claimed by both as too high.
+    // Seventy, six or one tile over up to four threads: in the last case most
+    // threads find nothing left to take. A tile handed out twice shows up as a
+    // count that is too high, one never handed out as too low.
     REQUIRE(integrator.calls() == 10 * 7 * 4);
 }
 
@@ -221,8 +221,8 @@ TEST_CASE("the thread count is invisible in the result", "[render][renderer]") {
     ThreadPool serial(0);
     ThreadPool parallel(3);
 
-    // Tile size 1 splits seventy tiles into four uneven blocks whose boundaries
-    // fall mid-row, so adjacent pixels are written by different threads.
+    // Tile size 1 hands out seventy one-pixel tiles, so adjacent pixels are
+    // written by different threads, in an order that changes from run to run.
     const Film one = Renderer(camera, on_one, settings_for(10, 7, 4, 3), serial, 1).render();
     const Film four = Renderer(camera, on_four, settings_for(10, 7, 4, 3), parallel, 1).render();
 
