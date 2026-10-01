@@ -39,8 +39,10 @@ public:
 
 private:
     std::mutex mutex_;
-    std::condition_variable_any queue_cv_;
+    std::condition_variable_any queue_cv_; // Workers sleep here; only new work wakes them.
+    std::condition_variable done_cv_; // Threads inside TaskGroup::wait() sleep here: woken by a finished group, or by new work they can help.
     std::deque<Task> queue_;
+    std::size_t sleeping_waiters_{}; // Guarded by mutex_. Lets enqueue() skip done_cv_ when no thread is waiting.
 
     // Declared last: members are destroyed in reverse, so the workers are
     // stopped and joined before the queue and mutex they use are gone.

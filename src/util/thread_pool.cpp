@@ -37,11 +37,16 @@ void ThreadPool::worker_loop(const std::stop_token& stop_token) {
 }
 
 void ThreadPool::enqueue(Task task) {
+    bool wake_waiter{};
     {
         const std::scoped_lock lock(mutex_);
         queue_.push_back(std::move(task));
+        wake_waiter = sleeping_waiters_ > 0;
     }
     queue_cv_.notify_one();
+
+    // A waiting thread runs queued work too; wake one only if one is asleep.
+    if (wake_waiter) done_cv_.notify_one();
 }
 
 bool ThreadPool::try_run_one() {
@@ -60,9 +65,11 @@ bool ThreadPool::try_run_one() {
 void ThreadPool::wait_for_work(const std::atomic<std::size_t>& pending) {
     std::unique_lock lock(mutex_);
 
-    queue_cv_.wait(lock, [this, &pending] {
+    ++sleeping_waiters_;
+    done_cv_.wait(lock, [this, &pending] {
         return !queue_.empty() || pending.load(std::memory_order_acquire) == 0;
     });
+    --sleeping_waiters_;
 }
 
 void ThreadPool::notify_waiters() {
@@ -71,7 +78,8 @@ void ThreadPool::notify_waiters() {
         // here orders this notify after that check and the wakeup cannot be lost.
         const std::scoped_lock lock(mutex_);
     }
-    queue_cv_.notify_all();
+    // Waiters only: workers react to the queue alone and would wake for nothing.
+    done_cv_.notify_all();
 }
 
 TaskGroup::~TaskGroup() { drain(); }

@@ -3,6 +3,7 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <latch>
@@ -127,6 +128,34 @@ TEST_CASE("TaskGroup::wait runs pending tasks on the calling thread", "[util][th
     group.wait();
 
     REQUIRE(releaser == std::this_thread::get_id());
+}
+
+TEST_CASE("A waiting thread wakes up for work submitted while it sleeps", "[util][thread_pool]") {
+    pt::ThreadPool pool(1);
+    pt::TaskGroup group(pool);
+
+    std::latch worker_busy(1);
+    std::latch second_done(1);
+    std::thread::id runner;
+
+    group.run([&group, &worker_busy, &second_done, &runner] {
+        worker_busy.count_down();
+
+        // Long enough for the test thread to find the queue empty and fall asleep in wait().
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        group.run([&second_done, &runner] {
+            runner = std::this_thread::get_id();
+            second_done.count_down();
+        });
+
+        // Keeps the only worker busy: the new task can run on the waiting thread alone.
+        second_done.wait();
+    });
+    worker_busy.wait();
+    group.wait();
+
+    REQUIRE(runner == std::this_thread::get_id());
 }
 
 TEST_CASE("The waiting thread works alongside every worker", "[util][thread_pool]") {
