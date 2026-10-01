@@ -8,6 +8,7 @@ add_executable(pathtracer_tests
   util/arena_test.cpp
   util/log_test.cpp
   util/overloaded_test.cpp
+  util/parallel_for_test.cpp
   util/stats_test.cpp
   util/thread_pool_test.cpp
 
