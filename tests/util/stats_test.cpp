@@ -1,9 +1,10 @@
 #include "pt/util/stats.hpp"
 #include <catch2/catch_test_macros.hpp>
 
-// The counters are thread_local by design (D56's host-only diagnostic). That
-// property is not exercised here: it would pull a threading dependency into the
-// test target, and the merge hook the parallel renderer needs will own it.
+// The counters are process-wide mutable state: any case that traversed a tree
+// may have counted before these run. Every case therefore starts from a reset,
+// and touches the counters only through the snapshot API, so the storage behind
+// that API can change without these cases noticing.
 
 TEST_CASE("stats_enabled mirrors the build option", "[util][stats]") {
     // The definition is PUBLIC on pathtracer_core, so the test binary sees the
@@ -17,8 +18,7 @@ TEST_CASE("stats_enabled mirrors the build option", "[util][stats]") {
 }
 
 TEST_CASE("the counters are independent, and compile out when disabled", "[util][stats]") {
-    // Shared mutable state: a bvh case may have run earlier in this process.
-    pt::traversal_stats = pt::TraversalStats{};
+    pt::reset_traversal_stats();
 
     pt::count_node_test();
     pt::count_node_test();
@@ -27,9 +27,11 @@ TEST_CASE("the counters are independent, and compile out when disabled", "[util]
     pt::count_ray_query();
     pt::count_ray_query();
 
-    const pt::TraversalStats& stats = pt::traversal_stats;
+    const pt::TraversalStats stats = pt::traversal_snapshot();
 
     if constexpr (pt::stats_enabled) {
+        // A different count per counter: an increment wired to the wrong field
+        // shows up as two wrong numbers instead of hiding behind an equal one.
         REQUIRE(stats.node_tests == 2);
         REQUIRE(stats.leaf_tests == 1);
         REQUIRE(stats.ray_queries == 3);
@@ -41,6 +43,20 @@ TEST_CASE("the counters are independent, and compile out when disabled", "[util]
         REQUIRE(stats.ray_queries == 0);
     }
 
-    // Leave the shared state as it was found.
-    pt::traversal_stats = pt::TraversalStats{};
+    pt::reset_traversal_stats();
+}
+
+TEST_CASE("a reset zeroes every counter", "[util][stats]") {
+    pt::count_node_test();
+    pt::count_leaf_test();
+    pt::count_ray_query();
+
+    pt::reset_traversal_stats();
+    const pt::TraversalStats stats = pt::traversal_snapshot();
+
+    // Every field, not one: the benchmark resets between timed runs, and a field
+    // the reset skipped would carry the previous run into the next record.
+    REQUIRE(stats.node_tests == 0);
+    REQUIRE(stats.leaf_tests == 0);
+    REQUIRE(stats.ray_queries == 0);
 }

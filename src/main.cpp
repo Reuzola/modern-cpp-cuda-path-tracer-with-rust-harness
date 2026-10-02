@@ -73,7 +73,7 @@ namespace {
     pt::log_info("Render time: {:.2f}s", elapsed.count());
 
     if constexpr (pt::stats_enabled) {
-        const pt::TraversalStats& stats = pt::traversal_stats;
+        const pt::TraversalStats stats = pt::traversal_snapshot();
 
         if (stats.ray_queries > 0) {
 

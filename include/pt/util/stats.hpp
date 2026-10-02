@@ -1,6 +1,6 @@
 #pragma once
-
 #include <cstdint>
+
 namespace pt {
 
 #ifdef PT_STATS
@@ -33,6 +33,6 @@ inline void count_ray_query() noexcept {
 // per-thread state here; no other call site should touch the thread_local directly.
 [[nodiscard]] inline TraversalStats traversal_snapshot() noexcept { return traversal_stats; }
 
-void inline reset_traversal_stats() noexcept { traversal_stats = TraversalStats{}; }
+inline void reset_traversal_stats() noexcept { traversal_stats = TraversalStats{}; }
 
 } // namespace pt
