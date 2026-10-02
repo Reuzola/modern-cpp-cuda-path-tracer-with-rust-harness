@@ -70,9 +70,10 @@ the short scenes, and a one-scene movement near that size is not a result.
 
 Every figure below was taken on one thread, before the renderer could use
 more, and the set remains the reference for one-thread measurements. The
-renderer now splits each sample pass across a thread pool and defaults to every
-hardware thread, so the thread count is part of the workload rather than a
-constant.
+renderer now shares each sample pass out across a thread pool and defaults to
+every hardware thread, so the thread count is part of the workload rather than
+a constant. How the pass is shared, and what that costs and gains, is in
+[Scaling across threads](#scaling-across-threads).
 
 - Timing is measured at one thread and at the full thread count, into separate
   files. `scene-tool bench-compare` pairs records by scene and build, so a file
@@ -96,8 +97,9 @@ counted by `mem_load_l3_hit_retired.xsnp_hitm` rose more than twentyfold, yet
 neither aligning the buffer to a cache line, which removes them at tile sizes of
 16 and above, nor padding every pixel to a line of its own made a full-thread
 render measurably faster; padding made it 1–4% slower through its larger
-footprint. The accumulator therefore stays packed, and the tile size can be
-chosen without regard to it.
+footprint. The accumulator therefore stays packed. That holds at the tile size
+the renderer uses; below it, on the cheapest scenes, cross-core traffic does
+become visible — see [Tile size](#tile-size).
 
 ### Throughput and memory
 
@@ -418,6 +420,194 @@ This is an observation rather than a result. The earlier timings were taken on
 the same machine in an unrecorded load state, which is exactly the comparison
 this document's own rules call invalid; the counters are what carry weight
 here, and they say the work did not change in these scenes.
+
+## Scaling across threads
+
+Taken on 2026-10-02 from revision `3f4daa1d6378`, on the machine above, from the
+`release` and `release-stats` builds: one file at one thread and one at sixteen,
+three timed runs per scene, minimum reported. The one-thread file matches the
+baseline: the largest render time movement is +1.8%, on `cornell_smoke`, inside
+the noise described above, and every counter is identical.
+
+### How a pass is shared out
+
+A sample pass covers the image once. The image is cut into 16×16 tiles, and the
+tiles of a pass are handed out one at a time, from a shared counter, to
+whichever thread is free: the pool's workers and the thread that started the
+pass. The pass ends when its last tile does, and the next one starts after it.
+A thread that drew cheap tiles, or simply ran faster, takes more of them.
+
+None of this reaches the image. A sample is seeded by its pixel and its pass, a
+pixel is written by exactly one tile within a pass, and passes run in order, so
+every pixel sums the same samples in the same order on any thread count, under
+any schedule and at any tile size. The golden images and the traversal counters
+were bit-identical across the change that introduced the dynamic hand-out, and
+the tests hold the property at unit level.
+
+### Sixteen threads
+
+| Scene | 1 thread (s) | 16 threads (s) | Spread | Mray/s | Scaling |
+|---|---|---|---|---|---|
+| `area_lights` | 32.21 | 3.60 | 3.5% | 8.09 | 8.94 |
+| `argent_weave` | 12.15 | 1.20 | 0.5% | 0.97 | 10.11 |
+| `checkered_spheres` | 6.45 | 0.76 | 0.6% | 20.66 | 8.50 |
+| `cornell_box` | 9.38 | 1.04 | 1.9% | 7.52 | 9.00 |
+| `cornell_smoke` | 12.51 | 1.31 | 0.1% | 4.39 | 9.53 |
+| `earth` | 5.54 | 0.75 | 1.2% | 83.86 | 7.40 |
+| `gilded_orrery` | 12.25 | 1.19 | 0.4% | 1.74 | 10.28 |
+| `mesh_showcase` | 6.89 | 0.93 | 0.3% | 23.51 | 7.39 |
+| `neon_cathedral` | 10.32 | 1.04 | 3.8% | 1.99 | 9.90 |
+| `perlin_spheres` | 29.24 | 3.29 | 0.4% | 5.67 | 8.89 |
+| `quads` | 5.52 | 0.71 | 1.0% | 50.37 | 7.72 |
+| `random_spheres` | 15.63 | 1.68 | 0.0% | 6.27 | 9.33 |
+| `showcase` | 11.95 | 1.31 | 0.1% | 9.89 | 9.12 |
+
+Scaling is the one-thread time of the same revision divided by the
+sixteen-thread time. Its geometric mean over the set is 8.9, on eight cores
+carrying two threads each. Why it is not sixteen is the rest of this section.
+
+### Where the time goes
+
+The figures below come from a measurement harness kept outside the repository:
+an instrumented build that reported, for every timed run, the CPU time of the
+whole process over the render interval and its context switch count, and could
+switch between schedules and tile sizes at run time, so that the alternatives
+ran from one binary. Two quantities follow from those numbers:
+
+- **Utilisation**, CPU time divided by threads × wall time: the share of the
+  machine that was working rather than waiting.
+- **Inflation**, CPU time divided by the one-thread CPU time at the same tile
+  size: how much more CPU the same work cost when it ran in parallel.
+
+Speedup is threads × utilisation / inflation, so a loss is either waiting or
+slowing down, and the two have different causes. The split is valid here
+because the pool's idle threads sleep on a condition variable rather than spin:
+waiting costs no CPU time. Under a runtime that spins before it sleeps, the same
+arithmetic would count waiting as work.
+
+A third measurement isolated imbalance. One single-threaded run per scene
+recorded the time spent on every pixel, summed over all passes. From that map,
+any tile size and any schedule can be simulated with equal-speed threads and no
+synchronisation cost, which leaves the imbalance a schedule causes on its own.
+
+Every comparison between schedules or tile sizes below pairs runs taken in the
+same round, one after another, and reports the median over three rounds. On
+sixteen threads this machine drifts by around 12% over minutes, which would
+swamp most of these differences if runs from different sessions were compared.
+
+**Contiguous blocks lost almost all of their idle time to imbalance.** The
+schedule before this one gave each thread one contiguous block of tiles, which
+on a row-major tile order is a horizontal band of the image. Cost varies down
+an image — the sky in `earth`, the light in `cornell_smoke` — so the bands were
+unequal, and the band that held the expensive rows held the whole pass. At
+eight threads, measured utilisation matched the simulated block balance within
+a few points on most of the set: `area_lights` 42% against 42%, `perlin_spheres`
+65% against 65%. In passes long enough to see it, the slowest band took a
+further 4–12% of the pass, because thread speed itself varies on this host —
+vCPUs are preempted by the host, and clock frequency depends on how many cores
+are busy. A static split can absorb neither; a dynamic one absorbs both.
+
+| Scene | Gain, 8 threads | Gain, 16 threads | Utilisation, 8 threads: blocks → dynamic | Utilisation, 16 threads | Inflation, 16 threads | 16 over 8 threads |
+|---|---|---|---|---|---|---|
+| `area_lights` | 2.18 | 1.85 | 42% → 99% | 96% | 1.77 | 1.26 |
+| `argent_weave` | 1.34 | 1.27 | 77% → 103% | 100% | 1.58 | 1.56 |
+| `checkered_spheres` | 1.69 | 1.40 | 57% → 97% | 95% | 1.77 | 1.23 |
+| `cornell_box` | 1.22 | 1.14 | 82% → 101% | 101% | 1.76 | 1.31 |
+| `cornell_smoke` | 1.29 | 1.23 | 74% → 99% | 99% | 1.65 | 1.19 |
+| `earth` | 1.26 | 1.11 | 73% → 94% | 81% | 1.72 | 1.19 |
+| `gilded_orrery` | 1.27 | 1.23 | 76% → 99% | 98% | 1.55 | 1.55 |
+| `mesh_showcase` | 1.79 | 1.59 | 52% → 97% | 94% | 1.96 | 1.14 |
+| `neon_cathedral` | 1.16 | 1.05 | 85% → 99% | 98% | 1.63 | 1.47 |
+| `perlin_spheres` | 1.49 | 1.43 | 65% → 100% | 99% | 1.79 | 1.30 |
+| `quads` | 1.41 | 1.24 | 69% → 97% | 90% | 1.90 | 1.17 |
+| `random_spheres` | 1.39 | 1.35 | 67% → 99% | 97% | 1.65 | 1.38 |
+| `showcase` | 1.45 | 1.38 | 64% → 99% | 97% | 1.68 | 1.37 |
+
+Gain is block time over dynamic time; its geometric mean is 1.43 at eight
+threads and 1.31 at sixteen. Utilisation above 100% is an artefact of the kernel
+charging CPU time in clock ticks, and reads as "fully busy".
+
+**At sixteen threads the loss is inflation, not waiting.** Utilisation is
+above 90% everywhere but `earth`, and the time goes instead into inflation of
+1.55–1.96. About 1.07 of that is clock frequency: one busy core runs at up to
+5.0 GHz, eight busy cores at 4.6. The rest is two threads sharing each core.
+How much the second thread on a core still adds is the last column, and it
+sorts the set by memory behaviour: 1.14 on `mesh_showcase`, 1.55 and 1.56 on
+`gilded_orrery` and `argent_weave`, the two largest trees. A thread waiting on
+memory leaves its core to its sibling, so the scenes that stall most gain most.
+Any change that removes memory stalls from traversal should be expected to
+shrink this column, and should be read against it.
+
+Before the dynamic hand-out, sixteen threads hid part of the imbalance: a
+thread whose sibling had finished its band ran with the core to itself and
+caught up. That is why the gain at sixteen threads is smaller than at eight,
+and why inflation rose when the waiting disappeared.
+
+**What is left of the waiting is the pass boundary.** When a pass finished,
+the pool used to wake every idle worker as well as the waiting thread; each
+woke, found nothing to do and slept again. Waking only the waiting thread cut
+the context switches per pass from about 57 to 35 at sixteen threads, and from
+20 to 12 at eight, and made `earth` 13% faster on sixteen. What remains is
+roughly 250–300 µs per pass on sixteen threads: starting the workers on a pass,
+and the last of them finishing. That is a fixed cost per pass, so it shows only
+where passes are short. On `earth` it is 18% of a 1.5 ms pass and the whole of
+its missing utilisation; on `quads` about 10%; elsewhere it is below the noise.
+It matters most wherever a pass is cheap by design, as in the interactive
+viewer, where one pass is one frame.
+
+### Tile size
+
+Tile size trades three effects against each other. A smaller tile lowers the
+tail of a pass, which is at most one tile long. A larger one keeps neighbouring
+pixels, and the tree nodes and textures they touch, on one thread. And tiles
+small enough that a row of one is narrower than a cache line make neighbouring
+tiles, rendered at the same moment, write the same lines.
+
+The size was chosen by a rule fixed before measuring: the geometric mean over
+the set of paired sixteen-thread time against tile 16, a candidate to be no
+more than 2% slower on one thread and no more than 5% slower on any single
+scene, and a difference inside the 2% noise floor to keep 16.
+
+| Tile | 1 thread | 16 threads | Worst scene, 16 threads |
+|---|---|---|---|
+| 4 | 1.013 | 1.046 | 1.328, `earth` |
+| 8 | 1.003 | 1.007 | 1.094, `earth` |
+| 12 | — | 1.001 | 1.062, `earth` |
+| 16 | 1 | 1 | — |
+| 24 | — | 1.003 | 1.027, `mesh_showcase` |
+| 32 | 1.004 | 1.012 | 1.062, `mesh_showcase` |
+
+Sixteen is the only size that passes every condition, and it stays. The losses
+at either end have different causes:
+
+- At 32, a pass has only eight tiles per thread on this set's resolutions, and
+  its tail grows; `mesh_showcase`, whose cost is concentrated in a few tiles,
+  loses 6%, as the simulation predicted in direction and roughly in size.
+- Below 16, `earth` and `quads` slow down on sixteen threads by up to 33% and
+  14%, yet not at all on one. Utilisation does not fall; inflation rises, from
+  1.73 to 2.27 on `earth` at tile 4. Their pixels cost around 100 ns each, so
+  the cache lines shared between threads — the tile counter, and the edges of
+  neighbouring tiles in the accumulator — become a visible part of the work.
+  The two sources were not separated.
+
+That last observation bounds future work rather than this choice: anything
+that makes a pixel cheaper widens the set of scenes where a tile below 16 pays
+this cost, and a smaller tile should not be chosen without measuring it again.
+
+### What this measurement could not see
+
+- **Simultaneous multithreading could not be isolated.** Pinning eight threads
+  to one logical CPU per core, and to four cores with two each, gave the same
+  result: under WSL2 the virtual CPUs reported as siblings are not pinned to
+  the same physical core. Its effect shows only as the difference between
+  eight and sixteen busy threads.
+- **The host's share is invisible.** A Linux guest under Hyper-V records no
+  steal time, so time the host takes a vCPU away is charged to the process as
+  CPU time. Utilisation and inflation carry that noise; one scene measured an
+  inflation slightly below one at eight threads.
+- **Absolute sixteen-thread timings are not portable across sessions.** Only
+  the paired figures above are comparisons; the table in
+  [Sixteen threads](#sixteen-threads) describes one session.
 
 ## Earlier measurements
 
