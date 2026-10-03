@@ -133,6 +133,7 @@ find_package(Threads REQUIRED)
 # pathtracer_core - the engine. Sources listed inline for greppability.
 add_library(pathtracer_core STATIC
   src/util/log.cpp
+  src/util/stats.cpp
   src/util/thread_pool.cpp
 
   src/io/color.cpp
