@@ -59,6 +59,14 @@
       }
     },
     {
+      "name": "tsan-stats",
+      "displayName": "Sanitizer (TSan) + BVH statistics (counter thread safety)",
+      "inherits": "tsan",
+      "cacheVariables": {
+        "PT_ENABLE_STATS": "ON"
+      }
+    },
+    {
       "name": "release",
       "displayName": "Release (optimized, portable)",
       "inherits": "base",
@@ -106,6 +114,7 @@
     { "name": "dev-double", "configurePreset": "dev-double" },
     { "name": "asan-ubsan", "configurePreset": "asan-ubsan" },
     { "name": "tsan", "configurePreset": "tsan" },
+    { "name": "tsan-stats", "configurePreset": "tsan-stats" },
     { "name": "release", "configurePreset": "release" },
     { "name": "release-native", "configurePreset": "release-native" },
     { "name": "release-viewer", "configurePreset": "release-viewer" },
@@ -135,7 +144,9 @@
         "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1"
       }
     },
-    { "name": "release", "inherits": "test-base", "configurePreset": "release" }
+    { "name": "tsan-stats", "inherits": "tsan", "configurePreset": "tsan-stats" },
+    { "name": "release", "inherits": "test-base", "configurePreset": "release" },
+    { "name": "release-stats", "inherits": "test-base", "configurePreset": "release-stats" }
   ],
   "workflowPresets": [
     {
@@ -160,6 +171,14 @@
         { "type": "configure", "name": "tsan" },
         { "type": "build", "name": "tsan" },
         { "type": "test", "name": "tsan" }
+      ]
+    },
+    {
+      "name": "tsan-stats",
+      "steps": [
+        { "type": "configure", "name": "tsan-stats" },
+        { "type": "build", "name": "tsan-stats" },
+        { "type": "test", "name": "tsan-stats" }
       ]
     }
   ]
