@@ -258,14 +258,22 @@ jobs:
         run: clang++ --version
 
       # release-stats, never release: the counters only exist in this build,
-      # and its timing is worthless by construction.
+      # and its timing is worthless by construction. The test binary is built
+      # here as well.
       - name: Build the renderer
         run: |
           cmake --preset release-stats
           cmake --build --preset release-stats
 
+      # The only leg where the instrumented branch of each test runs; every
+      # other leg compiles the counters out. It runs ahead of the measurement:
+      # if the merge is wrong in a unit test, the sweep below proves nothing.
+      - name: Test the instrumented build
+        run: ctest --preset release-stats
+
       # No timing pass: a shared runner cannot produce a timing worth keeping,
-      # and dropping it halves the work.
+      # and dropping it halves the work. No --threads either: the sweep runs on
+      # every core the runner has.
       - name: Measure the counters
         run: scripts/run-benchmarks.sh --stats-only "${RUNNER_TEMP}/counters.ndjson"
 
@@ -277,8 +285,10 @@ jobs:
 
       # --threshold 0: the counters are deterministic and were measured to
       # reproduce bit for bit on this runner, so any movement at all is either
-      # a change in the work or a change in the arithmetic. Exit 1 is a
-      # regression, exit 2 means the two runs describe different workloads.
+      # a change in the work or a change in the arithmetic. The baseline was
+      # taken on one thread and this run uses every core, so a pass also shows
+      # the totals do not depend on the thread count. Exit 1 is a regression,
+      # exit 2 means the two runs describe different workloads.
       - name: Compare against the recorded counters
         run: |
           tools/scene-tool/target/debug/scene-tool bench-compare \
