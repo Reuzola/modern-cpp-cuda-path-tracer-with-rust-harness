@@ -6,20 +6,21 @@
 # build supplies BVH traversal counters. They are separate because the counters
 # sit in the hot loop, so a build that carries them cannot also be timed.
 #
-# --threads N sets the thread count of the timing pass; without it the renderer
+# --threads N sets the thread count of both passes; without it the renderer
 # uses its own default, every hardware thread. One output file holds one thread
 # count: bench-compare pairs records by scene and build, and rejects a file with
 # two timing records for the same scene. Measure another count into another file.
 #
-# The counter pass always runs on one thread: the instrumented build counts per
-# thread and accepts no other value.
+# The counters do not depend on the thread count - every thread's count is
+# merged into one total - so the counter pass follows the same value only to
+# keep the file uniform and the pass fast.
 #
 # --stats-only drops the timing pass and requires only the instrumented build.
 # The counters are a property of the source and the workload rather than of the
 # machine, so that pass is the only one a shared host can produce a meaningful
 # record from.
 #
-# Usage: scripts/run-benchmarks.sh [--stats-only | --threads N] [output]
+# Usage: scripts/run-benchmarks.sh [--stats-only] [--threads N] [output]
 
 set -euo pipefail
 
@@ -74,13 +75,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Rejected rather than ignored, like --output next to --bench in the renderer:
-# the caller asked for something this run would not do.
-if [[ "${stats_only}" == true && -n "${threads}" ]]; then
-    echo "error: --threads sets the timing pass, which --stats-only drops" >&2
-    exit 1
-fi
-
 output="${output:-out/benchmarks.ndjson}"
 
 # Timed repeats. The record keeps every run; the minimum is the reported figure,
@@ -109,11 +103,11 @@ for renderer in "${required[@]}"; do
     fi
 done
 
-# Passed to the timing pass only. An empty array expands to nothing, which is
-# what leaves the renderer on its default.
-timing_threads=()
+# Passed to both passes. An empty array expands to nothing, which is what
+# leaves the renderer on its default.
+thread_args=()
 if [[ -n "${threads}" ]]; then
-    timing_threads=(--threads "${threads}")
+    thread_args=(--threads "${threads}")
 fi
 
 mkdir -p "$(dirname -- "${output}")"
@@ -132,21 +126,20 @@ while read -r scene width height spp; do
     name=$(basename "${scene}" .json)
 
     # Shared arguments. An array, not a string: every element stays one argument.
-    args=(--width "${width}" --height "${height}" --spp "${spp}" --log-level warning)
+    args=(--width "${width}" --height "${height}" --spp "${spp}" --log-level warning "${thread_args[@]}")
 
     # Timing pass. stdout carries the record, stderr carries diagnostics, so the
     # redirection needs no filtering.
     if [[ "${stats_only}" == false ]]; then
         echo "==> ${name}  ${width}x${height}  ${spp} spp  (${runs} timed runs, threads: ${threads:-default})"
-        "${timing_renderer}" "${scene}" "${args[@]}" "${timing_threads[@]}" --bench --bench-runs "${runs}" >> "${output}"
+        "${timing_renderer}" "${scene}" "${args[@]}" --bench --bench-runs "${runs}" >> "${output}"
     else
-        echo "==> ${name}  ${width}x${height}  ${spp} spp  (counters only)"
+        echo "==> ${name}  ${width}x${height}  ${spp} spp  (counters only, threads: ${threads:-default})"
     fi
 
-    # Counter pass. One run: the counters are deterministic under a fixed seed,
-    # so repeating them adds time and no information. The thread count is stated
-    # rather than inherited, so the record's meaning does not rest on a default.
-    "${stats_renderer}" "${scene}" "${args[@]}" --threads 1 --bench --bench-runs 1 >> "${output}"
+    # Counter pass. One run: the counters are deterministic under a fixed seed
+    # and on any thread count, so repeating them adds time and no information.
+    "${stats_renderer}" "${scene}" "${args[@]}" --bench --bench-runs 1 >> "${output}"
 
     count=$((count + 1))
 done < "${manifest}"
