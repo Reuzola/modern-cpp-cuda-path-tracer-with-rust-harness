@@ -212,9 +212,9 @@ jobs:
             tools/scene-tool/target/release/scene-tool validate "${scene}"
           done
 
-      # Cheaper than the golden sweep and answers a different question, so it
-      # runs first: if the renderer is not reproducible, a golden difference
-      # says nothing about the change that produced it.
+      # Answers a different question from the golden sweep, so it runs first: if
+      # the renderer does not reproduce - from run to run, or between one thread
+      # and many - a golden difference says nothing about the change behind it.
       - name: Check determinism
         run: scripts/check-determinism.sh
 
