@@ -47,6 +47,13 @@ jobs:
           # loader -> BVH -> traversal -> writer path the unit tests split up.
           - preset: asan-ubsan
             render: true
+          # ThreadSanitizer over the test suite, with the counters compiled in: the
+          # stats build runs every line the plain build does plus the per-thread
+          # counter slots, so one leg covers both. Tests only: the threaded cases
+          # already drive the real pipeline across thread counts, and a render
+          # under TSan's slowdown would add minutes and no new interleaving.
+          - preset: tsan-stats
+            render: false
 
     env:
       # Without it UBSan prints the diagnostic but not where it came from.
@@ -63,6 +70,14 @@ jobs:
         uses: ./.github/actions/setup-vcpkg
         with:
           cache-key: core
+
+      # The runner's kernel randomizes mmap addresses over more bits than
+      # ThreadSanitizer's fixed memory layout allows, and a TSan binary can then
+      # abort with "unexpected memory mapping" before main(). 28 bits is the
+      # value TSan's layout was designed for; only this leg needs it.
+      - name: Narrow address randomization for ThreadSanitizer
+        if: matrix.preset == 'tsan-stats'
+        run: sudo sysctl vm.mmap_rnd_bits=28
 
       # Logged so a future warning can be traced to its compiler version.
       - name: Toolchain versions
