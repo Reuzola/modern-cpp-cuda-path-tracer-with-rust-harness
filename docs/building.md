@@ -51,6 +51,7 @@ at the repository root rather than duplicated per build directory.
 | `dev-double` | Debug | `dev` with `Float` as `double`. The reference configuration for the non-default scalar type. |
 | `asan-ubsan` | Debug + `-O1` | AddressSanitizer and UndefinedBehaviorSanitizer. |
 | `tsan` | Debug + `-O1` | ThreadSanitizer. Cannot be combined with `asan-ubsan`. |
+| `tsan-stats` | Debug + `-O1` | `tsan` plus the traversal counters. The only build in which ThreadSanitizer sees the counters being merged across threads. |
 | `release` | Release | Optimized and portable. **Reference images and benchmark timings are only valid from this one.** |
 | `release-native` | Release | `release` plus `-march=native`. Faster on this machine, and changes floating-point results. |
 | `release-viewer` | Release | `release` plus the viewer. |
@@ -58,7 +59,7 @@ at the repository root rather than duplicated per build directory.
 | `release-profiling` | Release | `release` plus debug info and frame pointers. For profiling only. |
 
 `ctest` presets exist for `dev`, `dev-viewer`, `dev-double`, `asan-ubsan`,
-`tsan` and `release`.
+`tsan`, `tsan-stats`, `release` and `release-stats`.
 
 Three presets are not interchangeable with the others and it matters:
 
@@ -66,28 +67,38 @@ Three presets are not interchangeable with the others and it matters:
   produces differs from `release` in the last few bits, so it must not be used
   to generate or check reference images.
 - **`release-stats`** compiles counters into the traversal hot loop, which
-  costs a few percent. It measures tree shape, never time.
+  costs a few percent. It measures tree shape, never time. The counters come
+  out the same on any thread count, so it renders on every thread like the
+  plain build.
 - **`release-profiling`** carries debug info and keeps frame pointers, so a
   profile describes the same code generation `release` is timed with. It is not
   a timing build: the frame pointer costs a register.
 
 ## Sanitizers
 
-The two sanitizer presets are separate builds because the runtimes cannot
-coexist: AddressSanitizer and ThreadSanitizer both reserve most of the address
-space for shadow memory.
+The AddressSanitizer and ThreadSanitizer presets are separate builds because
+the runtimes cannot coexist: both reserve most of the address space for shadow
+memory.
 
 ```bash
 cmake --workflow --preset asan-ubsan
 cmake --workflow --preset tsan
+cmake --workflow --preset tsan-stats
 ```
 
-Both instrument this project only. Dependencies come from the shared vcpkg
+`tsan` compiles the traversal counters out, like every build but
+`release-stats`, so the code that counts on many threads and merges the totals
+is invisible to it. `tsan-stats` is the same build with the counters compiled
+in, and is the one to run after touching that code or anything that
+synchronises the render threads.
+
+All three instrument this project only. Dependencies come from the shared vcpkg
 tree and are not rebuilt, so a race or overflow inside a dependency is not
 reported. Standard library synchronisation is still understood, since TSan
 intercepts the underlying pthread calls.
 
-The `tsan` test preset stops at the first report (`halt_on_error=1`).
+The `tsan` and `tsan-stats` test presets stop at the first report
+(`halt_on_error=1`).
 
 On some recent kernels the TSan runtime aborts at startup with
 `unexpected memory mapping`: the kernel's address-space randomisation is wider

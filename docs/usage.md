@@ -44,9 +44,10 @@ Four things are worth knowing before the first surprise:
   go through the operator the scene selected.
 - **The thread count never changes the image.** Every sample is seeded from its
   pixel and pass, and each pixel is written by one thread per pass, so any
-  `--threads` value renders the same image bit for bit. The instrumented
-  `release-stats` build counts per thread and accepts only `--threads 1`, which
-  is also its default there.
+  `--threads` value renders the same image bit for bit. Nor does it change the
+  traversal counters of the instrumented `release-stats` build: every thread
+  counts on its own and the totals are merged, so any thread count reports the
+  same figures.
 
 Diagnostics — the progress line, the thread count, the BVH summary, the render
 time — go to standard error. The progress line is drawn only at `info`.
@@ -159,7 +160,9 @@ scene-tool bench-compare baseline.ndjson current.ndjson
 
 Both files are NDJSON as written by `--bench`, and both must describe the same
 workload: the same scenes, the same resolution, sample count, depth and seed,
-on the same machine and thread count, from the same scalar type and build type.
+on the same machine, from the same scalar type and build type, and — for the
+timing pass — on the same thread count. The counter pass is exempt from that
+last rule, because its totals do not depend on how many threads produced them.
 Anything else makes the two runs incomparable, and the tool refuses the whole
 comparison rather than reporting a difference it cannot attribute. The revision
 is the one field expected to differ.
@@ -200,7 +203,7 @@ default build directory.
 | `scripts/render-scenes.sh <preset> [dir]` | Renders every scene in `scenes/`. Scenes in the golden manifest use its resolution and sample count; the rest use their own settings. Output goes to `out/<preset>/` unless told otherwise. |
 | `scripts/render-goldens.sh [dir]` | Regenerates the reference set. Writes over `tests/golden/` unless given a scratch directory. |
 | `scripts/check-goldens.sh [--no-build] [--diff-dir D]` | Builds, renders into a scratch directory and compares every reference against the tolerance its manifest row carries. Keeps the renders and difference images behind only when something failed. |
-| `scripts/run-benchmarks.sh [--stats-only \| --threads N] [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, writing NDJSON to `out/benchmarks.ndjson`. `--threads` sets the timing pass and defaults to every hardware thread; the counter pass always runs on one. One file holds one thread count, so a second count goes to a second file. `BENCH_RUNS` overrides the repeat count. |
+| `scripts/run-benchmarks.sh [--stats-only] [--threads N] [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, writing NDJSON to `out/benchmarks.ndjson`. `--stats-only` drops the timing pass. `--threads` sets both passes and defaults to every hardware thread; the counters come out the same on any count. One file holds one thread count, so a second count goes to a second file. `BENCH_RUNS` overrides the repeat count. |
 | `scripts/profile.sh [--out dir] [--threads N] [scene ...]` | Records a sampling profile per benchmark scene and renders a flame graph. One thread unless told otherwise. Output goes to `out/profiles/`. Needs `perf` and `inferno`; see [profiling.md](profiling.md). |
 | `scripts/check-determinism.sh [scene ...]` | Renders each scene twice from the same binary and compares the two files byte for byte. Defaults to three scenes chosen for what they construct. |
 

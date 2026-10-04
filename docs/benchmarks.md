@@ -79,9 +79,11 @@ a constant. How the pass is shared, and what that costs and gains, is in
   files. `scene-tool bench-compare` pairs records by scene and build, so a file
   holds a single thread count and is only compared against a file taken at the
   same one.
-- Counters come from one thread. The work a sample does is the same on any
-  thread count, but the instrumented build keeps a count per thread and does
-  not yet add them up, so it accepts only `--threads 1`.
+- Counters come from any thread count. The work a sample does is the same on
+  any count, every thread counts on its own, and the totals are merged once the
+  render has finished, so one thread and sixteen report identical figures. The
+  counter pass runs on whatever count the timing pass uses, and a comparison of
+  counters leaves the thread count out.
 
 The two thread counts answer different questions and are not read against each
 other across revisions. Scaling is the ratio between them within one revision;
@@ -176,7 +178,8 @@ remeasured rather than reused:
 - A different build preset. `release-native` enables FMA contraction;
   `release-stats` carries the counters; a Debug figure is worse than none.
 - A different scalar type. `Float = double` changes both speed and results.
-- A different thread count.
+- A different thread count, for timing. The counters are the same on any thread
+  count, and a comparison of counters leaves it out.
 - A change to the intersection arithmetic itself. It moves the counters, not
   just the timings, and the tables below record exactly such a change.
 - A different source revision, or a build taken with uncommitted changes. The
@@ -184,7 +187,7 @@ remeasured rather than reused:
   discipline rather than a check.
 - A different machine, or the same machine in a different thermal, power or
   load state.
-- The machine is the one exemption a counter-only comparison makes; see
+- A counter-only comparison exempts the machine; see
   [The counter regression gate](#the-counter-regression-gate).
 
 Statistics and timing may be quoted from the same run only when both come from
@@ -232,9 +235,12 @@ neighbours as much as it measures this renderer, while the counters measure the
 work itself.
 
 The workload is `benchmarks/manifest.txt` unchanged — the same rows the tables
-below were measured from. Only the instrumented pass runs, one run per scene,
-which is the whole of the measurement: the counters are deterministic under a
-fixed seed, so a second run would cost time and say nothing.
+below were measured from. Only the instrumented pass runs, one run per scene on
+every core of the runner, which is the whole of the measurement: the counters
+are deterministic under a fixed seed and on any thread count, so a second run
+would cost time and say nothing. The job runs the test suite in the same
+instrumented build first; it is the only place the counted branch of those
+tests is exercised.
 
 ### Why the threshold is zero
 
@@ -247,12 +253,15 @@ hosts run the same Clang and the same libm. It is a measurement nonetheless,
 and the threshold rests on the measurement rather than on the argument.
 
 The consequence is that the CPU model is left out of the comparison, and only
-there. Every other rule above still holds: architecture, scalar type, thread
-count, resolution, sample count, seed and maximum depth all have to match, and
-a record carrying a timing is refused outright, because two machines cannot be
-timed against each other however well their counters agree. A run taken on a
-different thread count will refuse the comparison rather than quietly report
-the difference as a result.
+there. The thread count is left out as well, for a different reason and in
+every comparison of counters, not only this one: each thread counts on its own
+and the totals are merged after the render, so they do not depend on how many
+threads produced them. The recorded set was taken on one thread and the job
+measures on every core the runner has, so each run of the gate also checks that
+claim across the whole set. Every other rule above still holds: architecture,
+scalar type, resolution, sample count, seed and maximum depth all have to match,
+and a record carrying a timing is refused outright, because two machines cannot
+be timed against each other however well their counters agree.
 
 ### What it catches, and what it does not
 

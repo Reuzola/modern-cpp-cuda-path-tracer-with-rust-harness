@@ -44,7 +44,9 @@ question.
 | `dev` | Debug, warnings as errors. The everyday build. |
 | `asan-ubsan` | AddressSanitizer and UndefinedBehaviorSanitizer, with `-fno-sanitize-recover=all` so the first report fails the run. |
 | `tsan` | ThreadSanitizer: data races and lock-order inversions, stopping at the first report. It cannot share a build with `asan-ubsan`, and no CI job runs it; it is run locally. |
+| `tsan-stats` | ThreadSanitizer with the traversal counters compiled in, the only build in which it sees threads counting and their totals being merged. Run locally, like `tsan`. |
 | `release` | Optimizer and ThinLTO. Catches issues that only appear once the compiler is allowed to transform the code. |
+| `release-stats` | The traversal counters compiled in. The only configuration in which the counted branch of the counter tests runs; everywhere else the counters compile out and those cases check that nothing is counted. CI runs it in the counter regression job. |
 
 Both scalar precisions are worth exercising, since tolerances and a few
 numerical paths depend on the width of `Float` (see [building.md](building.md)):
@@ -113,10 +115,12 @@ Every push to `main` runs five independent jobs:
   reproduces itself byte for byte across two runs, and compares a full render
   of the golden set against the references, uploading the difference images
   when it fails;
-- a performance job that measures the BVH traversal counters over the benchmark
-  set and compares them against a recorded baseline. It gates on counters
-  rather than on time, because a shared runner's wall clock measures its
-  neighbours as much as this renderer. The method and the policy are in
-  [benchmarks.md](benchmarks.md).
+- a performance job that runs the C++ suite in the instrumented `release-stats`
+  build, then measures the BVH traversal counters over the benchmark set on
+  every core and compares them against a baseline recorded on one thread. It
+  gates on counters rather than on time, because a shared runner's wall clock
+  measures its neighbours as much as this renderer; and since the totals do not
+  depend on the thread count, a pass also confirms that they do not. The method
+  and the policy are in [benchmarks.md](benchmarks.md).
 
 See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
