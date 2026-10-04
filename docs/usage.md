@@ -194,9 +194,9 @@ them:
 
 ## Scripts
 
-All six resolve the repository root from their own location, so they can be
-run from anywhere. All accept `PATHTRACER` to point at a renderer outside the
-default build directory.
+All seven resolve the repository root from their own location, so they can be
+run from anywhere. Those that run the renderer accept `PATHTRACER` to point at
+one outside the default build directory.
 
 | | |
 |---|---|
@@ -206,6 +206,7 @@ default build directory.
 | `scripts/run-benchmarks.sh [--stats-only] [--threads N] [file]` | Runs the benchmark set twice per scene, once from `release` for timing and once from `release-stats` for counters, writing NDJSON to `out/benchmarks.ndjson`. `--stats-only` drops the timing pass. `--threads` sets both passes and defaults to every hardware thread; the counters come out the same on any count. One file holds one thread count, so a second count goes to a second file. `BENCH_RUNS` overrides the repeat count. |
 | `scripts/profile.sh [--out dir] [--threads N] [scene ...]` | Records a sampling profile per benchmark scene and renders a flame graph. One thread unless told otherwise. Output goes to `out/profiles/`. Needs `perf` and `inferno`; see [profiling.md](profiling.md). |
 | `scripts/check-determinism.sh [scene ...]` | Renders each scene twice from the same binary and compares the two files byte for byte. Defaults to three scenes chosen for what they construct. |
+| `scripts/run-workflows.sh [preset ...]` | Runs every CMake workflow preset (configure, build, test) one after another, or only the named ones, and prints a pass/fail table at the end. A failure does not stop the run; each failed workflow's log is kept in `out/workflows/`. See [building.md](building.md#presets). |
 
 The reference set and the reasoning behind it are in
 [golden-images.md](golden-images.md).

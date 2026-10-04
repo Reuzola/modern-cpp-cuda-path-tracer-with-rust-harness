@@ -58,8 +58,14 @@ at the repository root rather than duplicated per build directory.
 | `release-stats` | Release | `release` plus BVH traversal counters. For measurement only. |
 | `release-profiling` | Release | `release` plus debug info and frame pointers. For profiling only. |
 
-`ctest` presets exist for `dev`, `dev-viewer`, `dev-double`, `asan-ubsan`,
-`tsan`, `tsan-stats`, `release` and `release-stats`.
+Every preset has a build, a test and a workflow preset of the same name, so
+`cmake --workflow --preset <name>` configures, builds and tests any of them.
+To run every workflow in turn and get one pass/fail table at the end:
+
+```bash
+scripts/run-workflows.sh                  # all of them
+scripts/run-workflows.sh dev tsan-stats   # only these, in this order
+```
 
 Three presets are not interchangeable with the others and it matters:
 

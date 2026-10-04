@@ -14,6 +14,10 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
+`cmake --workflow --preset dev` does all three in one step, and
+`scripts/run-workflows.sh` does it for every preset in turn (see
+[building.md](building.md#presets)).
+
 Cases are registered individually via `catch_discover_tests`, so a crash isolates
 to one case rather than taking down the run. Catch2 tags are exposed as CTest
 labels, and test names are matchable by regex:
