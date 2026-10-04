@@ -137,15 +137,28 @@ favour of keeping it cheap, and the limit is written down here instead.
 ## Determinism
 
 The tolerance above is for holding a render against a reference produced by a
-different build. It is not a licence for one build to disagree with itself.
+different build. It is not a licence for one build to disagree with itself,
+from one run to the next or between one thread and many.
 
-That is a separate check, `scripts/check-determinism.sh`, which renders a scene
-twice from the same binary and compares the two files byte for byte. It covers
-what a tolerance cannot: the sampler is seeded from the pixel and sample index
-alone, never from wall-clock time or thread identity, and scene loading, arena
-allocation and tree construction have to produce the same tree on every run.
-Every run is a fresh process, so two constructions at different addresses have
-to agree as well.
+That is a separate check, `scripts/check-determinism.sh`. It renders each scene
+once on a single thread, then again on every core and on more threads than
+there are cores, and compares each multi-threaded file with the single-threaded
+one byte for byte. Every run is a fresh process, so scene loading, arena
+allocation and tree construction at different addresses have to produce the
+same tree. Two runs that each match the reference also match each other, so
+reproducibility from run to run needs no comparison of its own.
+
+The renders are EXR, not PNG. EXR stores the film's floats without loss, while
+a PNG is tone mapped and quantized to eight bits, so a difference in a pixel's
+low bits would show only if it happened to cross a quantization step. The cost
+is that tone mapping and the PNG encoder sit outside the check; today both are
+a pure function of a single pixel.
+
+What the check relies on: the sampler is seeded from the pixel and sample index
+alone, never from wall-clock time or thread identity; each pixel is written by
+one tile per pass; and passes run in order. The in-process counterpart, which
+also guarantees that the work really was shared between threads, is described
+in [testing.md](testing.md#thread-invariance).
 
 Three scenes, picked for what they construct rather than for what they show:
 `gilded_orrery` for the most trees, meshes, instances and a medium;

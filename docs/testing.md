@@ -43,16 +43,19 @@ question.
 |---|---|
 | `dev` | Debug, warnings as errors. The everyday build. |
 | `asan-ubsan` | AddressSanitizer and UndefinedBehaviorSanitizer, with `-fno-sanitize-recover=all` so the first report fails the run. |
-| `tsan` | ThreadSanitizer: data races and lock-order inversions, stopping at the first report. It cannot share a build with `asan-ubsan`, and no CI job runs it; it is run locally. |
-| `tsan-stats` | ThreadSanitizer with the traversal counters compiled in, the only build in which it sees threads counting and their totals being merged. Run locally, like `tsan`. |
+| `tsan` | ThreadSanitizer: data races and lock-order inversions, stopping at the first report. It cannot share a build with `asan-ubsan`. Run locally; CI runs `tsan-stats` instead, which covers everything this build does. |
+| `tsan-stats` | ThreadSanitizer with the traversal counters compiled in, the only build in which it sees threads counting and their totals being merged. It also runs every line `tsan` does, so it is the one CI runs. |
 | `release` | Optimizer and ThinLTO. Catches issues that only appear once the compiler is allowed to transform the code. |
 | `release-stats` | The traversal counters compiled in. The only configuration in which the counted branch of the counter tests runs; everywhere else the counters compile out and those cases check that nothing is counted. CI runs it in the counter regression job. |
 
 Both scalar precisions are worth exercising, since tolerances and a few
-numerical paths depend on the width of `Float` (see [building.md](building.md)):
+numerical paths depend on the width of `Float` (see [building.md](building.md)).
+`float` is the default; `dev-double` builds and tests the other:
 
 ```bash
-cmake --preset dev -DPT_DOUBLE_PRECISION=OFF
+cmake --preset dev-double
+cmake --build --preset dev-double
+ctest --preset dev-double
 ```
 
 ## Layout
@@ -75,6 +78,38 @@ Fixture paths are baked in as compile definitions (`PT_SCENES_DIR`,
 `PT_ASSETS_DIR`) rather than resolved from the working directory, so cases stay
 correct under `ctest -j` and inside IDEs.
 
+## Thread invariance
+
+A render must not depend on how many threads produced it, or on how the image
+was cut into tiles. Every sample is seeded from its pixel and pass alone, each
+pixel is written by one tile per pass, and passes run in order, so every pixel
+adds the same samples in the same order whatever the schedule. That is what
+makes the result exact rather than close: floating-point addition is not
+associative, and a pixel that summed its samples in another order would differ
+in its last bits.
+
+`tests/render/thread_invariance_test.cpp` holds that claim against the real
+pipeline. Each case loads a shipped scene, renders it serially as the
+reference, renders it again on another pool size and tile size, and compares
+the two images bit for bit and the traversal counters exactly. Bits, not `==`:
+`==` treats `+0` and `-0` as equal and a NaN as unequal to itself.
+
+A small render can be finished by the calling thread before any worker wakes,
+and a comparison between two serial renders proves nothing. The test therefore
+wraps the integrator in one that holds the first thread to start tracing until
+a second one has started too, and fails if that never happens.
+
+The scene is loaded inside each render, after its pool exists, so a stage that
+is later handed the pool is covered by the same comparison.
+
+Two other checks cover what this one cannot. `scripts/check-determinism.sh`
+asserts the same property from outside, on the shipped binary (see
+[golden-images.md](golden-images.md#determinism)). The `tsan-stats` CI leg
+checks the mechanism: that no two threads touch the same memory without
+synchronisation. The questions differ: a race need not change the output on
+any given run, and an atomic sum of floats, race-free by construction, still
+depends on the order in which the threads arrive.
+
 ## Golden images
 
 Rendered output is checked separately, by comparing renders against a tracked
@@ -84,7 +119,8 @@ regenerate the references, is documented in
 
 Reproducibility is checked on its own rather than as a side effect of that
 comparison, since the comparison now carries a tolerance;
-`scripts/check-determinism.sh` is what asserts it.
+`scripts/check-determinism.sh` is what asserts it, between runs and between
+thread counts.
 
 ## Scope
 
@@ -104,17 +140,18 @@ stayed behind.
 
 Every push to `main` runs five independent jobs:
 
-- the C++ suite under `dev`, `dev-double`, `release` and `asan-ubsan`, with the
-  latter two also rendering one scene end to end;
+- the C++ suite under `dev`, `dev-double`, `release`, `asan-ubsan` and
+  `tsan-stats`, with `release` and `asan-ubsan` also rendering one scene end
+  to end;
 - the Rust suite, plus `cargo clippy` with warnings denied;
 - clang-tidy over the `dev-viewer` compilation database, which is configured
   but not built — the analyser needs the commands and the headers, not an
   artefact. `dev` is not used because the viewer's translation units are absent
   from it and would go unanalysed;
 - a regression job that validates every scene file, checks that the renderer
-  reproduces itself byte for byte across two runs, and compares a full render
-  of the golden set against the references, uploading the difference images
-  when it fails;
+  produces byte-identical images on one thread and on several, and compares a
+  full render of the golden set against the references, uploading the
+  difference images when it fails;
 - a performance job that runs the C++ suite in the instrumented `release-stats`
   build, then measures the BVH traversal counters over the benchmark set on
   every core and compares them against a baseline recorded on one thread. It
