@@ -11,6 +11,7 @@
 #include "pt/render/renderer.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/util/thread_pool.hpp"
+#include "support/test_support.hpp"
 #include <atomic>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -77,20 +78,6 @@ private:
     return settings;
 }
 
-/// Every channel of every pixel, compared exactly.
-[[nodiscard]] bool identical(const Film& a, const Film& b) {
-    if (a.width() != b.width() || a.height() != b.height()) return false;
-
-    for (int y = 0; y < a.height(); ++y) {
-        for (int x = 0; x < a.width(); ++x) {
-            const Color lhs = a.pixel(x, y);
-            const Color rhs = b.pixel(x, y);
-            if (lhs.r() != rhs.r() || lhs.g() != rhs.g() || lhs.b() != rhs.b()) return false;
-        }
-    }
-    return true;
-}
-
 } // namespace
 
 TEST_CASE("the sample count is rounded down to a square", "[render][renderer]") {
@@ -141,10 +128,10 @@ TEST_CASE("the same seed gives the same image", "[render][renderer]") {
     // per pass from the scene's seed alone, with nothing accumulated between
     // samples. This is what makes a golden image possible at all, and what keeps
     // the result independent of how the tiles are shared out between threads.
-    REQUIRE(identical(a, b));
+    pt_test::require_bit_identical(b, a);
 
     const Film c = Renderer(camera, third, settings_for(8, 6, 4, 999), serial).render();
-    REQUIRE_FALSE(identical(a, c));
+    REQUIRE_FALSE(pt_test::bit_identical(a, c));
 }
 
 TEST_CASE("neighbouring pixels do not share a sample sequence", "[render][renderer]") {
@@ -179,8 +166,8 @@ TEST_CASE("the tile size is invisible in the result", "[render][renderer]") {
     // seeded from its own coordinates, so no state crosses a tile boundary. This
     // is what lets the tile loop run on a thread pool; the thread-count cases
     // below rest on it.
-    REQUIRE(identical(standard, per_pixel));
-    REQUIRE(identical(standard, whole_image));
+    pt_test::require_bit_identical(per_pixel, standard);
+    pt_test::require_bit_identical(whole_image, standard);
 }
 
 TEST_CASE("the thread count is the pool's workers plus the caller", "[render][renderer]") {
@@ -229,7 +216,7 @@ TEST_CASE("the thread count is invisible in the result", "[render][renderer]") {
     // Each pixel is written by exactly one task per pass, and passes run in
     // order, so every pixel sums the same samples in the same order on any
     // thread count. Bit for bit, not within a tolerance.
-    REQUIRE(identical(one, four));
+    pt_test::require_bit_identical(four, one);
 }
 
 TEST_CASE("render is the pass loop written out", "[render][renderer]") {
@@ -250,7 +237,7 @@ TEST_CASE("render is the pass loop written out", "[render][renderer]") {
     // The viewer refines an image pass by pass and the command line renders it in
     // one call; both go through the same accumulator in the same order. If they
     // diverged, the picture on screen would not be the picture that gets saved.
-    REQUIRE(identical(all_at_once, acc.resolve()));
+    pt_test::require_bit_identical(acc.resolve(), all_at_once);
     REQUIRE(acc.sample_count() == 9);
 }
 
@@ -328,5 +315,5 @@ TEST_CASE("rendering without a callback is the same render", "[render][renderer]
 
     // An empty std::function is a valid argument, checked rather than called. The
     // reporting path must not perturb the result in any way.
-    REQUIRE(identical(without, with));
+    pt_test::require_bit_identical(with, without);
 }
