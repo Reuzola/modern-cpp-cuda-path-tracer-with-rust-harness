@@ -77,8 +77,17 @@ pub enum Comparability {
     CountersOnly,
 }
 
+/// Which of a scene's two records a check is looking at. Most fields describe
+/// the workload of either pass; the thread count only that of the timing pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    Timing,
+    Stats,
+}
+
 fn check_record_pair(
     scene: &str,
+    pass: Pass,
     b: &Record,
     c: &Record,
     comparability: Comparability,
@@ -147,7 +156,10 @@ fn check_record_pair(
         ));
     }
 
-    if b.runtime.threads != c.runtime.threads {
+    // Timing scales with the thread count; the counters do not: the renderer
+    // merges every thread's count into one total that is identical on any count,
+    // so a single-threaded baseline gates a run taken on every core.
+    if pass == Pass::Timing && b.runtime.threads != c.runtime.threads {
         violations.push(format!(
             "{scene}: threads differs (baseline {}, current {})",
             b.runtime.threads, c.runtime.threads
@@ -200,10 +212,10 @@ fn comparability_violations(
         }
 
         if let (Some(b), Some(c)) = (base_records.timing, curr_records.timing) {
-            check_record_pair(scene, b, c, comparability, &mut violations);
+            check_record_pair(scene, Pass::Timing, b, c, comparability, &mut violations);
         }
         if let (Some(b), Some(c)) = (base_records.stats, curr_records.stats) {
-            check_record_pair(scene, b, c, comparability, &mut violations);
+            check_record_pair(scene, Pass::Stats, b, c, comparability, &mut violations);
         }
     }
 
@@ -591,6 +603,54 @@ mod tests {
         let details = refusal_in(&baseline, &current, Comparability::SameMachine);
 
         assert!(details.contains("cpu_model differs"), "{details}");
+    }
+
+    // The counters are merged across threads into a total that does not depend
+    // on how many there were, so a single-threaded baseline gates a run taken on
+    // eight. Both modes: the reason is the counters, not the machine.
+    #[test]
+    fn a_different_thread_count_is_not_a_violation_for_counters() {
+        let current_json = STATS_RECORD.replace(r#""threads":1"#, r#""threads":8"#);
+        assert_ne!(
+            current_json, STATS_RECORD,
+            "the fixture must carry a thread count to change"
+        );
+
+        let baseline_records = [record(STATS_RECORD)];
+        let current_records = [record(&current_json)];
+        let baseline = run(&baseline_records);
+        let current = run(&current_records);
+
+        for mode in [Comparability::SameMachine, Comparability::CountersOnly] {
+            let pairs = pair_runs(
+                &baseline,
+                &current,
+                mode,
+                Path::new("baseline.ndjson"),
+                Path::new("current.ndjson"),
+            )
+            .unwrap_or_else(|err| panic!("{mode:?}: {err}"));
+
+            assert_eq!(pairs.len(), 1, "{mode:?}");
+        }
+    }
+
+    // The exemption belongs to the stats pass alone: with both passes moved to
+    // eight threads, the timing pair is still refused, and refused only once.
+    #[test]
+    fn a_thread_count_change_is_refused_for_the_timing_pass_only() {
+        let baseline_records = [record(TIMING_RECORD), record(STATS_RECORD)];
+        let current_records = [
+            record(&TIMING_RECORD.replace(r#""threads":1"#, r#""threads":8"#)),
+            record(&STATS_RECORD.replace(r#""threads":1"#, r#""threads":8"#)),
+        ];
+        let baseline = run(&baseline_records);
+        let current = run(&current_records);
+
+        let details = refusal(&baseline, &current);
+
+        assert!(details.contains("threads differs"), "{details}");
+        assert_eq!(details.lines().count(), 1, "{details}");
     }
 
     // Both runs carry a timing pass, so the presence check is satisfied and the
