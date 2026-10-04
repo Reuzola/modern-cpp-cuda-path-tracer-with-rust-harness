@@ -19,9 +19,7 @@
       "name": "dev",
       "displayName": "Development (Debug, warnings as errors)",
       "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     },
     {
       "name": "dev-viewer",
@@ -36,9 +34,7 @@
       "name": "dev-double",
       "displayName": "Development + double precision scalar",
       "inherits": "dev",
-      "cacheVariables": {
-        "PT_DOUBLE_PRECISION": "ON"
-      }
+      "cacheVariables": { "PT_DOUBLE_PRECISION": "ON" }
     },
     {
       "name": "asan-ubsan",
@@ -62,25 +58,19 @@
       "name": "tsan-stats",
       "displayName": "Sanitizer (TSan) + BVH statistics (counter thread safety)",
       "inherits": "tsan",
-      "cacheVariables": {
-        "PT_ENABLE_STATS": "ON"
-      }
+      "cacheVariables": { "PT_ENABLE_STATS": "ON" }
     },
     {
       "name": "release",
       "displayName": "Release (optimized, portable)",
       "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     },
     {
       "name": "release-native",
       "displayName": "Release (native arch, this machine only)",
       "inherits": "release",
-      "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "-march=native"
-      }
+      "cacheVariables": { "CMAKE_CXX_FLAGS": "-march=native" }
     },
     {
       "name": "release-viewer",
@@ -95,90 +85,146 @@
       "name": "release-stats",
       "displayName": "Release + BVH statistics (measurement only)",
       "inherits": "release",
-      "cacheVariables": {
-        "PT_ENABLE_STATS": "ON"
-      }
+      "cacheVariables": { "PT_ENABLE_STATS": "ON" }
     },
     {
       "name": "release-profiling",
       "displayName": "Release + profiling symbols (measurement only)",
       "inherits": "release",
-      "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "-g -fno-omit-frame-pointer"
-      }
+      "cacheVariables": { "CMAKE_CXX_FLAGS": "-g -fno-omit-frame-pointer" }
     }
   ],
   "buildPresets": [
-    { "name": "dev", "configurePreset": "dev" },
-    { "name": "dev-viewer", "configurePreset": "dev-viewer" },
-    { "name": "dev-double", "configurePreset": "dev-double" },
-    { "name": "asan-ubsan", "configurePreset": "asan-ubsan" },
-    { "name": "tsan", "configurePreset": "tsan" },
-    { "name": "tsan-stats", "configurePreset": "tsan-stats" },
-    { "name": "release", "configurePreset": "release" },
-    { "name": "release-native", "configurePreset": "release-native" },
-    { "name": "release-viewer", "configurePreset": "release-viewer" },
-    { "name": "release-stats", "configurePreset": "release-stats" },
+    { "name": "dev",               "configurePreset": "dev" },
+    { "name": "dev-viewer",        "configurePreset": "dev-viewer" },
+    { "name": "dev-double",        "configurePreset": "dev-double" },
+
+    { "name": "asan-ubsan",        "configurePreset": "asan-ubsan" },
+    { "name": "tsan",              "configurePreset": "tsan" },
+    { "name": "tsan-stats",        "configurePreset": "tsan-stats" },
+
+    { "name": "release",           "configurePreset": "release" },
+    { "name": "release-native",    "configurePreset": "release-native" },
+    { "name": "release-viewer",    "configurePreset": "release-viewer" },
+    { "name": "release-stats",     "configurePreset": "release-stats" },
     { "name": "release-profiling", "configurePreset": "release-profiling" }
   ],
   "testPresets": [
     {
       "name": "test-base",
       "hidden": true,
-      "output": {
-        "outputOnFailure": true
-      },
-      "execution": {
-        "noTestsAction": "error"
-      }
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
     },
-    { "name": "dev", "inherits": "test-base", "configurePreset": "dev" },
-    { "name": "dev-viewer", "inherits": "test-base", "configurePreset": "dev-viewer" },
-    { "name": "dev-double", "inherits": "test-base", "configurePreset": "dev-double" },
-    { "name": "asan-ubsan", "inherits": "test-base", "configurePreset": "asan-ubsan" },
+
+    { "name": "dev",               "inherits": "test-base", "configurePreset": "dev" },
+    { "name": "dev-viewer",        "inherits": "test-base", "configurePreset": "dev-viewer" },
+    { "name": "dev-double",        "inherits": "test-base", "configurePreset": "dev-double" },
+
+    { "name": "asan-ubsan",        "inherits": "test-base", "configurePreset": "asan-ubsan" },
     {
       "name": "tsan",
       "inherits": "test-base",
       "configurePreset": "tsan",
-      "environment": {
-        "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1"
-      }
+      "environment": { "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1" }
     },
-    { "name": "tsan-stats", "inherits": "tsan", "configurePreset": "tsan-stats" },
-    { "name": "release", "inherits": "test-base", "configurePreset": "release" },
-    { "name": "release-stats", "inherits": "test-base", "configurePreset": "release-stats" }
+    { "name": "tsan-stats",        "inherits": "tsan",      "configurePreset": "tsan-stats" },
+
+    { "name": "release",           "inherits": "test-base", "configurePreset": "release" },
+    { "name": "release-native",    "inherits": "test-base", "configurePreset": "release-native" },
+    { "name": "release-viewer",    "inherits": "test-base", "configurePreset": "release-viewer" },
+    { "name": "release-stats",     "inherits": "test-base", "configurePreset": "release-stats" },
+    { "name": "release-profiling", "inherits": "test-base", "configurePreset": "release-profiling" }
   ],
   "workflowPresets": [
     {
       "name": "dev",
       "steps": [
         { "type": "configure", "name": "dev" },
-        { "type": "build", "name": "dev" },
-        { "type": "test", "name": "dev" }
+        { "type": "build",     "name": "dev" },
+        { "type": "test",      "name": "dev" }
       ]
     },
+    {
+      "name": "dev-viewer",
+      "steps": [
+        { "type": "configure", "name": "dev-viewer" },
+        { "type": "build",     "name": "dev-viewer" },
+        { "type": "test",      "name": "dev-viewer" }
+      ]
+    },
+    {
+      "name": "dev-double",
+      "steps": [
+        { "type": "configure", "name": "dev-double" },
+        { "type": "build",     "name": "dev-double" },
+        { "type": "test",      "name": "dev-double" }
+      ]
+    },
+
     {
       "name": "asan-ubsan",
       "steps": [
         { "type": "configure", "name": "asan-ubsan" },
-        { "type": "build", "name": "asan-ubsan" },
-        { "type": "test", "name": "asan-ubsan" }
+        { "type": "build",     "name": "asan-ubsan" },
+        { "type": "test",      "name": "asan-ubsan" }
       ]
     },
     {
       "name": "tsan",
       "steps": [
         { "type": "configure", "name": "tsan" },
-        { "type": "build", "name": "tsan" },
-        { "type": "test", "name": "tsan" }
+        { "type": "build",     "name": "tsan" },
+        { "type": "test",      "name": "tsan" }
       ]
     },
     {
       "name": "tsan-stats",
       "steps": [
         { "type": "configure", "name": "tsan-stats" },
-        { "type": "build", "name": "tsan-stats" },
-        { "type": "test", "name": "tsan-stats" }
+        { "type": "build",     "name": "tsan-stats" },
+        { "type": "test",      "name": "tsan-stats" }
+      ]
+    },
+
+    {
+      "name": "release",
+      "steps": [
+        { "type": "configure", "name": "release" },
+        { "type": "build",     "name": "release" },
+        { "type": "test",      "name": "release" }
+      ]
+    },
+    {
+      "name": "release-native",
+      "steps": [
+        { "type": "configure", "name": "release-native" },
+        { "type": "build",     "name": "release-native" },
+        { "type": "test",      "name": "release-native" }
+      ]
+    },
+    {
+      "name": "release-viewer",
+      "steps": [
+        { "type": "configure", "name": "release-viewer" },
+        { "type": "build",     "name": "release-viewer" },
+        { "type": "test",      "name": "release-viewer" }
+      ]
+    },
+    {
+      "name": "release-stats",
+      "steps": [
+        { "type": "configure", "name": "release-stats" },
+        { "type": "build",     "name": "release-stats" },
+        { "type": "test",      "name": "release-stats" }
+      ]
+    },
+    {
+      "name": "release-profiling",
+      "steps": [
+        { "type": "configure", "name": "release-profiling" },
+        { "type": "build",     "name": "release-profiling" },
+        { "type": "test",      "name": "release-profiling" }
       ]
     }
   ]
