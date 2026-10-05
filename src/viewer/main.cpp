@@ -90,6 +90,10 @@ int main(int argc, char** argv) {
         const pt::ViewerOptions& opts = std::get<pt::ViewerOptions>(parsed);
         pt::set_log_level(opts.log_level);
 
+        const int threads = pt::resolve_render_threads(opts.threads);
+        pt::ThreadPool pool(static_cast<unsigned>(threads - 1));
+        pt::log_info("Threads: {}", threads);
+
         pt::Scene scene(pt::load_scene(opts.scene));
         pt::apply_overrides(scene, opts);
 
@@ -104,9 +108,9 @@ int main(int argc, char** argv) {
         pt::CameraController controller(scene.camera);
         pt::Camera camera(controller.settings(), img_w, img_h);
         pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
-        pt::ThreadPool pool(0);
 
-        // No workers: every pass runs on this thread, between frames.
+        // render_pass() runs tiles on this thread too and returns only once the pass is
+        // done, so a slow pass stalls the whole frame.
         pt::Renderer renderer(camera, integrator, scene.render, pool);
         pt::ViewerControls controls{
             .tone_map = scene.render.tone_map,
