@@ -18,7 +18,8 @@ struct ViewerOptions {
     std::optional<int> max_depth;
     std::optional<std::uint64_t> seed;
     std::optional<int> threads;
-    std::optional<float> ui_scale; // Overrides the platform's content scale (XWayland reports none).
+    std::optional<int> measure_frames; // Set: scripted measurement run, record on stdout, then exit.
+    std::optional<float> ui_scale;     // Overrides the platform's content scale (XWayland reports none).
 };
 
 [[nodiscard]] std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv);

@@ -17,6 +17,7 @@
 #include "viewer/cli.hpp"
 #include "viewer/controls.hpp"
 #include "viewer/display.hpp"
+#include "viewer/frame_measurement.hpp"
 #include "viewer/gui.hpp"
 #include "viewer/screenshot.hpp"
 #include "viewer/window.hpp"
@@ -26,6 +27,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
+#include <iostream>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -131,9 +134,15 @@ int main(int argc, char** argv) {
             accumulated_seconds = 0.0;
         };
 
+        std::optional<pt::FrameMeasurement> measurement;
+        if (opts.measure_frames) measurement.emplace(*opts.measure_frames);
+
         auto last_time = std::chrono::steady_clock::now();
         bool looking{};
         while (!window.should_close()) {
+            const auto frame_start = pt::FrameClock::now();
+            pt::FrameTimes times{};
+
             window.poll_events();
             gui.begin_frame();
 
@@ -169,23 +178,34 @@ int main(int argc, char** argv) {
             }
 
             const bool moving = !gui.wants_keyboard();
-            const pt::CameraInput input = read_camera_input(window, looking, moving);
+            const pt::CameraInput input = measurement ? measurement->scripted_input() : read_camera_input(window, looking, moving);
             if (controller.update(input, dt)) {
                 camera = pt::Camera(controller.settings(), img_w, img_h);
                 restart_accumulation();
             }
 
+            bool rendered_pass{};
             if (acc.sample_count() < renderer.samples_per_pixel()) {
-                const auto pass_start = std::chrono::steady_clock::now();
+                const auto pass_start = pt::FrameClock::now();
                 renderer.render_pass(acc, acc.sample_count());
-                accumulated_seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - pass_start).count();
+                const double pass_ms = pt::ms_since(pass_start);
+                times.render_ms = pass_ms;
+                accumulated_seconds += pass_ms / 1000.0;
+                rendered_pass = true;
+
+                const auto resolve_start = pt::FrameClock::now();
                 resolved = acc.resolve();
+                times.display_ms += pt::ms_since(resolve_start);
+
                 display_dirty = true;
             }
 
             if (display_dirty) {
+                const auto display_start = pt::FrameClock::now();
                 film_to_bytes(resolved, controls.tone_map, pixels);
                 display.upload(pixels);
+                times.display_ms += pt::ms_since(display_start);
+
                 display_dirty = false;
             }
 
@@ -198,9 +218,30 @@ int main(int argc, char** argv) {
             });
 
             // Safe to draw after the UI trashed GL state last frame: draw() rebinds everything it needs.
+            const auto present_start = pt::FrameClock::now();
             display.draw(fb_w, fb_h);
             gui.end_frame();
             window.swap_buffers();
+            times.present_ms = pt::ms_since(present_start);
+            times.frame_ms = pt::ms_since(frame_start);
+
+            if (measurement) {
+                measurement->record(times, rendered_pass);
+                if (measurement->done()) {
+                    // stdout carries the record and nothing else; logs go to stderr, so runs can be appended to one file.
+                    // clang-format off
+                    pt::write_measurement({
+                        .scene = opts.scene.string(),
+                        .width = img_w,
+                        .height = img_h,
+                        .threads = threads,
+                        .moving = measurement->moving(),
+                        .still = measurement->still(),
+                    }, std::cout);
+                    // clang-format on
+                    break;
+                }
+            }
         }
 
         return EXIT_SUCCESS;

@@ -337,6 +337,7 @@ if(PT_BUILD_VIEWER)
     src/viewer/camera_controller.cpp
     src/viewer/gui.cpp
     src/viewer/screenshot.cpp
+    src/viewer/frame_measurement.cpp
   )
 
   # Same private src/ root as the driver: viewer-local headers stay out of the
@@ -350,9 +351,9 @@ if(PT_BUILD_VIEWER)
     PT_VERSION="${PROJECT_VERSION}"
   )
 
-  # One-way arrow: viewer -> core. No viewer dependency ever flows back.
-  # glfw/glad/imgui are imported targets, so their headers are SYSTEM: -Wconversion
-  # and friends skip them.
+  # nlohmann_json writes the measurement record. It is already a core dependency,
+  # but a PRIVATE one: a static library's private deps reach consumers as link
+  # items only, never as include paths, so the viewer must name it itself.
   target_link_libraries(pathtracer_viewer PRIVATE
     pt::core
     pt::warnings
@@ -360,6 +361,7 @@ if(PT_BUILD_VIEWER)
     glad::glad
     imgui::imgui
     CLI11::CLI11
+    nlohmann_json::nlohmann_json
   )
 
   # Core uses ThinLTO in Release; linking targets must opt into IPO too.

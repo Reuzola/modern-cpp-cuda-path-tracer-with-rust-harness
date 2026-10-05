@@ -46,6 +46,9 @@ std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv
     app.add_option("-S,--seed", opts.seed, "random seed");
     app.add_option("-t,--threads", opts.threads,
                    "render threads, counting the one that drives the passes; -1 = all but one (default: all hardware threads)");
+    app.add_option("-m,--measure-frames", opts.measure_frames,
+                   "drive the camera for N frames, then hold it for up to N more; write one frame-time record to stdout and exit")
+        ->check(positive_int);
     app.add_option("-u,--ui-scale", opts.ui_scale, "UI scale factor (default: platform content scale)")->check(CLI::Range(0.5F, 4.0F));
 
     try {
