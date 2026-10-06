@@ -18,6 +18,8 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <stop_token>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -66,6 +68,31 @@ public:
     [[nodiscard]] int calls() const noexcept { return calls_.load(std::memory_order_relaxed); }
 
 private:
+    mutable std::atomic<int> calls_{0};
+};
+
+/// The stub's draw, plus a stop request on a chosen call: a test can cut a pass at
+/// an exact point without depending on timing. Same output as StubIntegrator, so a
+/// film rendered through one compares bit for bit against the other.
+class StoppingIntegrator final : public Integrator {
+public:
+    // stop_at_call counts from 1; 0 never requests a stop.
+    StoppingIntegrator(std::stop_source source, int stop_at_call) : source_(std::move(source)), stop_at_call_(stop_at_call) {}
+
+    [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override {
+        const int call = calls_.fetch_add(1, std::memory_order_relaxed) + 1;
+        if (call == stop_at_call_) source_.request_stop();
+
+        const Float value = sampler.next_scalar();
+        return Color(value, r.direction().x(), r.time());
+    }
+
+    [[nodiscard]] int calls() const noexcept { return calls_.load(std::memory_order_relaxed); }
+
+private:
+    // request_stop() is non-const; radiance() is const by the interface's contract.
+    mutable std::stop_source source_;
+    int stop_at_call_;
     mutable std::atomic<int> calls_{0};
 };
 
@@ -316,4 +343,93 @@ TEST_CASE("rendering without a callback is the same render", "[render][renderer]
     // An empty std::function is a valid argument, checked rather than called. The
     // reporting path must not perturb the result in any way.
     pt_test::require_bit_identical(with, without);
+}
+
+TEST_CASE("a pass cancelled before it starts does no work and is not counted", "[render][renderer]") {
+    const unsigned workers = GENERATE(0U, 3U);
+    CAPTURE(workers);
+
+    const Camera camera(straight_ahead, 64, 64);
+    std::stop_source source;
+    const StoppingIntegrator integrator(source, 0);
+    ThreadPool pool(workers);
+    const Renderer renderer(camera, integrator, settings_for(64, 64, 4, 1), pool);
+
+    source.request_stop();
+    Accumulator acc(64, 64);
+
+    // An edit that lands between two passes cancels one that has not begun: it
+    // must trace nothing and leave the count the image is divided by untouched.
+    REQUIRE_FALSE(renderer.render_pass(acc, 0, source.get_token()));
+    REQUIRE(integrator.calls() == 0);
+    REQUIRE(acc.sample_count() == 0);
+}
+
+TEST_CASE("a pass cancelled mid-way finishes the running tile and starts no other", "[render][renderer]") {
+    constexpr int size = 64;
+    constexpr int tile_size = 16;
+
+    const Camera camera(straight_ahead, size, size);
+    std::stop_source source;
+    const StoppingIntegrator integrator(source, 1);
+    ThreadPool serial(0);
+    const Renderer renderer(camera, integrator, settings_for(size, size, 4, 1), serial, tile_size);
+
+    Accumulator acc(size, size);
+    REQUIRE_FALSE(renderer.render_pass(acc, 0, source.get_token()));
+
+    // The stop arrives on the first ray of the first tile. The tile is the unit of
+    // cancellation, so that tile completes and none of the other fifteen starts:
+    // a per-pixel check would stop after one ray, a missing check after all 4096.
+    REQUIRE(integrator.calls() == tile_size * tile_size);
+    REQUIRE(acc.sample_count() == 0);
+}
+
+TEST_CASE("a pass under a live token renders the same image as one without", "[render][renderer]") {
+    const unsigned workers = GENERATE(0U, 3U);
+    CAPTURE(workers);
+
+    const Camera camera(straight_ahead, 10, 7);
+    const StubIntegrator plain;
+    const StubIntegrator watched;
+    ThreadPool pool(workers);
+    const Renderer plain_renderer(camera, plain, settings_for(10, 7, 4, 17), pool, 1);
+    const Renderer watched_renderer(camera, watched, settings_for(10, 7, 4, 17), pool, 1);
+
+    std::stop_source source; // never requested
+    Accumulator without(10, 7);
+    Accumulator with(10, 7);
+    for (int pass = 0; pass < plain_renderer.samples_per_pixel(); ++pass) {
+        plain_renderer.render_pass(without, pass);
+        REQUIRE(watched_renderer.render_pass(with, pass, source.get_token()));
+    }
+
+    // The offline driver uses one overload and the viewer the other. A token that
+    // is never triggered must not change a single bit, or the two would disagree.
+    pt_test::require_bit_identical(with.resolve(), without.resolve());
+    REQUIRE(with.sample_count() == without.sample_count());
+}
+
+TEST_CASE("a cancelled pass leaves nothing behind once the accumulator is reset", "[render][renderer]") {
+    const Camera camera(straight_ahead, 32, 32);
+    std::stop_source source;
+    const StoppingIntegrator interrupted(source, 300);
+    const StubIntegrator reference;
+    ThreadPool pool(3);
+    ThreadPool serial(0);
+    const Renderer renderer(camera, interrupted, settings_for(32, 32, 4, 29), pool);
+
+    Accumulator acc(32, 32);
+    REQUIRE_FALSE(renderer.render_pass(acc, 0, source.get_token()));
+
+    acc.reset();
+    for (int pass = 0; pass < renderer.samples_per_pixel(); ++pass) {
+        renderer.render_pass(acc, pass);
+    }
+
+    // A cancelled pass leaves some pixels holding pass 0 and others not. Reset is
+    // the only way forward, and it must erase every trace: the restarted render
+    // has to match one that was never interrupted, bit for bit.
+    const Film expected = Renderer(camera, reference, settings_for(32, 32, 4, 29), serial).render();
+    pt_test::require_bit_identical(acc.resolve(), expected);
 }

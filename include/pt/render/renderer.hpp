@@ -5,6 +5,7 @@
 #include "pt/render/progress.hpp"
 #include "pt/render/tile.hpp"
 #include <cstdint>
+#include <stop_token>
 #include <vector>
 
 namespace pt {
@@ -32,6 +33,11 @@ public:
 
     // Blocks until the pass is complete. Tiles are handed out one at a time to whichever thread is free.
     void render_pass(Accumulator& acc, int pass_index) const;
+
+    // Cancellable at tile granularity: once stop is requested, tiles not yet started are
+    // skipped and running ones finish. Returns false if stop was seen before the pass was
+    // counted; acc then holds a partial pass and must be reset() before any further pass.
+    [[nodiscard]] bool render_pass(Accumulator& acc, int pass_index, const std::stop_token& stop) const;
 
     [[nodiscard]] int samples_per_pixel() const noexcept { return sqrt_spp_ * sqrt_spp_; }
 

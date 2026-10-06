@@ -17,7 +17,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <span>
+#include <stop_token>
 
 namespace pt {
 
@@ -60,13 +60,18 @@ Film Renderer::render(const ProgressCallback& progress) const {
 }
 
 void Renderer::render_pass(Accumulator& acc, int pass_index) const {
+    [[maybe_unused]] const bool completed = render_pass(acc, pass_index, std::stop_token{});
+    assert(completed);
+}
+
+bool Renderer::render_pass(Accumulator& acc, int pass_index, const std::stop_token& stop) const {
     // A thread that drew cheap tiles, or ran faster, takes more of them. The image does not
     // depend on who rendered what: samples are seeded by (pixel, pass), and each pixel is
     // written by one tile.
-    parallel_for(pool_, tiles_.size(), [this, &acc, pass_index](std::size_t i) {
-        render_tile(acc, tiles_[i], pass_index);
-    });
+    parallel_for(pool_, tiles_.size(), [this, &acc, pass_index](std::size_t i) { render_tile(acc, tiles_[i], pass_index); }, stop);
+    if (stop.stop_requested()) return false;
     acc.end_pass();
+    return true;
 }
 
 int Renderer::thread_count() const noexcept {
