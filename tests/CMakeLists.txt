@@ -56,6 +56,7 @@ add_executable(pathtracer_tests
   render/path_integrator_test.cpp
   render/progress_test.cpp
   render/accumulator_test.cpp
+  render/render_session_test.cpp
 )
 
 # PRIVATE: executables have no consumers.
