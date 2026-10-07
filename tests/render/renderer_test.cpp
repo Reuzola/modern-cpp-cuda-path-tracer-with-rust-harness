@@ -350,7 +350,7 @@ TEST_CASE("a pass cancelled before it starts does no work and is not counted", "
     CAPTURE(workers);
 
     const Camera camera(straight_ahead, 64, 64);
-    std::stop_source source;
+    const std::stop_source source;
     const StoppingIntegrator integrator(source, 0);
     ThreadPool pool(workers);
     const Renderer renderer(camera, integrator, settings_for(64, 64, 4, 1), pool);
@@ -370,7 +370,7 @@ TEST_CASE("a pass cancelled mid-way finishes the running tile and starts no othe
     constexpr int tile_size = 16;
 
     const Camera camera(straight_ahead, size, size);
-    std::stop_source source;
+    const std::stop_source source;
     const StoppingIntegrator integrator(source, 1);
     ThreadPool serial(0);
     const Renderer renderer(camera, integrator, settings_for(size, size, 4, 1), serial, tile_size);
@@ -396,7 +396,7 @@ TEST_CASE("a pass under a live token renders the same image as one without", "[r
     const Renderer plain_renderer(camera, plain, settings_for(10, 7, 4, 17), pool, 1);
     const Renderer watched_renderer(camera, watched, settings_for(10, 7, 4, 17), pool, 1);
 
-    std::stop_source source; // never requested
+    const std::stop_source source; // never requested
     Accumulator without(10, 7);
     Accumulator with(10, 7);
     for (int pass = 0; pass < plain_renderer.samples_per_pixel(); ++pass) {
@@ -412,7 +412,7 @@ TEST_CASE("a pass under a live token renders the same image as one without", "[r
 
 TEST_CASE("a cancelled pass leaves nothing behind once the accumulator is reset", "[render][renderer]") {
     const Camera camera(straight_ahead, 32, 32);
-    std::stop_source source;
+    const std::stop_source source;
     const StoppingIntegrator interrupted(source, 300);
     const StubIntegrator reference;
     ThreadPool pool(3);

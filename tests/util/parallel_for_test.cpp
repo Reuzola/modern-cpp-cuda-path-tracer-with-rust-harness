@@ -121,7 +121,7 @@ TEST_CASE("parallel_for runs nothing when stop is already requested", "[util][pa
     const unsigned workers = GENERATE(0U, 1U, 4U);
     pt::ThreadPool pool(workers);
 
-    std::stop_source source;
+    const std::stop_source source;
     source.request_stop();
 
     std::atomic<int> calls{0};
@@ -135,7 +135,7 @@ TEST_CASE("parallel_for runs nothing when stop is already requested", "[util][pa
 TEST_CASE("parallel_for hands out no index after stop is requested", "[util][parallel_for]") {
     // No workers: indices run in order, so "after the request" is well defined.
     pt::ThreadPool pool(0);
-    std::stop_source source;
+    const std::stop_source source;
 
     constexpr std::size_t count = 64;
     constexpr std::size_t stopping = 5;
@@ -155,7 +155,7 @@ TEST_CASE("parallel_for hands out no index after stop is requested", "[util][par
 TEST_CASE("parallel_for starts at most one call per other participant after stop", "[util][parallel_for]") {
     const unsigned workers = GENERATE(1U, 4U);
     pt::ThreadPool pool(workers);
-    std::stop_source source;
+    const std::stop_source source;
 
     constexpr std::size_t count = 10'000;
     std::vector<std::atomic<int>> calls(count);
