@@ -78,15 +78,44 @@ taken months apart can be concatenated. The fields are specified in
 ./build/release-viewer/pathtracer_viewer scenes/cornell_box.json
 ```
 
-It accepts the same scene overrides as the renderer, minus the output ones,
-plus `--ui-scale` for platforms that misreport their content scale — XWayland
-reports 1.0 regardless of DPI.
+| Option | Default | |
+|---|---|---|
+| `<scene>` | — | Path to the scene file. Required. |
+| `-w`, `--width`, `-H`, `--height` | from the scene | Must be given together. |
+| `-s`, `--spp` | from the scene | Samples per pixel, rounded down to a square as in the renderer. |
+| `-d`, `--max-depth` | from the scene | Maximum bounces along a path. |
+| `-S`, `--seed` | from the scene | Base seed for sampling. |
+| `-t`, `--threads` | every hardware thread but one | Threads that render. The window's own thread is not counted. `-1` gives the default. |
+| `-f`, `--max-fps` | the display's refresh rate | Frame rate cap. `0` removes it. |
+| `-u`, `--ui-scale` | the platform's content scale | XWayland reports 1.0 regardless of DPI. |
+| `-l`, `--log-level` | `info` | `info`, `warning`, `error` or `off`. |
+| `-m`, `--measure-images` | off | Scripted measurement run. See below. |
+| `--version`, `--help` | | |
 
-The image accumulates one sample pass at a time and keeps refining until it
-reaches the target. Any change that invalidates the estimate — moving the
-camera, changing the depth or the sample target — restarts it. Changing
-exposure or the tone map operator does not: those are applied to the film that
-is already there.
+The viewer has no short options.
+
+Rendering runs on threads of its own, and the window never waits for it. The
+image accumulates one sample pass at a time and keeps refining until it reaches
+the target. Any change that invalidates the estimate — moving the camera,
+changing the depth or the sample target — restarts it and cancels the pass in
+progress. Changing exposure or the tone map operator does not: those are applied
+to the image that is already there.
+
+While the camera moves, the image is replaced each time the first pass of the
+newest view completes. Only one view is in flight at a time, so continuous
+movement shows a new image at the rate passes complete instead of freezing
+until it stops. On a heavy scene that is a few images a second, while the
+window, the overlay and the panel keep their full frame rate.
+
+The default leaves one hardware thread to the window and the GL driver. On the
+reference machine that halves the frame-time spikes at no measurable cost in
+render speed; see [benchmarks.md](benchmarks.md#default-thread-count).
+
+The frame rate is capped because vsync is not honoured everywhere, and a loop
+without it draws frames no display can show, taking that time from the render.
+The cap follows the refresh rate the platform reports. WSLg reports 60 Hz
+whatever the monitor, so a faster display needs `--max-fps` set to its own
+rate.
 
 | | |
 |---|---|
@@ -110,13 +139,25 @@ and the sample target. It edits `N` rather than the sample count directly,
 because rounding a count down to a square is not reversible — typing 17 into a
 box showing 16 would leave it at 16.
 
-The overlay reports accumulated and target samples, frame time, the time spent
-accumulating, and the camera position. That position is the one to copy back
-into a scene file after finding a shot worth keeping.
+The overlay reports accumulated and target samples, the window's frame rate,
+the wall time spent accumulating the current image, and the camera position.
+That position is the one to copy back into a scene file after finding a shot
+worth keeping.
 
 Screenshots land in `out/screenshots/` with a timestamped name. The PNG is
 what the window shows, tone mapped with the current settings; the EXR is the
-linear film, unaffected by them.
+linear image, unaffected by them. Once the image has converged from the scene's
+own camera — `R` returns to it — the EXR is bit for bit the one `pathtracer`
+writes for the same sample count and seed, on any thread count of either.
+
+### Measuring the viewer
+
+`--measure-images N` replaces the mouse and keyboard with a scripted camera:
+it turns the view one step per image for N images, holds it still for up to N
+more, prints one JSON object to standard output and exits. Leave the window
+alone while it runs. `scripts/measure-viewer.sh` runs it over a fixed scene set;
+what the record holds and how to read it is in
+[benchmarks.md](benchmarks.md#the-interactive-viewer).
 
 ## The scene tool
 

@@ -114,6 +114,35 @@ synchronisation. The questions differ: a race need not change the output on
 any given run, and an atomic sum of floats, race-free by construction, still
 depends on the order in which the threads arrive.
 
+## Progressive sessions
+
+The interactive viewer does not drive the renderer itself. A render session
+(`include/pt/render/render_session.hpp`) runs the pass loop on a thread of its
+own, takes parameter changes from the frontend and hands it finished images.
+It lives in the engine rather than in the viewer so that this suite, and the
+`tsan-stats` leg, can hold it to account.
+
+`tests/render/render_session_test.cpp` checks four properties, each from the
+frontend's side of the boundary:
+
+- **A converged session shows exactly the offline render**, bit for bit, on one
+  thread and on several. A screenshot from the viewer is the image the renderer
+  would have written.
+- **A session converges to its last update as if the others never happened.**
+  Updates arrive faster than passes complete, so most cancel a pass midway;
+  nothing from a cancelled pass or an earlier camera may survive the restart.
+- **No image taken after an update shows older parameters.** A frontend that
+  measures latency by matching images to the change that produced them
+  depends on this.
+- **A session can be destroyed mid-render.** The target is a million passes
+  away, so the case can only fail by hanging.
+
+Cancellation itself is tested a level down: a cancelled pass stops at a tile
+boundary, is not counted, and leaves nothing behind once the accumulator is
+reset. A session that fails on its own thread reports the exception to the
+frontend; that path is not exercised, because the session builds its own
+integrator and offers no point to inject a failure.
+
 ## Golden images
 
 Rendered output is checked separately, by comparing renders against a tracked
@@ -133,7 +162,9 @@ Two areas are deliberately outside it:
 
 - `src/app/cli.cpp` — argument parsing is delegated to CLI11 and exercised by
   running the binary.
-- `src/viewer/` — the interactive frontend needs a window and a GL context.
+- `src/viewer/` — the interactive frontend needs a window and a GL context. Its
+  render loop is not part of it: that is the render session above, which is
+  tested.
 
 Line coverage is not measured, and the suite is not written against a coverage
 target. Cases were added layer by layer as the code was restructured; several
