@@ -104,6 +104,16 @@ float Window::content_scale() const noexcept {
     return std::max(x, y);
 }
 
+int Window::refresh_rate() const noexcept {
+    // Non-null only in full screen; a windowed window has no monitor of its own, so the primary one is the best guess.
+    GLFWmonitor* monitor = glfwGetWindowMonitor(handle_.get());
+    if (monitor == nullptr) monitor = glfwGetPrimaryMonitor();
+    if (monitor == nullptr) return 0;
+
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    return mode != nullptr ? mode->refreshRate : 0;
+}
+
 bool Window::is_key_down(Key key) const noexcept {
     return glfwGetKey(handle_.get(), to_glfw(key)) == GLFW_PRESS;
 }

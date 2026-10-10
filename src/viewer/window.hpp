@@ -43,6 +43,9 @@ public:
     // DPI hint from the platform (Xft.dpi on X11, output scale on Wayland). 1.0 when unknown.
     [[nodiscard]] float content_scale() const noexcept;
 
+    // Refresh rate in Hz of the monitor showing the window, as far as GLFW knows; 0 when unreported.
+    [[nodiscard]] int refresh_rate() const noexcept;
+
     // Escape hatch for libraries that must bind to the GLFW window directly.
     [[nodiscard]] GLFWwindow* native_handle() const noexcept { return handle_.get(); }
 

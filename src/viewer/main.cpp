@@ -17,6 +17,7 @@
 #include "viewer/controls.hpp"
 #include "viewer/display.hpp"
 #include "viewer/edit_pacer.hpp"
+#include "viewer/frame_limiter.hpp"
 #include "viewer/frame_measurement.hpp"
 #include "viewer/gui.hpp"
 #include "viewer/screenshot.hpp"
@@ -135,6 +136,17 @@ int main(int argc, char** argv) {
         std::optional<pt::FrameMeasurement> measurement;
         if (opts.measure_images) measurement.emplace(*opts.measure_images);
 
+        const int refresh = window.refresh_rate();
+
+        // 60 when the platform reports no rate: a guess, but a busy loop is the worse default.
+        const int max_fps = opts.max_fps.value_or(refresh > 0 ? refresh : 60);
+        pt::FrameLimiter limiter(max_fps);
+
+        if (max_fps > 0)
+            pt::log_info("Frame cap: {} fps", max_fps);
+        else
+            pt::log_info("Frame rate: uncapped");
+
         auto last_time = std::chrono::steady_clock::now();
         bool looking{};
         while (!window.should_close()) {
@@ -235,6 +247,9 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
+
+            // Outside the measured span: frame_ms is what a frame costs; the cap only spaces frames out.
+            limiter.wait();
         }
 
         return EXIT_SUCCESS;

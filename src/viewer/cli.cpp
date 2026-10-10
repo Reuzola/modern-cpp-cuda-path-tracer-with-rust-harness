@@ -50,6 +50,8 @@ std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv
                    "drive the camera until N new images have been shown, then hold it for up to N more; write one frame-time record to stdout and exit")
         ->check(positive_int);
     app.add_option("-u,--ui-scale", opts.ui_scale, "UI scale factor (default: platform content scale)")->check(CLI::Range(0.5F, 4.0F));
+    app.add_option("-f,--max-fps", opts.max_fps, "frame rate cap; 0 = uncapped (default: the display's refresh rate)")
+        ->check(CLI::Range(0, 1000));
 
     try {
         app.parse(argc, argv);
