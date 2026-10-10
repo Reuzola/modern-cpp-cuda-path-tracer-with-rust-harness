@@ -10,6 +10,8 @@
 #include "pt/scene/scene_loader.hpp"
 #include "support/log_silencer.hpp"
 #include "support/temp_dir.hpp"
+#include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -466,7 +468,18 @@ TEST_CASE("a scene written to a temporary directory loads through the same path"
     CHECK(scene.importance_targets().empty());
 }
 
-TEST_CASE("every scene shipped in the repository loads", "[scene][loader]") {
+TEST_CASE("every lightweight scene shipped in the repository loads", "[scene][loader]") {
+    // Left out on cost alone, not because they are untrusted. argent_weave.json
+    // pulls in a 70 MB OBJ whose parse and BVH build took this one case to ~13 s
+    // in Debug, more than half of the dev suite, and longer still under the
+    // sanitizers, where TSan has nothing to find in a single-threaded load.
+    // It still reaches the real loader on every push: the render-regression job
+    // renders it through the release binary as part of the golden set, and the
+    // counter-regression job loads it for the benchmark sweep. The mesh path
+    // itself stays covered here through mesh_showcase.json and its real assets.
+    // A scene added to this list must be in both manifests for the same reason.
+    constexpr std::array<std::string_view, 1> heavy_scenes{"argent_weave.json"};
+
     // A filtered checkout may lack earth.json's image asset, which warns.
     const LogSilencer silence;
 
@@ -474,7 +487,10 @@ TEST_CASE("every scene shipped in the repository loads", "[scene][loader]") {
     for (const auto& entry : std::filesystem::directory_iterator(scenes_dir)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
 
-        CAPTURE(entry.path().filename().string());
+        const std::string filename = entry.path().filename().string();
+        if (std::ranges::find(heavy_scenes, filename) != heavy_scenes.end()) continue;
+
+        CAPTURE(filename);
         const pt::Scene scene = pt::load_scene(entry.path());
 
         CHECK(scene.render.image_width > 0);
