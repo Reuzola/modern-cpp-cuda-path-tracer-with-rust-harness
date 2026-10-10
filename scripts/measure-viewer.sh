@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Measures the interactive viewer's frame time on a fixed scene set and writes
-# one NDJSON record per scene and thread count.
+# Measures the interactive viewer's frame time and edit latency on a fixed scene
+# set and writes one NDJSON record per scene and thread count.
 #
 # The viewer opens a real window, so this needs a display and cannot run in CI.
 # Each run drives the camera itself and exits on its own; leave the window alone
@@ -11,10 +11,11 @@
 # sweeps: the host drifts over minutes, and pairing keeps that drift out of
 # the comparison.
 #
-# --frames N is the frame count of each phase (moving, then still). A
-# one-thread run of a heavy scene takes seconds per frame; lower N for it.
+# --images N ends each phase (moving, then still) after N new images reach the
+# screen. A one-thread run of a heavy scene takes about a second per image;
+# lower N for it.
 #
-# Usage: scripts/measure-viewer.sh [--frames N] [--threads "1 16"] [output]
+# Usage: scripts/measure-viewer.sh [--images N] [--threads "1 16"] [output]
 
 set -euo pipefail
 
@@ -27,7 +28,7 @@ cd "${repo_root}"
 # Cheap, medium, heavy-material and heavy-geometry, in that order.
 scenes=(quads cornell_box gilded_orrery argent_weave)
 
-frames=120
+images=120
 
 # Space-separated. The default pairs the serial path with every hardware thread.
 thread_counts="1 $(nproc)"
@@ -36,9 +37,9 @@ output=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-    --frames)
-        [[ $# -ge 2 ]] || { echo "error: --frames needs a value" >&2; exit 1; }
-        frames="$2"
+    --images)
+        [[ $# -ge 2 ]] || { echo "error: --images needs a value" >&2; exit 1; }
+        images="$2"
         shift 2
         ;;
     --threads)
@@ -85,9 +86,9 @@ count=0
 for scene in "${scenes[@]}"; do
     # Unquoted on purpose: word splitting yields one thread count per word.
     for threads in ${thread_counts}; do
-        echo "==> ${scene}  threads: ${threads}  ${frames} frames per phase"
+        echo "==> ${scene}  threads: ${threads}  ${images} images per phase"
         "${viewer}" "scenes/${scene}.json" --threads "${threads}" \
-            --measure-frames "${frames}" --log-level warning >> "${output}"
+            --measure-images "${images}" --log-level warning >> "${output}"
         count=$((count + 1))
     done
 done

@@ -3,10 +3,9 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/post/tonemap.hpp"
-#include "pt/render/accumulator.hpp"
 #include "pt/render/camera.hpp"
 #include "pt/render/film.hpp"
-#include "pt/render/path_integrator.hpp"
+#include "pt/render/render_session.hpp"
 #include "pt/render/renderer.hpp"
 #include "pt/scene/scene.hpp"
 #include "pt/scene/scene_error.hpp"
@@ -17,6 +16,7 @@
 #include "viewer/cli.hpp"
 #include "viewer/controls.hpp"
 #include "viewer/display.hpp"
+#include "viewer/edit_pacer.hpp"
 #include "viewer/frame_measurement.hpp"
 #include "viewer/gui.hpp"
 #include "viewer/screenshot.hpp"
@@ -109,33 +109,31 @@ int main(int argc, char** argv) {
         pt::Gui gui(window, opts.ui_scale.value_or(window.content_scale()));
 
         pt::CameraController controller(scene.camera);
-        pt::Camera camera(controller.settings(), img_w, img_h);
-        pt::PathIntegrator integrator(scene.world(), scene.media(), scene.importance_targets(), scene.render.background, scene.render.max_depth);
 
-        // render_pass() runs tiles on this thread too and returns only once the pass is
-        // done, so a slow pass stalls the whole frame.
-        pt::Renderer renderer(camera, integrator, scene.render, pool);
         pt::ViewerControls controls{
             .tone_map = scene.render.tone_map,
             .max_depth = scene.render.max_depth,
-            .target_spp = renderer.samples_per_pixel(),
+            .target_spp = scene.render.samples_per_pixel,
         };
 
-        pt::Accumulator acc(img_w, img_h);
         std::vector<std::uint8_t> pixels;
 
         pt::Film resolved(img_w, img_h);
         bool display_dirty{true};
 
-        // Every restart must clear the stopwatch too; keep the two in one place.
-        double accumulated_seconds{};
-        const auto restart_accumulation = [&acc, &accumulated_seconds]() noexcept {
-            acc.reset();
-            accumulated_seconds = 0.0;
+        const auto current_parameters = [&controller, &controls] {
+            return pt::SessionParameters{.camera = controller.settings(), .max_depth = controls.max_depth, .samples_per_pixel = controls.target_spp};
         };
 
+        // After the pool and the scene it uses: destroyed, and its thread joined, before either.
+        pt::RenderSession session(scene, pool, current_parameters());
+        pt::FrameInfo shown{}; // The image on screen; zero until the first arrives.
+        pt::EditPacer pacer;
+        std::uint64_t latest_generation{};
+        bool edit_pending{};
+
         std::optional<pt::FrameMeasurement> measurement;
-        if (opts.measure_frames) measurement.emplace(*opts.measure_frames);
+        if (opts.measure_images) measurement.emplace(*opts.measure_images);
 
         auto last_time = std::chrono::steady_clock::now();
         bool looking{};
@@ -147,19 +145,13 @@ int main(int argc, char** argv) {
             gui.begin_frame();
 
             const pt::ControlChange change = gui.draw_controls(controls);
-            if (change.accumulation) {
-                integrator.set_max_depth(controls.max_depth);
-                renderer.set_samples_per_pixel(controls.target_spp);
-                controls.target_spp = renderer.samples_per_pixel(); // mirror whatever the renderer actually adopted
-                restart_accumulation();
-            }
+            if (change.accumulation) edit_pending = true;
             if (change.display) display_dirty = true;
 
             if (!gui.wants_keyboard()) {
                 if (gui.key_pressed(pt::ViewerKey::r)) {
                     controller.reset();
-                    camera = pt::Camera(controller.settings(), img_w, img_h);
-                    restart_accumulation();
+                    edit_pending = true;
                 }
                 if (gui.key_pressed(pt::ViewerKey::f2)) pt::save_screenshot(pt::tone_map(resolved, controls.tone_map), pt::ImageFormat::png);
                 if (gui.key_pressed(pt::ViewerKey::f3)) pt::save_screenshot(resolved, pt::ImageFormat::exr);
@@ -179,25 +171,22 @@ int main(int argc, char** argv) {
 
             const bool moving = !gui.wants_keyboard();
             const pt::CameraInput input = measurement ? measurement->scripted_input() : read_camera_input(window, looking, moving);
-            if (controller.update(input, dt)) {
-                camera = pt::Camera(controller.settings(), img_w, img_h);
-                restart_accumulation();
+            if (controller.update(input, dt)) edit_pending = true;
+
+            if (edit_pending && pacer.ready()) {
+                latest_generation = session.update(current_parameters());
+                pacer.posted(latest_generation);
+                edit_pending = false;
             }
 
-            bool rendered_pass{};
-            if (acc.sample_count() < renderer.samples_per_pixel()) {
-                const auto pass_start = pt::FrameClock::now();
-                renderer.render_pass(acc, acc.sample_count());
-                const double pass_ms = pt::ms_since(pass_start);
-                times.render_ms = pass_ms;
-                accumulated_seconds += pass_ms / 1000.0;
-                rendered_pass = true;
-
-                const auto resolve_start = pt::FrameClock::now();
-                resolved = acc.resolve();
-                times.display_ms += pt::ms_since(resolve_start);
-
+            bool new_image{};
+            if (const std::optional<pt::FrameInfo> info = session.take_frame(resolved)) {
+                shown = *info;
+                new_image = true;
                 display_dirty = true;
+                // Mirror the square count the renderer adopted, but only for the latest posted
+                // edit: otherwise a stale value would overwrite one not yet posted.
+                if (shown.generation == latest_generation && !edit_pending) controls.target_spp = shown.target_spp;
             }
 
             if (display_dirty) {
@@ -211,9 +200,9 @@ int main(int argc, char** argv) {
 
             const auto [fb_w, fb_h] = window.framebuffer_size();
             gui.draw_hud({
-                .sample_count = acc.sample_count(),
-                .target_spp = renderer.samples_per_pixel(),
-                .accumulated_seconds = accumulated_seconds,
+                .sample_count = shown.sample_count,
+                .target_spp = controls.target_spp,
+                .accumulated_seconds = shown.elapsed_seconds,
                 .camera_position = controller.settings().lookfrom,
             });
 
@@ -224,9 +213,12 @@ int main(int argc, char** argv) {
             window.swap_buffers();
             times.present_ms = pt::ms_since(present_start);
             times.frame_ms = pt::ms_since(frame_start);
+            times.new_image = new_image;
+            if (new_image) times.latency_ms = pacer.displayed(shown.generation);
 
             if (measurement) {
-                measurement->record(times, rendered_pass);
+                const bool converged = pacer.ready() && !edit_pending && shown.target_spp > 0 && shown.sample_count >= shown.target_spp;
+                measurement->record(times, converged);
                 if (measurement->done()) {
                     // stdout carries the record and nothing else; logs go to stderr, so runs can be appended to one file.
                     // clang-format off
@@ -237,6 +229,7 @@ int main(int argc, char** argv) {
                         .threads = threads,
                         .moving = measurement->moving(),
                         .still = measurement->still(),
+                        .passes_per_second = shown.elapsed_seconds > 0.0 ? static_cast<double>(shown.sample_count) / shown.elapsed_seconds : 0.0,
                     }, std::cout);
                     // clang-format on
                     break;

@@ -19,29 +19,32 @@ using FrameClock = std::chrono::steady_clock;
 }
 
 struct FrameTimes {
-    double frame_ms{};   // Whole loop iteration.
-    double render_ms{};  // render_pass() alone; 0 when no pass ran.
-    double display_ms{}; // Resolve, tone map, byte conversion and texture upload.
-    double present_ms{}; // Image and UI draw plus the buffer swap.
+    double frame_ms{};                // Whole loop iteration.
+    double display_ms{};              // Tone map, byte conversion and texture upload.
+    double present_ms{};              // Image and UI draw plus the buffer swap.
+    bool new_image{};                 // A session image arrived this frame.
+    std::optional<double> latency_ms; // Post-to-screen time of the edit this frame first shows.
 };
 
 struct PhaseSummary {
     int frames{};
+    int images{};
     double frame_p50_ms{};
     double frame_p95_ms{};
     double frame_max_ms{};
-    double render_p50_ms{};
-    double display_p50_ms{};
+    std::optional<double> display_p50_ms{}; // Over frames that showed a new image; the others do no display work.
     double present_p50_ms{};
+    std::optional<double> latency_p50_ms; // Empty in a phase that posted no edits.
+    std::optional<double> latency_p95_ms;
 };
 
 class FrameMeasurement final {
 public:
-    // Reserved up front so recording never allocates inside a measured frame.
-    explicit FrameMeasurement(int frames_per_phase) : frames_per_phase_(frames_per_phase) {
-        assert(frames_per_phase > 0);
-        moving_.reserve(static_cast<std::size_t>(frames_per_phase_));
-        still_.reserve(static_cast<std::size_t>(frames_per_phase_));
+    // Sized for one frame per image; faster frames grow the vectors geometrically, a few cheap copies over a whole run.
+    explicit FrameMeasurement(int images_per_phase) : images_per_phase_(images_per_phase) {
+        assert(images_per_phase > 0);
+        moving_.reserve(static_cast<std::size_t>(images_per_phase_));
+        still_.reserve(static_cast<std::size_t>(images_per_phase_));
     }
 
     [[nodiscard]] CameraInput scripted_input() const noexcept {
@@ -49,7 +52,7 @@ public:
         return CameraInput{};
     }
 
-    void record(const FrameTimes& times, bool rendered_pass);
+    void record(const FrameTimes& times, bool converged);
 
     [[nodiscard]] bool done() const noexcept { return phase_ == Phase::done; }
 
@@ -68,9 +71,11 @@ private:
     // Yaw only, a fixed step per frame: the camera never walks into geometry and every run sees the same views.
     static constexpr Float look_dx_per_frame = 8.0_f;
 
-    int frames_per_phase_{};
+    int images_per_phase_{};
     int warmup_left_{warmup_frames};
     Phase phase_{Phase::warmup};
+    int moving_images_{};
+    int still_images_{};
     std::vector<FrameTimes> moving_;
     std::vector<FrameTimes> still_;
 };
@@ -82,6 +87,7 @@ struct MeasurementRecord {
     int threads{};
     PhaseSummary moving;
     std::optional<PhaseSummary> still; // Empty when the image converged before the first still frame (a 1 spp target).
+    double passes_per_second{};        // The still view's passes over its wall time.
 };
 
 void write_measurement(const MeasurementRecord& record, std::ostream& out);
