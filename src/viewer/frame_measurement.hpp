@@ -47,8 +47,10 @@ public:
         still_.reserve(static_cast<std::size_t>(images_per_phase_));
     }
 
-    [[nodiscard]] CameraInput scripted_input() const noexcept {
-        if (phase_ == Phase::warmup || phase_ == Phase::moving) return CameraInput{.look_dx = look_dx_per_frame};
+    // One step per posted edit, not per frame: the views then depend on the edit count
+    // alone, whatever the frame rate, and match one step per pass in a synchronous loop.
+    [[nodiscard]] CameraInput scripted_input(bool edit_allowed) const noexcept {
+        if ((phase_ == Phase::warmup || phase_ == Phase::moving) && edit_allowed) return CameraInput{.look_dx = look_dx_per_frame};
         return CameraInput{};
     }
 
@@ -65,14 +67,14 @@ private:
     enum class Phase { warmup, moving, still, done };
     // clang-format on
 
-    // The first frames pay for shader compilation and first-touch page faults.
-    static constexpr int warmup_frames = 10;
+    // The first images pay for shader compilation and first-touch page faults.
+    static constexpr int warmup_images = 10;
 
     // Yaw only, a fixed step per frame: the camera never walks into geometry and every run sees the same views.
     static constexpr Float look_dx_per_frame = 8.0_f;
 
     int images_per_phase_{};
-    int warmup_left_{warmup_frames};
+    int warmup_left_{warmup_images};
     Phase phase_{Phase::warmup};
     int moving_images_{};
     int still_images_{};

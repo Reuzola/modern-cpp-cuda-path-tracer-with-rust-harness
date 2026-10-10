@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
             }
 
             const bool moving = !gui.wants_keyboard();
-            const pt::CameraInput input = measurement ? measurement->scripted_input() : read_camera_input(window, looking, moving);
+            const pt::CameraInput input = measurement ? measurement->scripted_input(pacer.ready()) : read_camera_input(window, looking, moving);
             if (controller.update(input, dt)) edit_pending = true;
 
             if (edit_pending && pacer.ready()) {

@@ -103,8 +103,7 @@ namespace {
 void FrameMeasurement::record(const FrameTimes& times, bool converged) {
     switch (phase_) {
     case Phase::warmup:
-        --warmup_left_;
-        if (warmup_left_ == 0) phase_ = Phase::moving;
+        if (times.new_image && --warmup_left_ == 0) phase_ = Phase::moving;
         break;
 
     case Phase::moving:
@@ -113,17 +112,13 @@ void FrameMeasurement::record(const FrameTimes& times, bool converged) {
         if (moving_images_ >= images_per_phase_) phase_ = Phase::still;
         break;
 
-    case Phase::still: {
-        // Edits posted while moving can land here; one or two stragglers would read as a distribution.
-        FrameTimes kept = times;
-        kept.latency_ms.reset();
-        still_.push_back(kept);
+    case Phase::still:
+        still_.push_back(times);
         if (times.new_image) ++still_images_;
 
         // Once the image has converged, further frames only redraw it.
         if (converged || still_images_ >= images_per_phase_) phase_ = Phase::done;
         break;
-    }
 
     case Phase::done: break;
     }
