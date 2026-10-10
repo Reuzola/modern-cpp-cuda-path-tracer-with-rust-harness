@@ -45,7 +45,7 @@ std::variant<ViewerOptions, int> parse_viewer_command_line(int argc, char** argv
     app.add_option("-d,--max-depth", opts.max_depth, "maximum ray bounce depth")->check(positive_int);
     app.add_option("-S,--seed", opts.seed, "random seed");
     app.add_option("-t,--threads", opts.threads,
-                   "render threads, counting the one that drives the passes; -1 = all but one (default: all hardware threads)");
+                   "render threads, counting the one that drives the passes; -1 = all but one (default: all hardware threads but one, left to the UI)");
     app.add_option("-m,--measure-images", opts.measure_images,
                    "drive the camera until N new images have been shown, then hold it for up to N more; write one frame-time record to stdout and exit")
         ->check(positive_int);
@@ -75,7 +75,7 @@ void apply_overrides(Scene& scene, const ViewerOptions& opts) {
 int resolve_render_threads(std::optional<int> requested) noexcept {
     const int hardware = static_cast<int>(ThreadPool::default_worker_count()) + 1;
 
-    if (!requested.has_value()) return hardware;
+    if (!requested.has_value()) return std::max(hardware - 1, 1);
     if (*requested == -1) return std::max(hardware - 1, 1);
     return *requested;
 }
