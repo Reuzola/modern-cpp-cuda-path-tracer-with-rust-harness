@@ -88,7 +88,7 @@ namespace {
 
     j["present_ms_p50"] = summary.present_p50_ms;
 
-    if (summary.latency_p50_ms) {
+    if (summary.latency_p50_ms && summary.latency_p95_ms) {
         j["latency_ms"]["p50"] = *summary.latency_p50_ms;
         j["latency_ms"]["p95"] = *summary.latency_p95_ms;
     } else {
