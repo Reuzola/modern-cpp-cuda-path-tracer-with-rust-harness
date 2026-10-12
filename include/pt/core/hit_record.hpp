@@ -18,6 +18,12 @@ struct HitRecord {
     Float t{};
     Float u{};
     Float v{};
+
+    // World-space distance a spawned origin must clear on top of the ulp offset: covers error,
+    // in p and in the primitive's own next test, that grows with the primitive's size rather
+    // than with |p|. Every producer of a hit writes it on every hit - records are reused
+    // across candidates, so a stale value would leak into the next one.
+    Float spawn_margin{};
     bool front_face{};
     const Material* mat = nullptr;
 
@@ -34,12 +40,18 @@ struct HitRecord {
         set_face_normal(r, outward_normal, outward_normal);
     }
 
+    // Where a ray leaving toward `direction` starts: pushed off the surface by the margin, then
+    // by the ulp offset. A zero margin reproduces the bare ulp offset bit for bit; a zero normal
+    // returns p itself, whatever the margin.
+    [[nodiscard]] constexpr Point3 spawn_origin(const Vec3& direction) const noexcept {
+        const Vec3 offset_side = dot(direction, geometric_normal) < 0 ? -geometric_normal : geometric_normal;
+        return offset_ray_origin(p + spawn_margin * offset_side, offset_side);
+    }
+
     // Spawns from a point offset off the surface, on the side the direction leaves
     // toward: the query range is then a plain [0, inf) with no epsilon in it.
     [[nodiscard]] constexpr Ray spawn_ray(const Vec3& direction, Float time) const noexcept {
-        const Vec3 offset_side = dot(direction, geometric_normal) < 0 ? -geometric_normal : geometric_normal;
-        const Point3 origin = offset_ray_origin(p, offset_side);
-        return Ray(origin, direction, time);
+        return Ray(spawn_origin(direction), direction, time);
     }
 };
 
@@ -64,6 +76,25 @@ static_assert([] {
     rec.geometric_normal = Vec3(0, 0, 1);
     const Ray r = rec.spawn_ray(Vec3(0, 0, -1), 0.0_f);
     return dot(r.origin() - rec.p, rec.geometric_normal) < 0.0_f;
+}());
+
+// A volume interaction has a zero normal, so the margin must not move the origin at all.
+static_assert([] {
+    HitRecord rec;
+    rec.p = Point3(1.5_f, -2.0_f, 3.25_f);
+    rec.geometric_normal = Vec3(0, 0, 0);
+    rec.spawn_margin = 0.5_f;
+    const Point3 o = rec.spawn_origin(Vec3(0, 1, 0));
+    return o.x() == rec.p.x() && o.y() == rec.p.y() && o.z() == rec.p.z();
+}());
+
+// The margin push and the ulp offset apply together: strictly past the margin distance.
+static_assert([] {
+    HitRecord rec;
+    rec.p = Point3(0, 0, 0);
+    rec.geometric_normal = Vec3(0, 0, 1);
+    rec.spawn_margin = 0.5_f;
+    return rec.spawn_origin(Vec3(0, 0, 1)).z() > 0.5_f;
 }());
 
 } // namespace pt

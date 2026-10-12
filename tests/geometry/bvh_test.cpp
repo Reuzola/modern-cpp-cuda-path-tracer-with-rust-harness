@@ -264,6 +264,12 @@ void require_same_hit(const Bvh& bvh, const HittableList& reference, const Ray& 
     REQUIRE(bvh_rec.front_face == reference_rec.front_face);
     require_same_vec(bvh_rec.p, reference_rec.p);
     require_same_vec(bvh_rec.normal, reference_rec.normal);
+
+    // The spawn data too. A primitive that skipped writing its margin would leak the
+    // previous candidate's, and the two paths visit candidates in different orders,
+    // so they would leak different ones.
+    REQUIRE(bvh_rec.spawn_margin == reference_rec.spawn_margin);
+    require_same_vec(bvh_rec.geometric_normal, reference_rec.geometric_normal);
 }
 
 constexpr int ray_count = 2000;

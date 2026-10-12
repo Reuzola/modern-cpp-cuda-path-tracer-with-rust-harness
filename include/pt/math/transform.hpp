@@ -167,6 +167,12 @@ public:
         return Aabb(min_pt, max_pt);
     }
 
+    // Upper bound on how much the linear part can lengthen a vector: the Frobenius norm,
+    // which dominates the largest singular value and costs no decomposition.
+    [[nodiscard]] Float stretch_bound() const noexcept {
+        return std::sqrt(m_.linear.row(0).length_squared() + m_.linear.row(1).length_squared() + m_.linear.row(2).length_squared());
+    }
+
     friend constexpr Transform operator*(const Transform& a, const Transform& b) noexcept;
 
 private:

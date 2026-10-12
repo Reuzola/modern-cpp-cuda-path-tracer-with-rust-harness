@@ -3,6 +3,7 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/robust.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
@@ -15,6 +16,7 @@ using pt::HitRecord;
 using pt::Point3;
 using pt::Ray;
 using pt::Vec3;
+using pt_test::same_bits;
 using pt::operator""_f;
 using pt::Float;
 using pt::infinity;
@@ -79,6 +81,10 @@ TEST_CASE("a fresh record carries no material and no distance", "[core][hit_reco
     REQUIRE(rec.u == 0.0_f);
     REQUIRE(rec.v == 0.0_f);
     REQUIRE_FALSE(rec.front_face);
+
+    // Zero is the one default that spawns exactly where the bare ulp offset does:
+    // a record no primitive with a margin has touched must not push its origin.
+    REQUIRE(rec.spawn_margin == 0.0_f);
 }
 
 TEST_CASE("the stored normal always faces the incoming ray", "[core][hit_record]") {
@@ -195,6 +201,10 @@ TEST_CASE("a volume interaction spawns from its own sample point", "[core][hit_r
         rec.p = Point3(scale, -scale, scale);
         rec.geometric_normal = Vec3();
 
+        // A margin changes nothing either: there is no surface for it to clear,
+        // and the zero normal gives it no direction to push in.
+        rec.spawn_margin = scale;
+
         const Ray spawned = rec.spawn_ray(Vec3(0, 1, 0), 0.0_f);
 
         REQUIRE(spawned.origin().x() == rec.p.x());
@@ -253,4 +263,54 @@ TEST_CASE("unoffset hit points do land behind their surface", "[core][hit_record
     }
 
     REQUIRE(self_hits > 0);
+}
+
+TEST_CASE("a zero margin spawns exactly where the bare ulp offset does", "[core][hit_record]") {
+    // Primitives whose error the ulp offset already covers write a zero margin, and
+    // scenes made only of them must not move by a single bit. Hence bits, not a
+    // tolerance: an origin one ulp off is a different image.
+    Sampler sampler = make_sampler(303);
+
+    for (const Float scale : scales) {
+        for (int i = 0; i < 64; ++i) {
+            HitRecord rec;
+            rec.p = scale * Vec3(sampler.next_scalar(-1.0_f, 1.0_f), sampler.next_scalar(-1.0_f, 1.0_f), sampler.next_scalar(-1.0_f, 1.0_f));
+            rec.geometric_normal = random_unit_vector(sampler);
+
+            const Vec3 direction = random_unit_vector(sampler);
+            const Vec3 side = dot(direction, rec.geometric_normal) < 0.0_f ? -rec.geometric_normal : rec.geometric_normal;
+
+            const Point3 expected = pt::offset_ray_origin(rec.p, side);
+            const Point3 origin = rec.spawn_origin(direction);
+
+            REQUIRE(same_bits(origin.x(), expected.x()));
+            REQUIRE(same_bits(origin.y(), expected.y()));
+            REQUIRE(same_bits(origin.z(), expected.z()));
+        }
+    }
+}
+
+TEST_CASE("a margin pushes the origin at least its own length off the surface", "[core][hit_record]") {
+    // The margin is a world-space distance and has to be cleared along the normal,
+    // on whichever side the ray leaves toward - reflection and transmission alike.
+    // The ulp offset is applied on top of it and can only add. The margin is set
+    // three orders of magnitude above the coordinate's ulp, so measuring the push
+    // in float costs the comparison nothing.
+    Sampler sampler = make_sampler(304);
+
+    for (const Float scale : scales) {
+        for (int i = 0; i < 64; ++i) {
+            HitRecord rec;
+            rec.p = scale * Vec3(sampler.next_scalar(-1.0_f, 1.0_f), sampler.next_scalar(-1.0_f, 1.0_f), sampler.next_scalar(-1.0_f, 1.0_f));
+            rec.geometric_normal = random_unit_vector(sampler);
+            rec.spawn_margin = 1e-3_f * scale;
+
+            for (const Float sign : {1.0_f, -1.0_f}) {
+                const Vec3 side = sign * rec.geometric_normal;
+                const Point3 origin = rec.spawn_origin(side);
+
+                REQUIRE(dot(origin - rec.p, side) >= 0.999_f * rec.spawn_margin);
+            }
+        }
+    }
 }

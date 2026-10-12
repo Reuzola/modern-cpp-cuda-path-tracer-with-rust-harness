@@ -73,6 +73,7 @@ bool Triangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
 
     rec.t = tri_hit.t;
     rec.p = r.at(tri_hit.t);
+    rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
     rec.u = tri_hit.b1;
     rec.v = tri_hit.b2;
     rec.mat = mat_;

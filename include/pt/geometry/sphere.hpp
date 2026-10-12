@@ -32,6 +32,7 @@ private:
     Float radius_;
     const Material* mat_ = nullptr;
     Aabb bbox_;
+    Float spawn_margin_{}; // Fixed per sphere: proportional to the radius, never to the hit point.
 
     struct UvCoords {
         Float u{}, v{};

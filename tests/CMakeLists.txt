@@ -31,6 +31,7 @@ add_executable(pathtracer_tests
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
   geometry/bvh_test.cpp
+  geometry/self_intersection_test.cpp
 
   textures/texture_test.cpp
   textures/perlin_test.cpp

@@ -78,6 +78,7 @@ bool Quad::find_hit(const Ray& r, const Interval& ray_t, QuadHit& out) const noe
 void Quad::fill_record(const Ray& r, const QuadHit& quad_hit, HitRecord& rec) const noexcept {
     rec.t = quad_hit.t;
     rec.p = r.at(quad_hit.t);
+    rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
     rec.u = quad_hit.alpha;
     rec.v = quad_hit.beta;
     rec.mat = mat_;

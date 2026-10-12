@@ -5,6 +5,7 @@
 #include "pt/math/interval.hpp"
 #include "pt/math/onb.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/robust.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -14,7 +15,18 @@
 
 namespace pt {
 
-Sphere::Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat) : center_(center1, center2 - center1), radius_(std::fmax(0.0_f, radius)), mat_(mat) {
+namespace {
+
+// gamma(4) is the smallest order that left no self-hit in randomized tests
+// near a large sphere; doubled for headroom.
+constexpr int spawn_margin_order = 8;
+
+} // namespace
+
+Sphere::Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat)
+    : center_(center1, center2 - center1),
+      radius_(std::fmax(0.0_f, radius)), mat_(mat),
+      spawn_margin_(gamma(spawn_margin_order) * radius_) {
     const auto rvec = Vec3(radius_, radius_, radius_);
     const Aabb box1(center_.at(0) - rvec, center_.at(0) + rvec);
     const Aabb box2(center_.at(1) - rvec, center_.at(1) + rvec);
@@ -55,9 +67,8 @@ Vec3 Sphere::sample_direction(const Point3& origin, Sampler& sampler) const {
 }
 
 auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
-    // The caller's normal is (p - center) / radius, not a renormalised unit vector, so
-    // cancellation in the intersection can push it a few ulps past +/-1 - enough for acos
-    // to return NaN at the poles. Clamping is a no-op everywhere else.
+    // The normal is renormalised, but rounding can still leave a component a few ulps
+    // past +/-1 - enough for acos to return NaN at the poles. Clamping is a no-op elsewhere.
     const Float cos_theta = -p.y();
     const Float theta = std::acos(std::clamp(cos_theta, -1.0_f, 1.0_f));
     const Float phi = std::atan2(-p.z(), p.x()) + pi;
@@ -107,8 +118,15 @@ std::optional<Float> Sphere::find_root(const Ray& r, const Point3& center, Float
 
 void Sphere::fill_record(const Ray& r, const Point3& center, Float t, HitRecord& rec) const noexcept {
     rec.t = t;
-    rec.p = r.at(t);
-    const Vec3 outward_normal = (rec.p - center) / radius_;
+
+    // Reprojected onto the surface: r.at(t) carries t's error, which grows with the radius (PBRT 6.8.5).
+    const Vec3 radial = r.at(t) - center;
+
+    // Divided by the true length, not radius_, so the normal is unit.
+    const Vec3 outward_normal = radial / radial.length();
+
+    rec.p = center + radius_ * outward_normal;
+    rec.spawn_margin = spawn_margin_;
     rec.set_face_normal(r, outward_normal);
     const auto [u, v] = get_sphere_uv(outward_normal);
     rec.u = u;

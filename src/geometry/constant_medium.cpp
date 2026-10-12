@@ -42,6 +42,7 @@ bool ConstantMedium::sample_interaction(const Ray& r, const Interval& ray_t, Sam
 
     // No surface here: a zero normal tells spawn_ray to leave the point alone.
     rec.geometric_normal = Vec3();
+    rec.spawn_margin = 0.0_f;
     rec.front_face = true;
     rec.mat = phase_function_;
     return true;

@@ -3,6 +3,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/scalar.hpp"
 #include "pt/math/transform.hpp"
 
 namespace pt {
@@ -23,6 +24,7 @@ private:
     const Hittable* object_;
     Transform transform_;
     Aabb bbox_;
+    Float margin_scale_{}; // The child's margin is an object-space distance; this keeps it a bound in world space.
 };
 
 } // namespace pt

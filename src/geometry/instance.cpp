@@ -9,7 +9,9 @@
 namespace pt {
 
 Instance::Instance(const Hittable* object, const Transform& transform)
-    : object_(object), transform_(transform), bbox_(transform.apply_bounds(object->bounding_box())) {
+    : object_(object), transform_(transform),
+      bbox_(transform.apply_bounds(object->bounding_box())),
+      margin_scale_(transform.stretch_bound()) {
     assert(object != nullptr);
 }
 
@@ -25,6 +27,7 @@ bool Instance::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     rec.p = transform_.apply_point(rec.p);
     rec.normal = transform_.apply_normal(rec.normal);
     rec.geometric_normal = transform_.apply_normal(rec.geometric_normal);
+    rec.spawn_margin *= margin_scale_;
 
     return true;
 }

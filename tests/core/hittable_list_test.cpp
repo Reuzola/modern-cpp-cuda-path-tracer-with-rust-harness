@@ -2,6 +2,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/quad.hpp"
+#include "pt/geometry/sphere.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
@@ -286,4 +287,27 @@ TEST_CASE("at exactly equal distance the first accepting object wins", "[core][h
     REQUIRE(reversed.hit(offset, visible, other));
     require_near(other.u, 0.25_f);
     require_near(other.v, 0.375_f);
+}
+
+TEST_CASE("a winner without a margin of its own does not inherit one", "[core][hittable_list]") {
+    // The list reuses one scratch record across its members. The sphere is asked
+    // first and accepted, which writes its nonzero margin there; the closer quad
+    // then displaces it. A primitive that skipped writing its margin would hand the
+    // sphere's to the quad, and every spawn from that quad would be pushed off by it.
+    const pt::Sphere far_sphere(Point3(0, 0, 10), 1.0_f, nullptr);
+    const pt::Quad near_quad(Point3(-1, -1, 2), Vec3(2, 0, 0), Vec3(0, 2, 0), nullptr);
+
+    // Not vacuous: on its own the sphere does leave a margin behind.
+    HitRecord sphere_only;
+    REQUIRE(far_sphere.hit(forward, visible, sphere_only));
+    REQUIRE(sphere_only.spawn_margin > 0.0_f);
+
+    HittableList list;
+    list.add(&far_sphere);
+    list.add(&near_quad);
+
+    HitRecord rec;
+    REQUIRE(list.hit(forward, visible, rec));
+    require_near(rec.t, 2.0_f);
+    REQUIRE(rec.spawn_margin == 0.0_f);
 }

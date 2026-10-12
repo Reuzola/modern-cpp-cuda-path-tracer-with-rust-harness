@@ -149,3 +149,27 @@ TEST_CASE("a miss leaves the record untouched", "[geometry][instance]") {
     REQUIRE_FALSE(moved.hit(Ray(Point3(0, 3, 0), Vec3(0, 0, 1)), visible, rec));
     require_near(rec.t, 42.0_f);
 }
+
+TEST_CASE("a child's margin is stretched into a world-space bound", "[geometry][instance]") {
+    // The sphere's margin is a distance in its own space. A transform that
+    // lengthens some direction by s can lengthen the error by s too, so the world
+    // margin must be at least s times the child's - whatever extra the instance
+    // adds on top of that. The child's margin is read from the same ray in object
+    // space, which is what the instance hands it.
+    const Ray local{Point3(0, 0, -10), Vec3(0, 0, 1)};
+    HitRecord child;
+    REQUIRE(unit_sphere.hit(local, visible, child));
+
+    // Uniform: every direction doubles.
+    const Instance grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
+    HitRecord uniform;
+    REQUIRE(grown.hit(Ray(Point3(0, 0, -20), Vec3(0, 0, 2)), visible, uniform));
+    REQUIRE(uniform.spawn_margin >= 2.0_f * child.spawn_margin);
+
+    // Non-uniform, and hit across the axis that does not stretch: the bound has to
+    // hold for the largest stretch anywhere, not for the one along the ray.
+    const Instance stretched{&unit_sphere, Transform::scaling(Vec3(3, 1, 1))};
+    HitRecord anisotropic;
+    REQUIRE(stretched.hit(Ray(Point3(0, 0, -10), Vec3(0, 0, 1)), visible, anisotropic));
+    REQUIRE(anisotropic.spawn_margin >= 3.0_f * child.spawn_margin);
+}

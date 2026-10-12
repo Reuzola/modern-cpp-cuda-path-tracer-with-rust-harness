@@ -9,18 +9,21 @@
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstdlib>
+#include <limits>
 
 namespace {
 
+using pt::dot;
 using pt::HitRecord;
 using pt::Interval;
 using pt::Point3;
 using pt::Ray;
 using pt::Sampler;
 using pt::Sphere;
-using pt::Vec3;
-using pt::dot;
 using pt::unit_vector;
+using pt::Vec3;
 using pt::operator""_f;
 using pt_test::make_sampler;
 using pt_test::require_aabb_near;
@@ -132,10 +135,9 @@ TEST_CASE("uv follows the spherical parameterisation, poles included", "[geometr
     REQUIRE(unit.hit(Ray(Point3(0, 0, 5), Vec3(0, 0, -1)), visible, rec));
     require_uv_near(rec.u, rec.v, 0.25_f, 0.5_f);
 
-    // The poles: v saturates at 0 and 1. The normal handed to acos is
-    // (p - centre) / radius rather than a renormalised vector, so cancellation
-    // can push it a hair past +/-1 here; without the clamp acos returns NaN and
-    // the texture lookup reads out of bounds.
+    // The poles: v saturates at 0 and 1. The normal is renormalised, but its
+    // rounding can still leave y a hair past +/-1 here; without the clamp acos
+    // returns NaN and the texture lookup reads out of bounds.
     REQUIRE(unit.hit(Ray(Point3(0, 5, 0), Vec3(0, -1, 0)), visible, rec));
     require_uv_near(rec.u, rec.v, 0.5_f, 1.0_f);
 
@@ -246,4 +248,58 @@ TEST_CASE("a distant ray hits a small sphere at the right distance", "[geometry]
 
     require_near(rec.t, 99'999.0_f, 0.01);
     require_vec_near(rec.normal, Vec3(0, 0, -1));
+}
+
+TEST_CASE("a hit is reprojected onto the sphere, within its own margin", "[geometry][sphere]") {
+    // The ground sphere of the classic scenes, hit from a few units up. r.at(t)
+    // carries t's error, which grows with the radius; the reprojected point keeps
+    // only the rounding of centre + radius * normal. The margin the record carries
+    // must at least bound how far the point is from the surface - measured in
+    // double, where the distance is exact to far below that margin.
+    const Point3 center(0, -1000, 0);
+    constexpr pt::Float radius = 1000.0_f;
+    const Sphere ground{center, radius, nullptr};
+    Sampler sampler = make_sampler(4);
+
+    for (int i = 0; i < 256; ++i) {
+        const Point3 eye(sampler.next_scalar(-50.0_f, 50.0_f), sampler.next_scalar(1.0_f, 50.0_f), sampler.next_scalar(-50.0_f, 50.0_f));
+        // Aimed at a point on the surface, so the ray cannot pass over the horizon.
+        const pt::Float x = sampler.next_scalar(-20.0_f, 20.0_f);
+        const pt::Float z = sampler.next_scalar(-20.0_f, 20.0_f);
+        const Point3 target(x, center.y() + std::sqrt(radius * radius - x * x - z * z), z);
+
+        HitRecord rec;
+        REQUIRE(ground.hit(Ray(eye, target - eye), visible, rec));
+
+        const double dx = pt_test::widen(rec.p.x()) - pt_test::widen(center.x());
+        const double dy = pt_test::widen(rec.p.y()) - pt_test::widen(center.y());
+        const double dz = pt_test::widen(rec.p.z()) - pt_test::widen(center.z());
+        const double off_surface = std::abs(std::sqrt(dx * dx + dy * dy + dz * dz) - pt_test::widen(radius));
+        REQUIRE(off_surface <= pt_test::widen(rec.spawn_margin));
+
+        // Divided by the radial vector's true length, not by the radius: the normal
+        // is unit to a few ulps, where (p - centre) / radius would inherit p's error.
+        const double unit_tolerance = 4.0 * pt_test::widen(std::numeric_limits<pt::Float>::epsilon());
+        REQUIRE(std::abs(pt_test::widen(rec.normal.length()) - 1.0) <= unit_tolerance);
+    }
+}
+
+TEST_CASE("the spawn margin follows the radius, never the hit point", "[geometry][sphere]") {
+    // What the margin covers - the reprojected point and the next query's
+    // c = |oc|^2 - r^2 - errs in proportion to the radius alone. Doubling the radius
+    // doubles it exactly, a product by two being exact, and a second hit elsewhere
+    // on the same sphere carries the same value.
+    const Sphere small{Point3(0, 0, 5), 1.0_f, nullptr};
+    const Sphere large{Point3(0, 0, 5), 2.0_f, nullptr};
+
+    HitRecord centre_hit;
+    HitRecord large_hit;
+    HitRecord off_centre_hit;
+    REQUIRE(small.hit(forward, visible, centre_hit));
+    REQUIRE(large.hit(forward, visible, large_hit));
+    REQUIRE(small.hit(Ray(Point3(0.5_f, 0, 0), Vec3(0, 0, 1)), visible, off_centre_hit));
+
+    REQUIRE(centre_hit.spawn_margin > 0.0_f);
+    REQUIRE(large_hit.spawn_margin == 2.0_f * centre_hit.spawn_margin);
+    REQUIRE(off_centre_hit.spawn_margin == centre_hit.spawn_margin);
 }
