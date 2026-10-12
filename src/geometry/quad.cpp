@@ -22,17 +22,20 @@ Quad::Quad(const Point3& q, const Vec3& u, const Vec3& v, const Material* mat) :
 }
 
 bool Quad::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    return intersect(r, ray_t, rec);
+    QuadHit quad_hit;
+    if (!find_hit(r, ray_t, quad_hit)) return false;
+    fill_record(r, quad_hit, rec);
+    return true;
 }
 
 Aabb Quad::bounding_box() const { return bbox_; }
 
 Float Quad::pdf_direction(const Point3& origin, const Vec3& direction) const {
-    HitRecord rec;
-    if (!intersect(Ray(origin, direction), Interval(0.0_f, infinity), rec)) return 0.0_f;
+    QuadHit quad_hit;
+    if (!find_hit(Ray(origin, direction), Interval(0.0_f, infinity), quad_hit)) return 0.0_f;
 
-    const Float distance_squared = rec.t * rec.t * direction.length_squared();
-    const Float cosine = std::fabs(dot(direction, rec.normal)) / direction.length();
+    const Float distance_squared = quad_hit.t * quad_hit.t * direction.length_squared();
+    const Float cosine = std::fabs(dot(direction, normal_)) / direction.length();
 
     return distance_squared / (cosine * area_);
 }
@@ -51,33 +54,34 @@ void Quad::set_bounding_box() {
     bbox_ = Aabb(bbox_diagonal1, bbox_diagonal2);
 }
 
-bool Quad::is_interior(Float a, Float b, HitRecord& rec) const {
+bool Quad::is_interior(Float a, Float b) noexcept {
     static constexpr Interval unit_interval{0, 1};
-    if (!unit_interval.contains(a) || !unit_interval.contains(b)) return false;
-
-    rec.u = a;
-    rec.v = b;
-    return true;
+    return unit_interval.contains(a) && unit_interval.contains(b);
 }
 
-bool Quad::intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+bool Quad::find_hit(const Ray& r, const Interval& ray_t, QuadHit& out) const noexcept {
     const Float denom = dot(normal_, r.direction());
-
     const Float t = (d_ - dot(normal_, r.origin())) / denom;
     if (!ray_t.surrounds(t)) return false;
 
     const Point3 intersection = r.at(t);
     const Vec3 planar_hitpt_vector = intersection - q_;
+
     const Float alpha = dot(w_, cross(planar_hitpt_vector, v_));
     const Float beta = dot(w_, cross(u_, planar_hitpt_vector));
-    if (!is_interior(alpha, beta, rec)) return false;
+    if (!is_interior(alpha, beta)) return false;
 
-    rec.t = t;
-    rec.p = intersection;
+    out = QuadHit{.t = t, .alpha = alpha, .beta = beta};
+    return true;
+}
+
+void Quad::fill_record(const Ray& r, const QuadHit& quad_hit, HitRecord& rec) const noexcept {
+    rec.t = quad_hit.t;
+    rec.p = r.at(quad_hit.t);
+    rec.u = quad_hit.alpha;
+    rec.v = quad_hit.beta;
     rec.mat = mat_;
     rec.set_face_normal(r, normal_);
-
-    return true;
 }
 
 } // namespace pt

@@ -7,6 +7,7 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <optional>
 
 namespace pt {
 
@@ -40,7 +41,12 @@ private:
 
     [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared, Sampler& sampler);
 
-    [[nodiscard]] bool intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const;
+    // Geometric test only: the nearest root inside ray_t. Static and handed
+    // its data, so the light pdf can ask hit-or-miss without paying for the record.
+    [[nodiscard]] static std::optional<Float> find_root(const Ray& r, const Point3& center, Float radius, const Interval& ray_t) noexcept;
+
+    // Everything a hit carries beyond its distance; run once per accepted root.
+    void fill_record(const Ray& r, const Point3& center, Float t, HitRecord& rec) const noexcept;
 };
 
 } // namespace pt

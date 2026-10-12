@@ -36,9 +36,20 @@ private:
 
     void set_bounding_box();
 
-    [[nodiscard]] bool is_interior(Float a, Float b, HitRecord& rec) const;
+    // Pure geometric result of the quad test: distance, and the hit's coordinates along u_ and v_.
+    struct QuadHit {
+        Float t{};
+        Float alpha{};
+        Float beta{};
+    };
 
-    [[nodiscard]] bool intersect(const Ray& r, const Interval& ray_t, HitRecord& rec) const;
+    [[nodiscard]] static bool is_interior(Float a, Float b) noexcept;
+
+    // Geometric test only; writes out on a hit and leaves it untouched otherwise.
+    [[nodiscard]] bool find_hit(const Ray& r, const Interval& ray_t, QuadHit& out) const noexcept;
+
+    // Everything a hit carries beyond its distance; run once per accepted root.
+    void fill_record(const Ray& r, const QuadHit& quad_hit, HitRecord& rec) const noexcept;
 };
 
 } // namespace pt
