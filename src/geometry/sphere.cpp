@@ -52,8 +52,7 @@ Float Sphere::pdf_direction(const Point3& origin, const Vec3& direction) const {
     const Float distance_squared = (center - origin).length_squared();
     if (distance_squared <= radius_ * radius_) return 0.0_f;
 
-    const Float cos_theta_max = std::sqrt(1.0_f - radius_ * radius_ / distance_squared);
-    const Float solid_angle = 2.0_f * pi * (1.0_f - cos_theta_max);
+    const Float solid_angle = 2.0_f * pi * cone_one_minus_cos(radius_, distance_squared);
 
     return 1.0_f / solid_angle;
 }
@@ -64,6 +63,14 @@ Vec3 Sphere::sample_direction(const Point3& origin, Sampler& sampler) const {
 
     const Onb uvw(direction);
     return uvw.transform(random_to_sphere(radius_, distance_squared, sampler));
+}
+
+Float Sphere::cone_one_minus_cos(Float radius, Float distance_squared) noexcept {
+    const Float x = radius * radius / distance_squared;
+
+    // The same value as 1 - sqrt(1 - x) with nothing subtracted: written that
+    // way, a light a thousand radii away is all rounding.
+    return x / (1.0_f + std::sqrt(1.0_f - x));
 }
 
 auto Sphere::get_sphere_uv(const Point3& p) -> UvCoords {
@@ -82,9 +89,14 @@ Vec3 Sphere::random_to_sphere(Float radius, Float distance_squared, Sampler& sam
     const Float r1 = sampler.next_scalar();
     const Float r2 = sampler.next_scalar();
 
-    const Float z = 1.0_f + r2 * (std::sqrt(1.0_f - radius * radius / distance_squared) - 1.0_f);
+    // Drawn as 1 - z: for a distant light z sits within an ulp of one, and
+    // anything built from z itself would cancel against it.
+    const Float one_minus_z = r2 * cone_one_minus_cos(radius, distance_squared);
+
+    // 1 - z^2 = (1 - z)(1 + z), formed from 1 - z.
+    const Float z = 1.0_f - one_minus_z;
     const Float phi = 2.0_f * pi * r1;
-    const Float sin_theta = std::sqrt(1.0_f - z * z);
+    const Float sin_theta = std::sqrt(one_minus_z * (2.0_f - one_minus_z));
 
     return Vec3(std::cos(phi) * sin_theta, std::sin(phi) * sin_theta, z);
 }

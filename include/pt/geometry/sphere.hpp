@@ -40,6 +40,10 @@ private:
 
     [[nodiscard]] static UvCoords get_sphere_uv(const Point3& p);
 
+    // 1 - cos(theta_max) of the cone a sphere subtends, shared by the
+    // density and the sampler so the two describe one cone.
+    [[nodiscard]] static Float cone_one_minus_cos(Float radius, Float distance_squared) noexcept;
+
     [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared, Sampler& sampler);
 
     // Geometric test only: the nearest root inside ray_t. Static and handed

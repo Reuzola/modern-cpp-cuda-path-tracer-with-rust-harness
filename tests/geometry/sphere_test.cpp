@@ -8,10 +8,13 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <numbers>
 
 namespace {
 
@@ -302,4 +305,59 @@ TEST_CASE("the spawn margin follows the radius, never the hit point", "[geometry
     REQUIRE(centre_hit.spawn_margin > 0.0_f);
     REQUIRE(large_hit.spawn_margin == 2.0_f * centre_hit.spawn_margin);
     REQUIRE(off_centre_hit.spawn_margin == centre_hit.spawn_margin);
+}
+
+TEST_CASE("the cone's density is exact at every distance", "[geometry][sphere]") {
+    // 1 - cos(theta_max) written as 1 - sqrt(1 - r^2/d^2) subtracts two numbers that
+    // agree in nearly every digit float has once the light is far away: at a thousand
+    // radii the density came out seven percent low. The reference is the same
+    // quantity in double, in the form that subtracts nothing. The nearest distances
+    // close the other end, a shading point almost on the light, where the cone opens
+    // to a hemisphere and no test had looked before.
+    const double distance_over_radius = GENERATE(1.001, 1.01, 1.1, 3.0, 10.0, 30.0, 100.0, 300.0, 1000.0, 3000.0);
+
+    constexpr pt::Float radius = 0.5_f;
+    const auto distance = pt_test::narrow(distance_over_radius * pt_test::widen(radius));
+    const Sphere light{Point3(0, 0, distance), radius, nullptr};
+
+    // From the float values the sphere actually holds, so the reference answers the
+    // same question the engine was asked.
+    const double r = pt_test::widen(radius);
+    const double d = pt_test::widen(distance);
+    const double x = (r * r) / (d * d);
+    const double expected = 1.0 / (2.0 * std::numbers::pi * (x / (1.0 + std::sqrt(1.0 - x))));
+
+    const double actual = pt_test::widen(light.pdf_direction(Point3(0, 0, 0), Vec3(0, 0, 1)));
+
+    // A few ulps of float relative error: the stable form stays near 1e-7 at every
+    // distance, while the cancelling one is already past 2e-5 at thirty radii.
+    INFO("d/r " << distance_over_radius << ": pdf " << actual << " against " << expected);
+    REQUIRE(std::abs(actual / expected - 1.0) < 1.0e-5);
+}
+
+TEST_CASE("directions sampled toward a distant light land on it", "[geometry][sphere]") {
+    // The cone sampled through a cancelling 1 - cos also came out too wide, so a share
+    // of the directions aimed at a far light missed it: a sample the pdf then calls
+    // impossible. Half a percent missed at three hundred radii, five percent at a
+    // thousand, half of them at three thousand. The stable form leaves only rounding
+    // at the cone's very edge, which none of these draws hit; one in a thousand is
+    // the bound, so the test does not hang on that edge either way.
+    const pt::Float distance_over_radius = GENERATE(300.0_f, 1000.0_f, 3000.0_f);
+
+    constexpr pt::Float radius = 0.01_f;
+    const Sphere light{Point3(0.3_f, -0.2_f, distance_over_radius * radius), radius, nullptr};
+    const Point3 origin(0, 0, 0);
+
+    Sampler sampler = make_sampler(5);
+    constexpr int samples = 20'000;
+    int misses = 0;
+
+    for (int i = 0; i < samples; ++i) {
+        const Vec3 direction = light.sample_direction(origin, sampler);
+        HitRecord rec;
+        if (!light.hit(Ray(origin, direction), visible, rec)) ++misses;
+    }
+
+    INFO("d/r " << distance_over_radius << ": " << misses << " of " << samples << " sampled directions missed");
+    REQUIRE(misses <= samples / 1000);
 }

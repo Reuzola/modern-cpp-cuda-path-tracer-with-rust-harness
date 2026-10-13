@@ -465,8 +465,10 @@ TEST_CASE("a small tilted light is sampled from the point its rays leave", "[ren
     // 0.5 / sqrt(65536) = 0.002, and the tolerance of one percent is two and a half.
     // A pdf evaluated from a different point than the ray left from misjudges the
     // cone's edge, which the tilted light puts across the offset; its error grows
-    // as the light shrinks towards the size of the offset itself.
-    const Float distance_over_radius = GENERATE(3.0_f, 10.0_f, 30.0_f, 100.0_f, 300.0_f);
+    // as the light shrinks towards the size of the offset itself. At a thousand
+    // radii the cone itself has to be computed without cancellation too, or a share
+    // of the light samples miss a light the pdf says they aim at.
+    const Float distance_over_radius = GENERATE(3.0_f, 10.0_f, 30.0_f, 100.0_f, 300.0_f, 1000.0_f);
     constexpr int samples = 65536;
 
     const Float mean = lit_ground_radiance(distance_over_radius, 127, samples);
