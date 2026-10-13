@@ -1,5 +1,6 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/geometry/instance.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/triangle.hpp"
@@ -10,6 +11,7 @@
 #include "pt/math/robust.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
+#include "pt/math/transform.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_message.hpp>
@@ -19,6 +21,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 
 namespace {
 
@@ -32,8 +35,10 @@ using pt::Sphere;
 using pt::Vec3;
 using pt::operator""_f;
 using pt::Hittable;
+using pt::Instance;
 using pt::Onb;
 using pt::Quad;
+using pt::Transform;
 using pt::Triangle;
 using pt_test::make_sampler;
 
@@ -138,6 +143,8 @@ struct SelfHits {
 // A planar primitive and a point on it. A plane cannot be met twice by one ray,
 // so on either side of it any hit at all is a self-intersection.
 struct PlanarCase {
+    // Declared first so it is destroyed last: an instance's child must outlive it.
+    std::unique_ptr<const Hittable> child;
     std::unique_ptr<const Hittable> surface;
     Point3 target;
     Vec3 outward;
@@ -194,6 +201,7 @@ struct TiltedPlane {
     const Point3 target = plane.anchor + sampler.next_scalar(-0.5_f, 0.5_f) * plane.a + sampler.next_scalar(-0.5_f, 0.5_f) * plane.b;
 
     return PlanarCase{
+        .child = nullptr,
         .surface = std::make_unique<Triangle>(v0, v1, v2, nullptr),
         .target = target,
         .outward = unit_vector(cross(v1 - v0, v2 - v0)),
@@ -208,6 +216,7 @@ struct TiltedPlane {
     const Point3 target = plane.anchor + sampler.next_scalar(-0.5_f, 0.5_f) * plane.a + sampler.next_scalar(-0.5_f, 0.5_f) * plane.b;
 
     return PlanarCase{
+        .child = nullptr,
         .surface = std::make_unique<Quad>(corner, 2.0_f * span * plane.a, 2.0_f * span * plane.b, nullptr),
         .target = target,
         .outward = unit_vector(cross(plane.a, plane.b)),
@@ -228,6 +237,7 @@ struct TiltedPlane {
     const Float b2 = sampler.next_scalar(0.05_f, 0.45_f);
 
     return PlanarCase{
+        .child = nullptr,
         .surface = std::make_unique<Triangle>(v0, v1, v2, nullptr),
         .target = (1.0_f - b1 - b2) * v0 + b1 * v1 + b2 * v2,
         .outward = unit_vector(cross(v1 - v0, v2 - v0)),
@@ -252,11 +262,47 @@ struct TiltedPlane {
     const Float b2 = sampler.next_scalar(0.05_f, 0.45_f);
 
     return PlanarCase{
+        .child = nullptr,
         .surface = std::make_unique<Triangle>(v0, v1, v2, nullptr),
         .target = (1.0_f - b1 - b2) * v0 + b1 * v1 + b2 * v2,
         .outward = unit_vector(cross(v1 - v0, v2 - v0)),
         .camera_distance = sampler.next_scalar(5.0_f, 40.0_f)};
 }
+
+// A ten-unit surface whose own coordinates sit 100 to 1000 units from its local
+// origin, rotated and translated so that the world sees it near the world origin.
+// Every term the transform rounds is large and they cancel to a small point: the
+// instance's arithmetic, not the primitive's, is what the offset must clear.
+[[nodiscard]] PlanarCase instanced_near_origin(Sampler& sampler, bool quad) {
+    const TiltedPlane plane = tilted_plane_near_origin(sampler);
+    const Float distance = std::pow(10.0_f, sampler.next_scalar(2.0_f, 3.0_f));
+    const Point3 local_centre = distance * pt::random_unit_vector(sampler);
+    constexpr Float half = 5.0_f;
+
+    const Point3 corner = local_centre - half * plane.a - half * plane.b;
+    std::unique_ptr<const Hittable> child;
+    Vec3 local_normal;
+    if (quad) {
+        child = std::make_unique<Quad>(corner, 2.0_f * half * plane.a, 2.0_f * half * plane.b, nullptr);
+        local_normal = unit_vector(cross(plane.a, plane.b));
+    } else {
+        const Point3 v1 = corner + 3.0_f * half * plane.a;
+        const Point3 v2 = corner + 3.0_f * half * plane.b;
+        child = std::make_unique<Triangle>(corner, v1, v2, nullptr);
+        local_normal = unit_vector(cross(v1 - corner, v2 - corner));
+    }
+
+    const Transform rotation = Transform::rotation_y(sampler.next_scalar(0.0_f, 360.0_f)) * Transform::rotation_x(sampler.next_scalar(0.0_f, 360.0_f));
+    const Transform placement = Transform::translation(-rotation.apply_point(local_centre)) * rotation;
+    const Point3 local_target = local_centre + sampler.next_scalar(-0.5_f, 0.5_f) * plane.a + sampler.next_scalar(-0.5_f, 0.5_f) * plane.b;
+
+    auto instance = std::make_unique<Instance>(child.get(), placement);
+    return PlanarCase{.child = std::move(child), .surface = std::move(instance), .target = placement.apply_point(local_target), .outward = unit_vector(rotation.apply_vector(local_normal)), .camera_distance = sampler.next_scalar(1.0_f, 50.0_f)};
+}
+
+[[nodiscard]] PlanarCase instanced_triangle(Sampler& sampler) { return instanced_near_origin(sampler, false); }
+
+[[nodiscard]] PlanarCase instanced_quad(Sampler& sampler) { return instanced_near_origin(sampler, true); }
 
 } // namespace
 
@@ -315,7 +361,9 @@ TEST_CASE("a ray spawned from a planar primitive never meets it again", "[geomet
     const Scenario scenario = GENERATE(Scenario{"large triangle near the origin", large_triangle_near_origin, 404},
                                        Scenario{"large quad near the origin", large_quad_near_origin, 405},
                                        Scenario{"mesh-scale triangle", mesh_triangle, 406},
-                                       Scenario{"sliver triangle", sliver_triangle, 407});
+                                       Scenario{"sliver triangle", sliver_triangle, 407},
+                                       Scenario{"instanced triangle far from its own origin", instanced_triangle, 408},
+                                       Scenario{"instanced quad far from its own origin", instanced_quad, 409});
 
     const SelfHits counts = trace_planar_cases(scenario.generate, scenario.stream);
 

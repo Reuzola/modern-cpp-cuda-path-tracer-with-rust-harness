@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
+#include "pt/math/robust.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <array>
@@ -167,6 +168,20 @@ public:
         return Aabb(min_pt, max_pt);
     }
 
+    // What apply_point's rounding scales with: the magnitude of every term it adds, summed over
+    // the result's components. Large whenever the terms are, however far they cancel - and the
+    // sum, not the largest component, bounds the error along any unit direction.
+    [[nodiscard]] constexpr Float apply_point_magnitude(const Point3& p) const noexcept {
+        const Vec3 magnitude = component_abs(p);
+
+        Float sum{};
+        for (int k = 0; k < 3; ++k) {
+            const Float t = m_.translation[k];
+            sum += dot(component_abs(m_.linear.row(k)), magnitude) + (t < 0 ? -t : t);
+        }
+        return sum;
+    }
+
     // Upper bound on how much the linear part can lengthen a vector: the Frobenius norm,
     // which dominates the largest singular value and costs no decomposition.
     [[nodiscard]] Float stretch_bound() const noexcept {
@@ -192,5 +207,6 @@ static_assert(std::is_trivially_copyable_v<Transform>);
 static_assert(Transform::translation(Vec3(1, 2, 3)).apply_point(Point3(0, 0, 0)).x() == 1.0_f);
 static_assert(Transform::scaling(Vec3(2, 2, 2)).apply_inverse_point(Point3(4, 4, 4)).y() == 2.0_f);
 static_assert((Transform::translation(Vec3(1, 0, 0)) * Transform::scaling(Vec3(2, 2, 2))).apply_point(Point3(1, 0, 0)).x() == 3.0_f);
+static_assert(Transform::translation(Vec3(1, -2, 3)).apply_point_magnitude(Point3(0, 0, 0)) == 6.0_f);
 
 } // namespace pt

@@ -1,6 +1,7 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/geometry/instance.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -172,4 +173,23 @@ TEST_CASE("a child's margin is stretched into a world-space bound", "[geometry][
     HitRecord anisotropic;
     REQUIRE(stretched.hit(Ray(Point3(0, 0, -10), Vec3(0, 0, 1)), visible, anisotropic));
     REQUIRE(anisotropic.spawn_margin >= 3.0_f * child.spawn_margin);
+}
+
+TEST_CASE("an instance adds its own rounding to the margin", "[geometry][instance]") {
+    // A triangle carries no margin of its own, and its hit lands exactly on its
+    // local origin. Whatever margin comes back is the instance's: apply_point rounds
+    // a sum whose terms are as large as the translation, so it grows with the
+    // translation even though the point itself is exact - doubling the translation
+    // doubles it exactly, a product by two being exact.
+    const pt::Triangle child(Point3(-1, -1, 0), Point3(1, -1, 0), Point3(0, 1, 0), nullptr);
+    const Instance near_instance{&child, Transform::translation(Vec3(1000, 0, 0))};
+    const Instance far_instance{&child, Transform::translation(Vec3(2000, 0, 0))};
+
+    HitRecord near_hit;
+    HitRecord far_hit;
+    REQUIRE(near_instance.hit(Ray(Point3(1000, 0, 5), Vec3(0, 0, -1)), visible, near_hit));
+    REQUIRE(far_instance.hit(Ray(Point3(2000, 0, 5), Vec3(0, 0, -1)), visible, far_hit));
+
+    REQUIRE(near_hit.spawn_margin > 0.0_f);
+    REQUIRE(far_hit.spawn_margin == 2.0_f * near_hit.spawn_margin);
 }
