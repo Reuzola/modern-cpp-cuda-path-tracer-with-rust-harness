@@ -13,6 +13,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
+#include <limits>
 
 namespace {
 
@@ -257,4 +259,46 @@ TEST_CASE("a degenerate triangle is rejected", "[geometry][triangle]") {
         TriangleHit hit;
         REQUIRE_FALSE(intersect_triangle(Ray(Point3(scale + 1, scale, 0), Vec3(0, 0, 1)), visible, v_0, v_1, v_2, hit));
     }
+}
+
+TEST_CASE("a hit point is rebuilt from the vertices, not from t", "[geometry][triangle]") {
+    // The quad's case for triangles: from ten thousand units away, r.at(t) lands
+    // about a thousandth of a unit off the plane, while the barycentric point keeps
+    // only the rounding of the vertices. Four ulps of the largest vertex coordinate.
+    const Point3 a(-1, -1, 2);
+    const Point3 b(1.5_f, -0.7_f, 2.6_f);
+    const Point3 c(-0.6_f, 1.4_f, 1.5_f);
+    const Triangle tilted(a, b, c, nullptr);
+    const Vec3 n = unit_vector(cross(b - a, c - a));
+
+    const double bound = 4.0 * widen(std::numeric_limits<Float>::epsilon()) * 2.6;
+    pt::Sampler sampler = pt_test::make_sampler(14);
+
+    for (int i = 0; i < 64; ++i) {
+        const Float b1 = sampler.next_scalar(0.1_f, 0.45_f);
+        const Float b2 = sampler.next_scalar(0.1_f, 0.45_f);
+        const Point3 target = (1.0_f - b1 - b2) * a + b1 * b + b2 * c;
+        const Point3 eye = target + 10'000.0_f * unit_vector(Vec3(sampler.next_scalar(-0.5_f, 0.5_f), sampler.next_scalar(-0.5_f, 0.5_f), 1));
+
+        HitRecord rec;
+        REQUIRE(tilted.hit(Ray(eye, target - eye), visible, rec));
+
+        const double off_plane = widen(rec.p.x() - a.x()) * widen(n.x()) + widen(rec.p.y() - a.y()) * widen(n.y()) +
+                                 widen(rec.p.z() - a.z()) * widen(n.z());
+        REQUIRE(std::abs(off_plane) <= bound);
+
+        // Covered by the conservative distance test instead of a margin.
+        REQUIRE(rec.spawn_margin == 0.0_f);
+    }
+}
+
+TEST_CASE("the conservative distance test is relative, not an epsilon", "[geometry][triangle]") {
+    // Hits closer than their own rounding are rejected, but that bound scales with
+    // the arithmetic of this query, so a genuine hit a ten-thousandth of a unit
+    // away is still found. A fixed t_min of the kind this replaced would lose it.
+    const Triangle tri = reference_triangle();
+    HitRecord rec;
+
+    REQUIRE(tri.hit(Ray(Point3(0.25_f, 0.25_f, 1.0e-4_f), Vec3(0, 0, -1)), visible, rec));
+    REQUIRE_THAT(widen(rec.t), WithinAbs(1.0e-4, 1.0e-8));
 }

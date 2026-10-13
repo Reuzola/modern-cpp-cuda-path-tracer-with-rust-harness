@@ -9,6 +9,8 @@
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <limits>
 
 namespace {
 
@@ -203,4 +205,52 @@ TEST_CASE("every sampled direction has a density", "[geometry][quad]") {
         const Vec3 direction = square.sample_direction(origin, sampler);
         REQUIRE(square.pdf_direction(origin, direction) > 0.0_f);
     }
+}
+
+TEST_CASE("a hit point is rebuilt from the quad's own basis", "[geometry][quad]") {
+    // Seen from ten thousand units away, r.at(t) carries the rounding of a long t:
+    // about a thousandth of a unit off the plane. Rebuilt as q + alpha u + beta v,
+    // the point keeps only the rounding of the quad's own coordinates. Distance to
+    // the plane is measured in double; the bound is four ulps of the largest
+    // coordinate the quad can have, which the old point misses by orders of magnitude.
+    const Point3 q(-1, -1, 2);
+    const Vec3 u(2, 0.3_f, 0.7_f);
+    const Vec3 v(0.3_f, 2, -0.4_f);
+    const Quad tilted{q, u, v, nullptr};
+    const Vec3 n = unit_vector(cross(u, v));
+
+    const double bound = 4.0 * pt_test::widen(std::numeric_limits<pt::Float>::epsilon()) * 6.0;
+    Sampler sampler = make_sampler(13);
+
+    for (int i = 0; i < 64; ++i) {
+        const Point3 target = q + sampler.next_scalar(0.1_f, 0.9_f) * u + sampler.next_scalar(0.1_f, 0.9_f) * v;
+        const Point3 eye = target - 10'000.0_f * unit_vector(Vec3(sampler.next_scalar(-0.5_f, 0.5_f), sampler.next_scalar(-0.5_f, 0.5_f), 1));
+
+        HitRecord rec;
+        REQUIRE(tilted.hit(Ray(eye, target - eye), visible, rec));
+
+        const double off_plane = pt_test::widen(rec.p.x() - q.x()) * pt_test::widen(n.x()) +
+                                 pt_test::widen(rec.p.y() - q.y()) * pt_test::widen(n.y()) +
+                                 pt_test::widen(rec.p.z() - q.z()) * pt_test::widen(n.z());
+        REQUIRE(std::abs(off_plane) <= bound);
+    }
+}
+
+TEST_CASE("a quad's spawn margin is fixed by its own coordinates", "[geometry][quad]") {
+    // The next plane test rounds d - n . origin, whose terms are the size of the
+    // quad's coordinates, not of the hit point. So the margin is one value per
+    // quad - every hit on it carries the same - and it grows with the coordinates:
+    // scaling the quad by two doubles it exactly, a product by two being exact.
+    const Quad doubled{Point3(-2, -2, 4), Vec3(4, 0, 0), Vec3(0, 4, 0), nullptr};
+
+    HitRecord centre;
+    HitRecord corner;
+    HitRecord larger;
+    REQUIRE(square.hit(forward, visible, centre));
+    REQUIRE(square.hit(Ray(Point3(0.9_f, -0.9_f, 0), Vec3(0, 0, 1)), visible, corner));
+    REQUIRE(doubled.hit(forward, visible, larger));
+
+    REQUIRE(centre.spawn_margin > 0.0_f);
+    REQUIRE(corner.spawn_margin == centre.spawn_margin);
+    REQUIRE(larger.spawn_margin == 2.0_f * centre.spawn_margin);
 }

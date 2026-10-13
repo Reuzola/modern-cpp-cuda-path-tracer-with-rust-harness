@@ -33,6 +33,7 @@ private:
     Float d_{};
     Vec3 w_;
     Float area_{};
+    Float spawn_margin_{}; // Fixed per quad: bounds the rounding of its own plane test, which scales with its coordinates.
 
     void set_bounding_box();
 

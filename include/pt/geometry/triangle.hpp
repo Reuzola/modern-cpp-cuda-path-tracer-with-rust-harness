@@ -19,6 +19,13 @@ struct TriangleHit {
     Vec3 normal;
 };
 
+// The hit point rebuilt from the vertices: its rounding then scales with their coordinates, which
+// the ulp offset is built for. r.at(t) would carry the error of a long t instead.
+// Kept out of intersect_triangle so it can run for the closest hit only.
+[[nodiscard]] constexpr Point3 barycentric_point(const Point3& v0, const Point3& v1, const Point3& v2, Float b1, Float b2) noexcept {
+    return (1.0_f - b1 - b2) * v0 + b1 * v1 + b2 * v2;
+}
+
 [[nodiscard]] bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
                                       const Point3& v1, const Point3& v2, TriangleHit& out) noexcept;
 

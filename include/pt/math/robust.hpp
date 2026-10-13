@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <limits>
@@ -49,6 +50,28 @@ inline constexpr Float ray_offset_absolute = 1.0_f / 65536.0_f;
     return n_eps / (1 - n_eps);
 }
 
+// Component-wise magnitude. Hand-rolled because std::fabs is not constexpr in C++20.
+[[nodiscard]] constexpr Vec3 component_abs(const Vec3& v) noexcept {
+    const Float x = v.x() < 0 ? -v.x() : v.x();
+    const Float y = v.y() < 0 ? -v.y() : v.y();
+    const Float z = v.z() < 0 ? -v.z() : v.z();
+    return Vec3(x, y, z);
+}
+
+// The largest coordinate magnitude: the scale that rounding in this vector's arithmetic grows with.
+[[nodiscard]] constexpr Float max_abs_component(const Vec3& v) noexcept {
+    const Vec3 a = component_abs(v);
+    return std::max({a.x(), a.y(), a.z()});
+}
+
+// Component-wise bound on |a x b| that ignores cancellation. Each component of a cross product is
+// a difference of two products, and its rounding scales with their size, not with the difference.
+[[nodiscard]] constexpr Vec3 abs_cross(const Vec3& a, const Vec3& b) noexcept {
+    const Vec3 x = component_abs(a);
+    const Vec3 y = component_abs(b);
+    return Vec3(x.y() * y.z() + x.z() * y.y(), x.z() * y.x() + x.x() * y.z(), x.x() * y.y() + x.y() * y.x());
+}
+
 // Contract guards: these fail the build if the offset silently loses constexpr or drops a case.
 static_assert(offset_ray_origin(Point3(555, 555, 555), Vec3(0, 0, 0)).y() == 555.0_f);
 static_assert(offset_ray_origin(Point3(0, 0, 0), Vec3(0, 1, 0)).y() == ray_offset_absolute);
@@ -56,5 +79,6 @@ static_assert(offset_ray_origin(Point3(0, 0, 0), Vec3(0, -1, 0)).y() == -ray_off
 static_assert(offset_ray_origin(Point3(555, 0, 0), Vec3(1, 0, 0)).x() > 555.0_f);
 static_assert(offset_ray_origin(Point3(-555, 0, 0), Vec3(1, 0, 0)).x() > -555.0_f);
 static_assert(offset_ray_origin(Point3(555, 0, 0), Vec3(0, 1, 0)).x() == 555.0_f);
+static_assert(max_abs_component(Vec3(-3, 2, 1)) == 3.0_f);
 
 } // namespace pt

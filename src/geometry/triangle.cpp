@@ -3,11 +3,20 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/robust.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <cmath>
 
 namespace pt {
+
+namespace {
+
+// gamma(4) is the smallest order that left no self-hit in randomized
+// tests on large tilted triangles near the origin; doubled for headroom.
+constexpr int t_error_order = 8;
+
+} // namespace
 
 // Uses an out-parameter over std::optional to eliminate hot-path allocation/padding overhead.
 bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
@@ -37,6 +46,13 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
 
     const Float t = dot(e2, qvec) * inv_det;
     if (!ray_t.surrounds(t)) return false;
+
+    // Conservative distance test (after PBRT 6.8.4): t's numerator rounds terms the size of
+    // |e2| . (|tvec| x |e1|), and the division scales that by 1/|det| - the factor a sliver
+    // inflates. A hit no farther than its own rounding cannot be told from the surface the ray
+    // left; the bound is relative to this query, never a fixed t_min.
+    const Float t_error = gamma(t_error_order) * dot(component_abs(e2), abs_cross(tvec, e1)) * std::fabs(inv_det);
+    if (t <= t_error) return false;
 
     out.t = t;
     out.b1 = b1;
@@ -72,7 +88,7 @@ bool Triangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     if (!intersect_triangle(r, ray_t, v0_, v1_, v2_, tri_hit)) return false;
 
     rec.t = tri_hit.t;
-    rec.p = r.at(tri_hit.t);
+    rec.p = barycentric_point(v0_, v1_, v2_, tri_hit.b1, tri_hit.b2);
     rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
     rec.u = tri_hit.b1;
     rec.v = tri_hit.b2;

@@ -4,6 +4,7 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
+#include "pt/math/robust.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -11,12 +12,23 @@
 
 namespace pt {
 
+namespace {
+
+// gamma(1) left no self-hit in randomized tests on large tilted quads near the origin; doubled for headroom.
+constexpr int spawn_margin_order = 2;
+
+} // namespace
+
 Quad::Quad(const Point3& q, const Vec3& u, const Vec3& v, const Material* mat) : q_(q), u_(u), v_(v), mat_(mat) {
     const Vec3 n = cross(u, v);
     normal_ = unit_vector(n);
     d_ = dot(normal_, q);
     w_ = n / dot(n, n);
     area_ = n.length();
+
+    // The next plane test rounds d_ - n . origin: terms the size of the quad's coordinates, however
+    // small the result. Bounded by the largest coordinate any point of the quad can have.
+    spawn_margin_ = gamma(spawn_margin_order) * (max_abs_component(q) + max_abs_component(u) + max_abs_component(v));
 
     set_bounding_box();
 }
@@ -77,8 +89,8 @@ bool Quad::find_hit(const Ray& r, const Interval& ray_t, QuadHit& out) const noe
 
 void Quad::fill_record(const Ray& r, const QuadHit& quad_hit, HitRecord& rec) const noexcept {
     rec.t = quad_hit.t;
-    rec.p = r.at(quad_hit.t);
-    rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
+    rec.p = q_ + quad_hit.alpha * u_ + quad_hit.beta * v_; // Rebuilt from the quad's own data; r.at(t) would carry the error of a long t.
+    rec.spawn_margin = spawn_margin_;
     rec.u = quad_hit.alpha;
     rec.v = quad_hit.beta;
     rec.mat = mat_;

@@ -1,7 +1,11 @@
 #include "pt/core/hit_record.hpp"
+#include "pt/core/hittable.hpp"
+#include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
+#include "pt/math/onb.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/robust.hpp"
 #include "pt/math/sampler.hpp"
@@ -10,9 +14,11 @@
 #include "support/test_support.hpp"
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 namespace {
 
@@ -25,6 +31,10 @@ using pt::Sampler;
 using pt::Sphere;
 using pt::Vec3;
 using pt::operator""_f;
+using pt::Hittable;
+using pt::Onb;
+using pt::Quad;
+using pt::Triangle;
 using pt_test::make_sampler;
 
 const Interval visible{0.0_f, pt::infinity};
@@ -125,6 +135,129 @@ struct SelfHits {
     return SphereCase{.center = center, .radius = sampler.next_scalar(0.1_f, 1.0_f), .outward = pt::random_unit_vector(sampler), .camera_distance = std::pow(10.0_f, sampler.next_scalar(0.0_f, 3.0_f))};
 }
 
+// A planar primitive and a point on it. A plane cannot be met twice by one ray,
+// so on either side of it any hit at all is a self-intersection.
+struct PlanarCase {
+    std::unique_ptr<const Hittable> surface;
+    Point3 target;
+    Vec3 outward;
+    Float camera_distance{};
+};
+
+[[nodiscard]] SelfHits trace_planar_cases(const std::function<PlanarCase(Sampler&)>& generate, std::uint64_t stream) {
+    Sampler sampler = make_sampler(stream);
+    SelfHits counts;
+
+    for (int i = 0; i < case_count; ++i) {
+        const PlanarCase c = generate(sampler);
+        const Point3 camera = c.target + c.camera_distance * camera_direction(sampler, c.outward);
+
+        HitRecord rec;
+        if (!c.surface->hit(Ray(camera, c.target - camera), visible, rec)) continue;
+        ++counts.cases;
+
+        HitRecord self;
+        const Ray leaving = rec.spawn_ray(hemisphere_direction(sampler, rec.geometric_normal), 0.0_f);
+        if (c.surface->hit(leaving, visible, self)) ++counts.outward;
+
+        const Ray passing = rec.spawn_ray(hemisphere_direction(sampler, -rec.geometric_normal), 0.0_f);
+        if (c.surface->hit(passing, visible, self)) ++counts.inward;
+    }
+    return counts;
+}
+
+// A plane through a point within a hundredth of the world origin, tilted off every
+// axis, with an orthonormal frame in it.
+struct TiltedPlane {
+    Point3 anchor;
+    Vec3 normal;
+    Vec3 a;
+    Vec3 b;
+};
+
+[[nodiscard]] TiltedPlane tilted_plane_near_origin(Sampler& sampler) {
+    const Vec3 normal = pt::random_unit_vector(sampler);
+    const Onb frame(normal);
+    return TiltedPlane{.anchor = sampler.next_scalar(-0.01_f, 0.01_f) * normal, .normal = normal, .a = frame.u(), .b = frame.v()};
+}
+
+// Spans of 10 to 1000 units across the origin. Every coordinate of the surface is
+// large, the hit point is not: the plane test rounds terms the size of the
+// vertices, and an offset scaled to |p| cannot see them.
+[[nodiscard]] PlanarCase large_triangle_near_origin(Sampler& sampler) {
+    const TiltedPlane plane = tilted_plane_near_origin(sampler);
+    const Float span = std::pow(10.0_f, sampler.next_scalar(1.0_f, 3.0_f));
+
+    const Point3 v0 = plane.anchor - span * plane.a - span * plane.b;
+    const Point3 v1 = plane.anchor + 2.0_f * span * plane.a - span * plane.b;
+    const Point3 v2 = plane.anchor - span * plane.a + 2.0_f * span * plane.b;
+    const Point3 target = plane.anchor + sampler.next_scalar(-0.5_f, 0.5_f) * plane.a + sampler.next_scalar(-0.5_f, 0.5_f) * plane.b;
+
+    return PlanarCase{
+        .surface = std::make_unique<Triangle>(v0, v1, v2, nullptr),
+        .target = target,
+        .outward = unit_vector(cross(v1 - v0, v2 - v0)),
+        .camera_distance = sampler.next_scalar(1.0_f, 50.0_f)};
+}
+
+[[nodiscard]] PlanarCase large_quad_near_origin(Sampler& sampler) {
+    const TiltedPlane plane = tilted_plane_near_origin(sampler);
+    const Float span = std::pow(10.0_f, sampler.next_scalar(1.0_f, 3.0_f));
+
+    const Point3 corner = plane.anchor - span * plane.a - span * plane.b;
+    const Point3 target = plane.anchor + sampler.next_scalar(-0.5_f, 0.5_f) * plane.a + sampler.next_scalar(-0.5_f, 0.5_f) * plane.b;
+
+    return PlanarCase{
+        .surface = std::make_unique<Quad>(corner, 2.0_f * span * plane.a, 2.0_f * span * plane.b, nullptr),
+        .target = target,
+        .outward = unit_vector(cross(plane.a, plane.b)),
+        .camera_distance = sampler.next_scalar(1.0_f, 50.0_f)};
+}
+
+// Mesh-scale triangles - edges of 5 mm to 20 cm - seen from 5 to 40 units: the
+// camera's t is long against the triangle, so r.at(t) errs by more than the
+// triangle's own scale.
+[[nodiscard]] PlanarCase mesh_triangle(Sampler& sampler) {
+    const Point3 center(sampler.next_scalar(-5.0_f, 5.0_f), sampler.next_scalar(-5.0_f, 5.0_f), sampler.next_scalar(-5.0_f, 5.0_f));
+    const Float edge = sampler.next_scalar(0.005_f, 0.2_f);
+
+    const Point3 v0 = center + edge * pt::random_unit_vector(sampler);
+    const Point3 v1 = center + edge * pt::random_unit_vector(sampler);
+    const Point3 v2 = center + edge * pt::random_unit_vector(sampler);
+    const Float b1 = sampler.next_scalar(0.05_f, 0.45_f);
+    const Float b2 = sampler.next_scalar(0.05_f, 0.45_f);
+
+    return PlanarCase{
+        .surface = std::make_unique<Triangle>(v0, v1, v2, nullptr),
+        .target = (1.0_f - b1 - b2) * v0 + b1 * v1 + b2 * v2,
+        .outward = unit_vector(cross(v1 - v0, v2 - v0)),
+        .camera_distance = sampler.next_scalar(5.0_f, 40.0_f)};
+}
+
+// The same scale with aspect ratios down to 1:1000, the shape a decimated scan
+// produces. The determinant shrinks with the area, so every error in the test is
+// amplified by the condition number - no fixed offset keeps up with that.
+[[nodiscard]] PlanarCase sliver_triangle(Sampler& sampler) {
+    const Point3 center(sampler.next_scalar(-5.0_f, 5.0_f), sampler.next_scalar(-5.0_f, 5.0_f), sampler.next_scalar(-5.0_f, 5.0_f));
+    const Float edge = sampler.next_scalar(0.005_f, 0.2_f);
+    const Float aspect = std::pow(10.0_f, sampler.next_scalar(-3.0_f, 0.0_f));
+
+    const Vec3 along = pt::random_unit_vector(sampler);
+    const Vec3 across = unit_vector(cross(along, pt::random_unit_vector(sampler)));
+
+    const Point3 v0 = center - edge * along;
+    const Point3 v1 = center + edge * along;
+    const Point3 v2 = center + sampler.next_scalar(-0.8_f, 0.8_f) * edge * along + aspect * edge * across;
+    const Float b1 = sampler.next_scalar(0.05_f, 0.45_f);
+    const Float b2 = sampler.next_scalar(0.05_f, 0.45_f);
+
+    return PlanarCase{
+        .surface = std::make_unique<Triangle>(v0, v1, v2, nullptr),
+        .target = (1.0_f - b1 - b2) * v0 + b1 * v1 + b2 * v2,
+        .outward = unit_vector(cross(v1 - v0, v2 - v0)),
+        .camera_distance = sampler.next_scalar(5.0_f, 40.0_f)};
+}
+
 } // namespace
 
 TEST_CASE("a ray spawned near a large sphere never meets it again", "[geometry][self_intersection]") {
@@ -170,4 +303,24 @@ TEST_CASE("near a large sphere the ulp offset alone is not enough", "[geometry][
     }
 
     REQUIRE(self_hits > 0);
+}
+
+TEST_CASE("a ray spawned from a planar primitive never meets it again", "[geometry][self_intersection]") {
+    struct Scenario {
+        const char* name;
+        PlanarCase (*generate)(Sampler&);
+        std::uint64_t stream;
+    };
+
+    const Scenario scenario = GENERATE(Scenario{"large triangle near the origin", large_triangle_near_origin, 404},
+                                       Scenario{"large quad near the origin", large_quad_near_origin, 405},
+                                       Scenario{"mesh-scale triangle", mesh_triangle, 406},
+                                       Scenario{"sliver triangle", sliver_triangle, 407});
+
+    const SelfHits counts = trace_planar_cases(scenario.generate, scenario.stream);
+
+    INFO(scenario.name << ": cases " << counts.cases << ", outward self-hits " << counts.outward << ", inward self-hits " << counts.inward);
+    REQUIRE(counts.cases > case_count * 99 / 100);
+    CHECK(counts.outward == 0);
+    CHECK(counts.inward == 0);
 }

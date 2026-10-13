@@ -81,7 +81,7 @@ bool MeshTriangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) cons
                       : Uv{.u = tri_hit.b1, .v = tri_hit.b2};
 
     rec.t = tri_hit.t;
-    rec.p = r.at(tri_hit.t);
+    rec.p = barycentric_point(a, b, c, tri_hit.b1, tri_hit.b2);
     rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
     rec.u = uv.u;
     rec.v = uv.v;

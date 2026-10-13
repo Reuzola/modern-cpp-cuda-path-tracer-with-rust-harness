@@ -1,5 +1,6 @@
 #include "pt/math/constants.hpp"
 #include "pt/math/robust.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
@@ -137,4 +138,39 @@ TEST_CASE("extreme coordinates stay finite and directed", "[math][robust]") {
     REQUIRE(std::isfinite(result.y()));
     REQUIRE(result.x() > huge);
     REQUIRE(result.y() < -huge);
+}
+
+TEST_CASE("component magnitudes drop the sign and nothing else", "[math][robust]") {
+    // Constant-evaluated: the spawn margins built from these are computed once per
+    // primitive, and a constexpr helper keeps that option open for the GPU path.
+    STATIC_REQUIRE(pt::component_abs(Vec3(-1, 2, -3)).x() == 1.0_f);
+    STATIC_REQUIRE(pt::component_abs(Vec3(-1, 2, -3)).y() == 2.0_f);
+    STATIC_REQUIRE(pt::component_abs(Vec3(-1, 2, -3)).z() == 3.0_f);
+
+    // The largest magnitude, whichever component and sign carries it.
+    STATIC_REQUIRE(pt::max_abs_component(Vec3(-3, 2, 1)) == 3.0_f);
+    STATIC_REQUIRE(pt::max_abs_component(Vec3(0.5_f, -0.25_f, -2)) == 2.0_f);
+    STATIC_REQUIRE(pt::max_abs_component(Vec3()) == 0.0_f);
+}
+
+TEST_CASE("abs_cross bounds every component of the cross product", "[math][robust]") {
+    // Parallel vectors: the cross product cancels to zero, but each of its products
+    // is still the size of the inputs - and that size, not the result, is what the
+    // rounding of the result scales with.
+    STATIC_REQUIRE(pt::abs_cross(Vec3(1, 1, 0), Vec3(2, 2, 0)).z() == 4.0_f);
+    STATIC_REQUIRE(cross(Vec3(1, 1, 0), Vec3(2, 2, 0)).z() == 0.0_f);
+
+    // The bound holds exactly, not within a tolerance: the two sides round the same
+    // products, and rounding is monotone, so |x - y| <= |x| + |y| survives it.
+    pt::Sampler sampler = pt_test::make_sampler(501);
+    for (int i = 0; i < 1000; ++i) {
+        const Vec3 a = Vec3::random(-100.0_f, 100.0_f, sampler);
+        const Vec3 b = Vec3::random(-100.0_f, 100.0_f, sampler);
+        const Vec3 exact = cross(a, b);
+        const Vec3 bound = pt::abs_cross(a, b);
+
+        REQUIRE(std::fabs(exact.x()) <= bound.x());
+        REQUIRE(std::fabs(exact.y()) <= bound.y());
+        REQUIRE(std::fabs(exact.z()) <= bound.z());
+    }
 }

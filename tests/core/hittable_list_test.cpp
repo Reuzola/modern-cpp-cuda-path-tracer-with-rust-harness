@@ -3,6 +3,7 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
@@ -291,11 +292,12 @@ TEST_CASE("at exactly equal distance the first accepting object wins", "[core][h
 
 TEST_CASE("a winner without a margin of its own does not inherit one", "[core][hittable_list]") {
     // The list reuses one scratch record across its members. The sphere is asked
-    // first and accepted, which writes its nonzero margin there; the closer quad
-    // then displaces it. A primitive that skipped writing its margin would hand the
-    // sphere's to the quad, and every spawn from that quad would be pushed off by it.
+    // first and accepted, which writes its nonzero margin there; the closer
+    // triangle then displaces it. A triangle's margin is zero - its conservative
+    // distance test does that job - and a primitive that skipped writing it would
+    // hand the sphere's to the triangle, pushing every spawn from it off by that much.
     const pt::Sphere far_sphere(Point3(0, 0, 10), 1.0_f, nullptr);
-    const pt::Quad near_quad(Point3(-1, -1, 2), Vec3(2, 0, 0), Vec3(0, 2, 0), nullptr);
+    const pt::Triangle near_triangle(Point3(-1, -1, 2), Point3(1, -1, 2), Point3(0, 1, 2), nullptr);
 
     // Not vacuous: on its own the sphere does leave a margin behind.
     HitRecord sphere_only;
@@ -304,7 +306,7 @@ TEST_CASE("a winner without a margin of its own does not inherit one", "[core][h
 
     HittableList list;
     list.add(&far_sphere);
-    list.add(&near_quad);
+    list.add(&near_triangle);
 
     HitRecord rec;
     REQUIRE(list.hit(forward, visible, rec));
