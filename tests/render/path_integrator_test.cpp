@@ -16,7 +16,11 @@
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "support/test_support.hpp"
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+#include <cmath>
+#include <cstdint>
 #include <span>
 #include <vector>
 
@@ -364,4 +368,110 @@ TEST_CASE("a bounce at scene scale does not shadow itself", "[render][integrator
     // outright. Averaged over the hemisphere that shows up as a darkened surface,
     // which is what shadow acne looks like once the pixels are small enough.
     require_near(total / static_cast<Float>(samples), 0.6_f, 0.02);
+}
+
+TEST_CASE("a light sample with no density costs its weight, not the pixel", "[render][integrator]") {
+    const SolidColor albedo{Color(0.6_f, 0.6_f, 0.6_f)};
+    const Lambertian matte{&albedo};
+    const Quad surface = facing_camera(2.0_f, &matte);
+
+    HittableList world;
+    world.add(&surface);
+
+    // A target sphere enclosing the shading point, kept out of the world like the
+    // target above. From inside a sphere there is no cone to sample: the light half
+    // of the mixture draws a direction that is not a number, to which every density
+    // - cosine and light alike - assigns zero. Dividing by that zero once would turn
+    // the pixel's running sum into NaN for the rest of the render.
+    const Sphere enclosing{Point3(0, 0, 2), 0.5_f, nullptr};
+    ImportanceTargets targets;
+    targets.add(&enclosing);
+
+    const PathIntegrator integrator{world, no_media, targets, Color(1, 1, 1), 2};
+
+    Sampler sampler = make_sampler(126);
+    Float total{0};
+    constexpr int samples = 8192;
+
+    for (int i = 0; i < samples; ++i) {
+        total += integrator.radiance(forward, sampler).r();
+    }
+    const Float mean = total / static_cast<Float>(samples);
+
+    // Dropping those samples is still unbiased: the cosine half alone carries the
+    // estimate, each of its samples weighted by 1 / 0.5, so the mean stays the
+    // albedo. Half the samples are 1.2 and half are 0, which puts one standard
+    // deviation at 0.6 / sqrt(8192) = 0.0066; the tolerance is four and a half.
+    REQUIRE(std::isfinite(mean));
+    require_near(mean, 0.6_f, 0.03);
+}
+
+namespace {
+
+// The radiance a camera sees on a large lambertian ground lit by one small sphere
+// light, which is both in the world and an importance target. The light stands
+// two units from the shading point, sixty degrees off the normal, and subtends a
+// cone of half-angle asin(radius / 2).
+//
+// A sphere's form factor is exact, not a small-light approximation: the ground
+// receives E = pi * L * (r / h)^2 * cos(theta) as long as the whole light is above
+// its horizon, so the outgoing radiance is albedo * L * (r / h)^2 * cos(theta). The
+// light's radiance is set to make that exactly one half at every size.
+[[nodiscard]] Float lit_ground_radiance(Float distance_over_radius, std::uint64_t stream, int samples) {
+    constexpr Float distance = 2.0_f;
+    constexpr Float cos_theta = 0.5_f;
+    constexpr Float ground_albedo = 0.5_f;
+
+    const Float radius = distance / distance_over_radius;
+    const Float emitted = 0.5_f * distance_over_radius * distance_over_radius / (ground_albedo * cos_theta);
+
+    const SolidColor ground_colour{Color(ground_albedo, ground_albedo, ground_albedo)};
+    const SolidColor light_colour{Color(emitted, emitted, emitted)};
+    const Lambertian ground_material{&ground_colour};
+    const DiffuseLight lamp{&light_colour};
+
+    // The ground sphere of the classic scenes: its top sits at the origin, where the
+    // spawn margin is about five ten-thousandths of a unit - a sizeable fraction of
+    // the smallest light below.
+    const Sphere ground{Point3(0, -1000, 0), 1000.0_f, &ground_material};
+    const Sphere light{distance * Point3(0.8660254_f, cos_theta, 0), radius, &lamp};
+
+    HittableList world;
+    world.add(&ground);
+    world.add(&light);
+
+    ImportanceTargets targets;
+    targets.add(&light);
+
+    // Depth two: the ground, then the light or the black sky. A path that hits the
+    // ground again has shadowed itself and spends its budget there.
+    const PathIntegrator integrator{world, no_media, targets, Color(0, 0, 0), 2};
+    const Ray down{Point3(0, 3, 0), Vec3(0, -1, 0)};
+
+    Sampler sampler = make_sampler(stream);
+    double total = 0.0;
+    for (int i = 0; i < samples; ++i) {
+        total += pt_test::widen(integrator.radiance(down, sampler).r());
+    }
+    return pt_test::narrow(total / samples);
+}
+
+} // namespace
+
+TEST_CASE("a small tilted light is sampled from the point its rays leave", "[render][integrator]") {
+    // Every light-sampled direction aims inside the cone seen from the spawn origin
+    // and lands on the light, so half the samples come back at twice the answer and
+    // the cosine half almost never finds it: one standard deviation is
+    // 0.5 / sqrt(65536) = 0.002, and the tolerance of one percent is two and a half.
+    // A pdf evaluated from a different point than the ray left from misjudges the
+    // cone's edge, which the tilted light puts across the offset; its error grows
+    // as the light shrinks towards the size of the offset itself.
+    const Float distance_over_radius = GENERATE(3.0_f, 10.0_f, 30.0_f, 100.0_f, 300.0_f);
+    constexpr int samples = 65536;
+
+    const Float mean = lit_ground_radiance(distance_over_radius, 127, samples);
+
+    INFO("d/r " << distance_over_radius << ": mean radiance " << mean);
+    REQUIRE(std::isfinite(mean));
+    require_near(mean, 0.5_f, 0.005);
 }
