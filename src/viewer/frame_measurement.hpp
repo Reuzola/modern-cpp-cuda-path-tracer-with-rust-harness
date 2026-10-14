@@ -19,11 +19,12 @@ using FrameClock = std::chrono::steady_clock;
 }
 
 struct FrameTimes {
-    double frame_ms{};                // Whole loop iteration.
+    double frame_ms{};                // Whole loop iteration, without the frame cap's sleep: what a frame costs.
     double display_ms{};              // Tone map, byte conversion and texture upload.
     double present_ms{};              // Image and UI draw plus the buffer swap.
     bool new_image{};                 // A session image arrived this frame.
     std::optional<double> latency_ms; // Post-to-screen time of the edit this frame first shows.
+    FrameClock::time_point presented; // Right after the swap: intervals between these are what reaches the screen.
 };
 
 struct PhaseSummary {
@@ -36,6 +37,14 @@ struct PhaseSummary {
     double present_p50_ms{};
     std::optional<double> latency_p50_ms; // Empty in a phase that posted no edits.
     std::optional<double> latency_p95_ms;
+
+    // Presented to presented, sleep included: the loop's period, not its cost (frame_ms).
+    std::optional<double> frame_interval_p50_ms;
+
+    // Between consecutive new images: how often the picture changes. Empty below two images.
+    std::optional<double> image_interval_p50_ms;
+    std::optional<double> image_interval_p95_ms;
+    std::optional<double> images_per_second; // Over the span from the phase's first new image to its last.
 };
 
 class FrameMeasurement final {

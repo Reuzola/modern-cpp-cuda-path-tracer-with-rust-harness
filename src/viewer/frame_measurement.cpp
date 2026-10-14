@@ -1,6 +1,7 @@
 #include "viewer/frame_measurement.hpp"
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <iterator>
@@ -8,6 +9,7 @@
 #include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <ostream>
+#include <ratio>
 #include <span>
 #include <vector>
 
@@ -30,7 +32,7 @@ namespace {
 [[nodiscard]] PhaseSummary summarize(std::span<const FrameTimes> frames) {
     assert(!frames.empty());
 
-    const auto column = [&frames](double FrameTimes::* field) {
+    const auto column = [&frames](double FrameTimes::*field) {
         std::vector<double> out;
         out.reserve(frames.size());
 
@@ -68,6 +70,35 @@ namespace {
         summary.latency_p95_ms = percentile(latencies, 0.95);
     }
 
+    const auto ms_between = [](FrameClock::time_point from, FrameClock::time_point to) {
+        return std::chrono::duration<double, std::milli>(to - from).count();
+    };
+
+    std::vector<double> frame_intervals;
+    for (std::size_t i = 1; i < frames.size(); ++i) {
+        frame_intervals.push_back(ms_between(frames[i - 1].presented, frames[i].presented));
+    }
+    if (!frame_intervals.empty()) summary.frame_interval_p50_ms = percentile(frame_intervals, 0.5);
+
+    // Only within the phase: the interval into its first image straddles the phase change.
+    std::vector<double> image_intervals;
+    std::optional<FrameClock::time_point> first_image;
+    std::optional<FrameClock::time_point> last_image;
+    for (const FrameTimes& t : frames) {
+        if (!t.new_image) continue;
+        if (last_image) image_intervals.push_back(ms_between(*last_image, t.presented));
+        if (!first_image) first_image = t.presented;
+        last_image = t.presented;
+    }
+
+    if (!image_intervals.empty()) {
+        summary.image_interval_p50_ms = percentile(image_intervals, 0.5);
+        summary.image_interval_p95_ms = percentile(image_intervals, 0.95);
+
+        const double span_ms = ms_between(*first_image, *last_image);
+        if (span_ms > 0.0) summary.images_per_second = 1000.0 * static_cast<double>(image_intervals.size()) / span_ms;
+    }
+
     return summary;
 }
 
@@ -94,6 +125,20 @@ namespace {
     } else {
         j["latency_ms"] = nullptr;
     }
+
+    const auto optional = [](const std::optional<double>& value) {
+        return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+    };
+
+    j["frame_interval_ms_p50"] = optional(summary.frame_interval_p50_ms);
+
+    if (summary.image_interval_p50_ms && summary.image_interval_p95_ms) {
+        j["image_interval_ms"]["p50"] = *summary.image_interval_p50_ms;
+        j["image_interval_ms"]["p95"] = *summary.image_interval_p95_ms;
+    } else {
+        j["image_interval_ms"] = nullptr;
+    }
+    j["images_per_second"] = optional(summary.images_per_second);
 
     return j;
 }

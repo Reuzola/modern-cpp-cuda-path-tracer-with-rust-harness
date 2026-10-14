@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 #
-# Measures the interactive viewer's frame time and edit latency on a fixed scene
-# set and writes one NDJSON record per scene and thread count.
+# Measures the interactive viewer's frame time, edit latency and image rate on a
+# fixed scene set and writes one NDJSON record per scene and thread count.
+#
+# frame_ms is what one loop iteration costs; frame_interval_ms_p50 is the loop's
+# period. Neither is what the eye sees: since the session renders on its own
+# thread most frames repeat the last image. image_interval_ms and
+# images_per_second are how often the picture actually changes.
 #
 # The viewer opens a real window, so this needs a display and cannot run in CI.
 # Each run drives the camera itself and exits on its own; leave the window alone

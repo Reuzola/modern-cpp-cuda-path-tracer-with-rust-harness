@@ -20,6 +20,7 @@
 #include "viewer/frame_limiter.hpp"
 #include "viewer/frame_measurement.hpp"
 #include "viewer/gui.hpp"
+#include "viewer/rate_meter.hpp"
 #include "viewer/screenshot.hpp"
 #include "viewer/window.hpp"
 #include <algorithm>
@@ -30,6 +31,7 @@
 #include <exception>
 #include <iostream>
 #include <optional>
+#include <ratio>
 #include <variant>
 #include <vector>
 
@@ -133,6 +135,16 @@ int main(int argc, char** argv) {
         std::uint64_t latest_generation{};
         bool edit_pending{};
 
+        // A second: long enough to steady the number, short enough that it falls within a second of the image stopping.
+        constexpr auto rate_window = std::chrono::seconds(1);
+        pt::RateMeter image_meter(rate_window);
+        pt::RateMeter loop_meter(rate_window);
+
+        // Nothing posted, nothing waiting to be posted, target reached: the image on screen is final.
+        const auto converged = [&pacer, &edit_pending, &shown] {
+            return pacer.ready() && !edit_pending && shown.target_spp > 0 && shown.sample_count >= shown.target_spp;
+        };
+
         std::optional<pt::FrameMeasurement> measurement;
         if (opts.measure_images) measurement.emplace(*opts.measure_images);
 
@@ -211,11 +223,15 @@ int main(int argc, char** argv) {
             }
 
             const auto [fb_w, fb_h] = window.framebuffer_size();
+            const auto hud_time = pt::FrameClock::now();
             gui.draw_hud({
                 .sample_count = shown.sample_count,
                 .target_spp = controls.target_spp,
                 .accumulated_seconds = shown.elapsed_seconds,
                 .camera_position = controller.settings().lookfrom,
+                .image_rate = image_meter.rate(hud_time),
+                .loop_rate = loop_meter.rate(hud_time),
+                .converged = converged(),
             });
 
             // Safe to draw after the UI trashed GL state last frame: draw() rebinds everything it needs.
@@ -223,14 +239,19 @@ int main(int argc, char** argv) {
             display.draw(fb_w, fb_h);
             gui.end_frame();
             window.swap_buffers();
-            times.present_ms = pt::ms_since(present_start);
-            times.frame_ms = pt::ms_since(frame_start);
+
+            const auto presented = pt::FrameClock::now();
+            loop_meter.tick(presented);
+            if (new_image) image_meter.tick(presented);
+
+            times.present_ms = std::chrono::duration<double, std::milli>(presented - present_start).count();
+            times.frame_ms = std::chrono::duration<double, std::milli>(presented - frame_start).count();
             times.new_image = new_image;
+            times.presented = presented;
             if (new_image) times.latency_ms = pacer.displayed(shown.generation);
 
             if (measurement) {
-                const bool converged = pacer.ready() && !edit_pending && shown.target_spp > 0 && shown.sample_count >= shown.target_spp;
-                measurement->record(times, converged);
+                measurement->record(times, converged());
                 if (measurement->done()) {
                     // stdout carries the record and nothing else; logs go to stderr, so runs can be appended to one file.
                     // clang-format off

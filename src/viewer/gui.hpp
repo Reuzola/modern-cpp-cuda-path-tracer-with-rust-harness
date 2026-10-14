@@ -1,6 +1,8 @@
 #pragma once
 #include "pt/math/vec3.hpp"
 #include "viewer/controls.hpp"
+#include "viewer/rate_meter.hpp"
+#include <optional>
 
 namespace pt {
 
@@ -16,6 +18,9 @@ struct HudStats {
     int target_spp{};
     double accumulated_seconds{};
     Point3 camera_position{};
+    std::optional<Rate> image_rate; // Frames that brought a new image: what moves on screen.
+    std::optional<Rate> loop_rate;  // Every presented frame, most of which repeat the last image.
+    bool converged{};               // No edit pending and the target reached: no new image is coming.
 };
 
 // Gui must be destroyed before Window (its backends hold the GLFW window and an active OpenGL context).

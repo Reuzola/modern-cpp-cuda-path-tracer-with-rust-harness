@@ -136,10 +136,19 @@ void Gui::draw_hud(const HudStats& stats) const noexcept {
     if (ImGui::Begin("##hud", nullptr, flags)) {
         ImGui::Text("%d / %d spp", stats.sample_count, stats.target_spp);
 
-        const ImGuiIO& io = ImGui::GetIO();
-        const double frame_time = static_cast<double>(1000.0F / io.Framerate);
-        const double fps = static_cast<double>(io.Framerate);
-        ImGui::Text("%.1f ms/frame (%.1f fps)", frame_time, fps);
+        // Not io.Framerate: since the session renders on its own thread, the loop redraws
+        // one image many times, and its rate says nothing about how often the image changes.
+        if (stats.converged) {
+            ImGui::Text("Image: converged");
+        } else if (stats.image_rate) {
+            ImGui::Text("Image: %.1f fps (%.0f ms)", stats.image_rate->per_second, stats.image_rate->interval_ms);
+        } else {
+            ImGui::Text("Image: -");
+        }
+
+        if (stats.loop_rate) {
+            ImGui::Text("UI loop: %.0f fps (%.1f ms)", stats.loop_rate->per_second, stats.loop_rate->interval_ms);
+        }
 
         ImGui::Text("Accumulated: %.2f s", stats.accumulated_seconds);
 
