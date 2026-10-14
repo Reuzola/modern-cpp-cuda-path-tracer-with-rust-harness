@@ -391,25 +391,25 @@ scalar type, and the ray origin offset together with the widened slab test — s
 a timing difference cannot be attributed to either one alone. The counters can
 be attributed, and were.
 
-**Three scenes now trace paths roughly three times as long.** `area_lights`,
-`perlin_spheres` and `random_spheres` moved from 1.59, 2.27 and 2.67 ray
-queries per primary ray to 4.96, 6.67 and 7.67. That was isolated by building
-the commit before the robustness work with the current scalar type and counting
-again on the same scenes: it reproduced the old ratios to three digits — 1.60,
-2.29, 2.70 — which leaves the robustness work as the whole of the difference
-and the scalar type as none of it. The direction is the useful part. Paths that
-used to end early now continue, and the same change made the affected images
-brighter, so the earlier numbers were counting rays that should never have been
-lost. These three are the whole of the set that scatters off a sphere of radius 1000,
-and a surface that large is where a fixed epsilon along `t` stops being an
-offset at all. The only larger sphere in the set bounds a participating medium
-rather than scattering, and its scene did not move.
+**Three scenes traced paths roughly three times as long — because of a
+defect.** `area_lights`, `perlin_spheres` and `random_spheres` moved from 1.59,
+2.27 and 2.67 ray queries per primary ray to 4.96, 6.67 and 7.67. Building the
+commit before the robustness work with the current scalar type reproduced the
+old ratios to three digits — 1.60, 2.29, 2.70 — which pinned the difference on
+the robustness work and cleared the scalar type. It was read at the time as
+paths that used to end early now continuing. That reading was wrong: removing
+the epsilon along `t` exposed a self-intersection on the radius-1000 sphere
+these three scenes share, and the extra queries were paths trapped inside it.
+These three are the whole of the set that scatters off a sphere that large; the
+only larger sphere bounds a participating medium rather than scattering, and its
+scene did not move. The defect and its correction are in
+[Self-intersection on the large sphere](#self-intersection-on-the-large-sphere).
 
-Two consequences are easy to misread. Their *ratios* per ray query fell —
-`random_spheres` from 26.2 to 10.5 node tests per query — purely because the
-denominator grew; its absolute test count rose by about 15%, and the tree did
-not improve. And their render times grew with the extra work rather than with
-any loss of speed.
+The ratio per ray query fell for the same reason — `random_spheres` from 26.2 to
+10.5 node tests per query. A path trapped inside the sphere sees almost none of
+the tree, so it adds queries and few tests. Neither the tree nor the traversal
+changed, and the render times of these three rows measure the defect, not the
+renderer.
 
 **The other ten scenes count what they counted before.** Every one of them is
 within 0.6% of its previous ray query total, which is the last-bit drift
@@ -429,6 +429,79 @@ This is an observation rather than a result. The earlier timings were taken on
 the same machine in an unrecorded load state, which is exactly the comparison
 this document's own rules call invalid; the counters are what carry weight
 here, and they say the work did not change in these scenes.
+
+## Self-intersection on the large sphere
+
+Measured on 2026-10-14 at revision `a6ae8fb1a730`, on the machine above, from
+the `release-stats` build: counters only. The timing tables in this file were
+not remeasured.
+
+### The defect
+
+The offset that moves a spawned ray off its surface scales with the hit
+point's coordinates. On a sphere the error it has to clear scales with the
+radius instead: both the hit point, computed as `origin + t * direction`, and
+the next query's test of the sign of `|oc|² − r²` err by a distance proportional
+to the radius. Near the world origin on the radius-1000 ground sphere the
+offset was about a tenth of what was needed, and the sign of that test was left
+to rounding. Where it came out negative, a bounce was taken to start inside the
+sphere, met the surface it had just left from behind, and stayed inside until
+its depth ran out. Which points did so followed the rounding of x² and z², which
+drew concentric rings and an axis-aligned grid on the ground — visible once
+multithreading made high sample counts cheap, and baked into the golden
+references until they were regenerated.
+
+The correction has four parts:
+
+- A sphere hit is reprojected onto the surface, and every hit record carries a
+  spawn margin: a world-space distance, proportional to the radius for a
+  sphere, cleared before the ulp offset is applied.
+- Planar primitives rebuild their hit points from their own data — barycentric
+  for triangles, parametric for quads. Triangles reject hits closer than their
+  own rounding; quads, and instances for the rounding of their transform, carry
+  a margin sized to the arithmetic of their own tests.
+- A light's density is evaluated from the point its ray leaves, and a direction
+  drawn with zero density ends the path instead of dividing by zero.
+- A sphere light's cone is computed without cancellation, so a small or distant
+  light is neither mis-weighted nor missed by the directions sampled towards it.
+
+The last two change the image wherever lights are sampled; the first two change
+every scene's hit points by a rounding.
+
+### Counters after the correction
+
+Ray queries per primary ray, on one thread, at three revisions: before the
+robustness work with `Float = float`, immediately before the correction, and
+after it.
+
+| Scene | Before robustness | Before correction | After correction | Change |
+|---|---|---|---|---|
+| `area_lights` | 1.597 | 4.962 | 1.590 | ÷3.12 |
+| `perlin_spheres` | 2.288 | 6.674 | 2.274 | ÷2.94 |
+| `random_spheres` | 2.707 | 7.670 | 2.672 | ÷2.87 |
+
+The three scenes return to within 1.3% of the figures taken before the
+robustness work, which is what identifies the threefold rise as the defect.
+`random_spheres` is back at 26.2 node tests per query.
+
+Elsewhere ray queries move by up to 1.3% in either direction, since the
+correction also moves hit points and changes light sampling. The one larger
+movement is `gilded_orrery`, with 4.8% fewer ray queries; it is the only scene
+combining instanced meshes with a medium, and the cause was not isolated. The
+counters remain identical on one thread and sixteen, and
+`benchmarks/counter-baseline.ndjson` was refreshed with this change.
+
+### What was not remeasured
+
+Timings. Single runs of the instrumented build, which by this document's own
+rules are not timings, put `area_lights` at 6.7 s against 33.6 s before the
+correction, `perlin_spheres` at 7.7 s against 30.7 s and `random_spheres` at
+9.1 s against 16.4 s. Until the set is remeasured, the rows for these three
+scenes in [Timing and throughput](#timing-and-throughput),
+[Tree and traversal](#tree-and-traversal) and
+[Sixteen threads](#sixteen-threads) describe the defective workload, and the
+tile size chosen in [Tile size](#tile-size) was not re-derived with them
+corrected. The viewer measurement used none of the three and stands.
 
 ## Scaling across threads
 
