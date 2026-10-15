@@ -27,6 +27,7 @@ onwards; their figures are not comparable with these.
 | Compiler | Clang 18.1.3 |
 | Scalar type | `float` |
 | Frequency | `intel_pstate`, `powersave` governor, turbo on, SMT on |
+| Power limit | PL1 = PL2 = 150 W, set in firmware |
 
 This set was measured from a terminal in the desktop session, on an otherwise
 idle machine with nothing else open. That is a condition of the measurement,
@@ -392,9 +393,13 @@ scaled by 8.9. That comparison is not paired and the code changed in between,
 but its direction is consistent: of the nine scenes whose workload moved by
 less than two percent, one-thread times moved by a few percent either way,
 while eight of the nine are 4–23% slower on sixteen threads. A difference that
-appears only when every core is busy points at the clock the cores hold under
-full load, which is set by the frequency policy rather than by the renderer.
-The cause was not investigated.
+appears only when every core is busy comes from the power limit, not from the
+operating system. The WSL2 set ran under the factory limits, 125 W sustained
+and 250 W for up to 56 seconds, and its sixteen-thread runs — a few seconds
+each, with idle gaps between them — stayed inside the short-term budget at
+about 4.6 GHz. This set runs with both limits at 150 W, so that a run's speed
+does not depend on how long it lasts or on what ran before it; under full load
+the cores hold about 3.9 GHz at 143 W and 70 °C, measured with `turbostat`.
 
 ### Reading the tables
 
