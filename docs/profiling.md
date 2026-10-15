@@ -14,29 +14,24 @@ rather than adding to them.
 `perf` and a flame graph renderer, neither of which the build needs — they are
 developer tools, installed per machine.
 
-### perf under WSL2
-
-WSL2 runs a Microsoft kernel that Ubuntu has no matching `perf` package for, so
-the wrapper in `linux-tools-common` cannot find a binary for `uname -r`:
+### perf
 
 ```bash
-sudo apt install -y linux-tools-common linux-tools-generic
-ls /usr/lib/linux-tools/          # e.g. 6.8.0-138-generic
-sudo ln -s /usr/lib/linux-tools/6.8.0-138-generic /usr/lib/linux-tools/$(uname -r)
+sudo apt install -y linux-tools-common "linux-tools-$(uname -r)"
+sudo sysctl kernel.perf_event_paranoid=2
 ```
 
-The symlink points the wrapper at Ubuntu's 6.8 binary while the kernel is 6.6.
-The skew is real and is accepted deliberately: it affects kernel-side features,
-not the user-space sampling this document relies on. Building `perf` from the
-WSL2 kernel source removes the skew and is the fallback if a `perf` subcommand
-ever misbehaves.
+The package built for the running kernel provides `perf`; nothing else is
+needed for user-space sampling.
 
-`kernel.perf_event_paranoid` is left at its default of 2. That level permits
-profiling one's own user-space processes and forbids resolving kernel symbols,
-which is the right trade here: the workload is pure computation, and lowering a
-system-wide security setting to label a few percent of frames is not worth it.
-The consequence is visible in the output — kernel time appears as unresolved
-addresses rather than named frames.
+Ubuntu's kernel adds a level 4 to `kernel.perf_event_paranoid` and ships with
+it: no unprivileged process may open a performance event at all, so `perf
+record` fails outright. Level 2, the upstream default, permits profiling one's
+own user-space processes and forbids resolving kernel symbols, which is what
+these profiles need — the workload is pure computation, and kernel time
+appears as unresolved addresses rather than named frames. It is lowered for
+the session rather than in `/etc/sysctl.d`, so it returns to 4 at the next
+boot: a system-wide security setting stays relaxed only while it is in use.
 
 ### The flame graph renderer
 
@@ -51,7 +46,7 @@ Perl scripts, and the toolchain to build it is already required by
 `rust-toolchain.toml` pin will be applied to a tool that has nothing to do with
 that crate.
 
-Recorded with: `perf` 6.8.12, `inferno` 0.12.8.
+Recorded with: `perf` 7.0.14, `inferno` 0.12.8.
 
 ### What is sampled
 
@@ -60,7 +55,7 @@ round 1000 so that sampling cannot phase-lock with kernel timers and resample
 the same point in a periodic loop.
 
 Hardware counters are available on this host — `cycles`, `instructions` and
-`cache-misses` all return figures under WSL2 — but they are not what these
+`cache-misses` all return figures — but they are not what these
 profiles use. The question here is where wall time goes. Counting cycles
 answers a different question and belongs with the work that asks it.
 
@@ -90,8 +85,8 @@ explanation of these numbers.
 
 ### What the extra flags cost
 
-Measured on three scenes at their benchmark settings, three runs each, minimum
-reported:
+Measured under WSL2 with `Float = double`, before the current baseline, on
+three scenes at their benchmark settings, three runs each, minimum reported:
 
 | Scene | `release` | `release-profiling` | Change |
 |---|---|---|---|
@@ -111,7 +106,7 @@ it appears in [benchmarks.md](benchmarks.md).
 ```bash
 cmake --preset release-profiling
 cmake --build --preset release-profiling
-scripts/profile.sh
+taskset -c 2 scripts/profile.sh
 ```
 
 The workload is `benchmarks/manifest.txt`, unchanged. A profile taken at a
@@ -119,14 +114,16 @@ different resolution or sample count cannot explain a timing taken at these
 ones. A single scene, or several:
 
 ```bash
-scripts/profile.sh gilded_orrery cornell_smoke
+taskset -c 2 scripts/profile.sh gilded_orrery cornell_smoke
 ```
 
-Profiles run on one thread unless `--threads` says otherwise. A single-threaded
-profile shows the render loop itself. On more threads `perf` folds every worker
-into the same graph, and the pool's scheduling and waiting frames appear beside
-the work. The output names do not carry the thread count, so a profile taken
-at another one belongs in its own directory:
+Profiles run on one thread unless `--threads` says otherwise, pinned to the
+same core as a one-thread timing for the reason given in
+[benchmarks.md](benchmarks.md#method). A single-threaded profile shows the
+render loop itself. On more threads `perf` folds every worker into the same
+graph, and the pool's scheduling and waiting frames appear beside the work. The
+output names do not carry the thread count, so a profile taken at another one
+belongs in its own directory:
 
 ```bash
 scripts/profile.sh --threads 16 --out out/profiles-16t argent_weave
@@ -178,35 +175,40 @@ trusting a single one.
 
 ## The recorded distribution
 
-Taken 2026-08-31 on the reference machine described in
-[benchmarks.md](benchmarks.md): i7-11700K, Clang 18.1.3, `Float = double`,
-single threaded, one render per scene at manifest settings, roughly ten thousand
-samples each.
+Taken 2026-10-15 on the reference machine described in
+[benchmarks.md](benchmarks.md): i7-11700K, native Linux, Clang 18.1.3,
+`Float = float`, from the source the baseline there was measured at. One
+thread pinned to logical CPU 2, one render per scene at manifest settings,
+between 5,700 and 13,600 samples each, on an otherwise idle machine. It
+replaces a distribution taken under WSL2 with `Float = double`, before the
+intersection arithmetic was made robust; that one is in the file's history.
 
-`argent_weave` was added on 2026-09-01, same machine and same method. The
-profile covers the whole process, so scene loading and tree construction sit
-inside it. For every other scene that is noise; for this one it is not —
-`BvhBuilder::build_recursive` is 3.5% of its profile and the OBJ parser
-another 1.5%, against a timed record that keeps construction outside the
-measurement entirely.
+The profile covers the whole process, so scene loading and tree construction
+sit inside it. For every scene but `argent_weave` that is noise; there
+`BvhBuilder::build_recursive` is 2.9% of the profile and the OBJ parser about
+1%, against a timed record that keeps construction outside the measurement
+entirely.
 
 Heaviest three entries per scene, by self time:
 
 | Scene | | | |
 |---|---|---|---|
-| `argent_weave` | `Bvh::hit` 73.8% | `MeshTriangle::hit` 6.8% | `intersect_triangle` 6.2% |
-| `random_spheres` | `Bvh::hit` 65.4% | `Sphere::intersect` 9.8% | `acos` 3.4% |
-| `neon_cathedral` | `Bvh::hit` 64.1% | `Quad::intersect` 13.2% | `Sphere::intersect` 3.2% |
-| `mesh_showcase` | `Bvh::hit` 59.7% | `intersect_triangle` 8.7% | `MeshTriangle::hit` 4.3% |
-| `gilded_orrery` | `Bvh::hit` 58.2% | `Quad::intersect` 17.5% | `HittableList::hit` 3.6% |
-| `quads` | `Bvh::hit` 51.1% | `Lambertian::scatter` 10.2% | `cos` 7.6% |
-| `cornell_box` | `Bvh::hit` 45.2% | `Quad::intersect` 10.0% | `Lambertian::scatter` 6.9% |
-| `showcase` | `Bvh::hit` 41.4% | `Sphere::intersect` 16.3% | `atan2` 9.8% |
-| `checkered_spheres` | `Bvh::hit` 30.9% | `Sphere::intersect` 15.6% | `Lambertian::scatter` 8.3% |
-| `area_lights` | `Bvh::hit` 29.6% | `Perlin::noise` 21.2% | `Sphere::intersect` 9.2% |
-| `earth` | `Bvh::hit` 29.1% | `Sphere::intersect` 16.6% | `Renderer::render` 9.8% |
-| `cornell_smoke` | `Quad::intersect` 42.9% | `Bvh::hit` 23.0% | `HittableList::hit` 6.1% |
-| `perlin_spheres` | `Perlin::noise` 24.8% | `Bvh::hit` 20.8% | `Sphere::intersect` 10.4% |
+| `argent_weave` | `Bvh::hit` 80.4% | `MeshTriangle::hit` 4.7% | `intersect_triangle` 4.3% |
+| `neon_cathedral` | `Bvh::hit` 68.3% | `Quad::find_hit` 9.8% | `Sphere::hit` 3.3% |
+| `gilded_orrery` | `Bvh::hit` 68.0% | `Quad::find_hit` 12.1% | `Quad::hit` 3.1% |
+| `random_spheres` | `Bvh::hit` 67.7% | `Sphere::hit` 14.0% | `acosf` 2.9% |
+| `mesh_showcase` | `Bvh::hit` 48.7% | `intersect_triangle` 10.2% | `Instance::hit` 5.5% |
+| `quads` | `Bvh::hit` 43.5% | `Lambertian::scatter` 11.9% | render loop 10.4% |
+| `cornell_box` | `Bvh::hit` 41.7% | `Quad::find_hit` 9.3% | `Sphere::hit` 8.2% |
+| `showcase` | `Bvh::hit` 41.6% | `Sphere::hit` 22.0% | `acosf` 9.8% |
+| `checkered_spheres` | `Sphere::hit` 28.9% | `Bvh::hit` 21.8% | `CosinePdf::value` 8.3% |
+| `earth` | `Sphere::hit` 27.9% | `Bvh::hit` 19.4% | render loop 10.9% |
+| `area_lights` | `Perlin::noise` 25.1% | `Sphere::hit` 18.7% | `Bvh::hit` 17.6% |
+| `cornell_smoke` | `Quad::find_hit` 41.5% | `Bvh::hit` 17.5% | `Quad::hit` 9.6% |
+| `perlin_spheres` | `Perlin::noise` 28.2% | `Sphere::hit` 19.1% | `Bvh::hit` 12.7% |
+
+The render loop is described under
+[Shading is not always the small half](#shading-is-not-always-the-small-half).
 
 ![argent_weave](profiles/argent_weave.svg)
 
@@ -218,88 +220,107 @@ Six flame graphs are kept in `profiles/`, one per regime the set contains:
 
 ### The slab test is the hottest code in the engine
 
-Source lines inside `Bvh::hit` for `gilded_orrery`:
+Source lines of `aabb.hpp`, the slab test inlined into `Bvh::hit`, as a share
+of the whole run:
 
-| Line | | Share |
-|---|---|---|
-| `aabb.hpp:73` | narrow `ray_t.max` | 16.7% |
-| `aabb.hpp:62` | `t_near` from the reciprocal | 9.0% |
-| `aabb.hpp:71` | swap on the sign of the reciprocal | 6.9% |
-| `aabb.hpp:75` | empty-interval rejection | 5.1% |
-| `aabb.hpp` | unattributed | 1.4% |
+| Line | | `gilded_orrery` | `argent_weave` |
+|---|---|---|---|
+| `aabb.hpp:84` | narrow `ray_t.max` | 14.0% | 15.1% |
+| `aabb.hpp:75` | swap on the sign of the reciprocal | 11.8% | 11.8% |
+| `aabb.hpp:67` | `t_far` from the reciprocal | 5.2% | 11.6% |
+| `aabb.hpp:88` | empty-interval rejection | 5.1% | 5.1% |
+| `aabb.hpp:66` | `t_near` from the reciprocal | 4.3% | 5.1% |
+| `aabb.hpp:83` | narrow `ray_t.min` | 2.0% | 1.8% |
+| `aabb.hpp:82` | widen `t_far` | 1.2% | below 1% |
+| `aabb.hpp` | unattributed | 10.7% | 11.9% |
 
-`Aabb::intersect` accounts for 39% of the scene's total time — around two thirds
-of what `Bvh::hit` is credited with. Its neighbour `aabb.hpp:72`, which narrows
-`ray_t.min` with the same shape of code, does not appear above the 0.5%
-threshold at all. The asymmetry is unexplained and worth a look before that loop
-is rewritten.
+The slab test is 54% of `gilded_orrery` and 62% of `argent_weave`, against 39%
+and 51% in the previous distribution. The scenes do not test more boxes than
+they did — the traversal counters did not move — but each test costs more: the
+exit distance is now widened by `1 + 2γ₃` to keep the test conservative, which
+adds a multiply to the chain every box test waits on.
 
-Source lines inside `Bvh::hit` for `argent_weave`:
+Lines 83 and 84 have the same shape and differ seven- to eightfold. The
+asymmetry predates the widening — the previous distribution showed it on the
+same two statements — so the widening does not explain it, though it lengthens
+the chain line 84 waits on. A sampling profile charges a stall to the
+instruction that is waiting when the sample is taken, not to the one that will
+produce the value, and which source line that is follows from how the compiler
+scheduled the loop. That reading is a hypothesis; confirming it needs the
+disassembly or hardware counters rather than a time profile.
 
-| Line | | Share |
-|---|---|---|
-| `aabb.hpp:62` | `t_near` from the reciprocal | 20.5% |
-| `aabb.hpp:73` | narrow `ray_t.max` | 17.1% |
-| `aabb.hpp:71` | swap on the sign of the reciprocal | 8.0% |
-| `aabb.hpp:75` | empty-interval rejection | 4.7% | 
-| `aabb.hpp` | unattributed | 1.1% |
+### Most traversal happens one tree down
 
-The slab test takes 51.4% of this scene, and the two heaviest lines have
-swapped places against the scene above. Line attribution under `-O3` is
-approximate enough that the swap is not worth explaining, but the total is
-not: half of one render is four lines of one header.
-
-`aabb.hpp:72` is again below the 0.5% threshold, on a different scene with a
-different tree and a different ray distribution. Whatever hides it is a
-property of the code rather than of one workload.
-
-### Nested traversal is a quarter of the largest scene
-
-`gilded_orrery` builds fifteen trees, and `Bvh::hit` calling itself accounts for
-23.9% of the run: descending into a mesh leaf starts a fresh traversal of a
-separate tree, with its own root test and its own stack.
+`gilded_orrery` builds seventeen trees and `argent_weave` seven. In both, the
+geometry that matters sits in a tree below the scene's own: a mesh or an
+instance is one leaf of the top-level tree, and reaching its triangles starts a
+fresh traversal of a separate tree, with its own root test and its own stack.
+Samples taken with `Bvh::hit` on the stack twice or more — inside a tree
+entered from another tree's leaf — are 58.6% of `gilded_orrery` and 84.4% of
+`argent_weave`. The previous distribution reported 23.9% for `gilded_orrery`
+under a different definition; the two figures are not comparable.
 
 ### Two indirections show up on their own lines
 
 Two lines outside the slab test are worth naming, both in `argent_weave`,
 because both are dispatch rather than arithmetic.
 
-`bvh.cpp:362` carries 5.1%. It is the `prim->hit()` call inside `hit_leaf`:
+`bvh.cpp:363` carries 3.7%. It is the `prim->hit()` call inside `hit_leaf`:
 a virtual call through a `const Hittable*`, issued once per primitive the
 traversal reaches. The leaves of this scene hold roughly one primitive each,
 so that is one indirect call per leaf visited.
 
-`mesh.hpp:82` carries 4.0%, one line of `Mesh::triangle`, which reads a
-vertex position through the index buffer. A triangle is a `(Mesh*, index)`
-handle, so fetching its three corners is two dependent loads per corner into
-two separate arrays.
+`mesh.hpp:82` carries 2.5%, one line of `Mesh::triangle`, which reads a vertex
+position through the index buffer. A triangle is a `(Mesh*, index)` handle, so
+fetching its three corners is two dependent loads per corner into two separate
+arrays.
+
+Both carry a smaller share than in the previous distribution, 5.1% and 4.0%,
+because the slab test around them grew; the work they do did not change.
 
 ### The volumetric scene barely touches its tree
 
-`cornell_smoke` spends 42.9% of its time in `Quad::intersect` while holding an
-eleven-node tree. `ConstantMedium::sample_interaction` issues two unbounded
-`hit` calls against its boundary per ray segment, the boundary is a box of six
-quads behind a list, and the integrator tests every medium in the scene on every
-segment regardless of where the ray goes.
+`cornell_smoke` spends 41.5% of its time in `Quad::find_hit`, and 9.6% more in
+`Quad::hit`, while holding an eleven-node tree.
+`ConstantMedium::sample_interaction` issues two unbounded `hit` calls against
+its boundary per ray segment, the boundary is a box of six quads behind a list,
+and the integrator tests every medium in the scene on every segment regardless
+of where the ray goes.
 
 ### Transcendental functions are a visible fraction
 
-`showcase` spends 9.8% in `atan2` and 7.7% in `acos`; `checkered_spheres` spends
-roughly 24% across `acos`, `atan2`, `sin` and `cos`. The sources are
-`get_sphere_uv`, which calls `atan2` and `acos` on every sphere hit, and cosine
-sampling, which calls `sin` and `cos` on every diffuse bounce.
+`showcase` spends 16.5% in `acosf`, `atanf` and `atan2f`; `checkered_spheres`
+15.5% across those and `sinf` and `cosf`; `earth` 14.1%. The sources are
+`get_sphere_uv`, which calls `atan2f` and `acosf` on every sphere hit — `atanf`
+is the core `atan2f` calls into — and cosine sampling, which calls `sinf` and
+`cosf` on every diffuse bounce. `acosf` alone is the largest of them in every
+scene that uses it.
+
+These run in glibc, which picks an implementation at run time for the CPU it
+finds. On this machine `sinf` and `cosf` resolve to variants that use fused
+multiply-add, although the renderer itself is built for a baseline without it.
+Results that pass through these functions are therefore the same on two
+machines only if both select the same variant, and the counter gate's
+agreement between this machine and the CI runner rests on that as well as on
+the shared compiler and library.
 
 ### Shading is not always the small half
 
-`Perlin::noise` alone is 24.8% of `perlin_spheres` and 21.2% of `area_lights` —
-more than traversal in both. `Renderer::render` carries 3-10% of self time
-across the set, which is the inlined per-sample setup: constructing a `Sampler`,
-generating the ray, and accumulating the result.
+`Perlin::noise` alone is 28.2% of `perlin_spheres` and 25.1% of `area_lights`
+— more than traversal in both.
+
+The render loop is the task `parallel_for` runs for a pass, with the per-sample
+setup inlined into it: constructing a `Sampler`, generating the ray,
+accumulating the result. It carries up to 10.9% of self time, on `earth` and
+`quads`, where a sample costs least, and less than one percent where traversal
+dominates. It is reported under a `std::function` symbol because the task is
+type-erased, but that call happens once per participating thread and pass, not
+once per sample.
 
 ### One scene now carries the traversal case
 
-`argent_weave` was authored for this. It puts `Bvh::hit` at 73.8% and the
-slab test alone above half the run, on a single tree of 2.3M nodes — see
+`argent_weave` was authored for this. It puts `Bvh::hit` at 80.4% and the slab
+test alone above three fifths of the run, on a single tree of 2.3M nodes — see
 [benchmarks.md](benchmarks.md) for its counters.
 
 The rest of the set has not changed shape. Three of the other twelve scenes
@@ -322,7 +343,9 @@ will be aimed at.
   and memory bandwidth.
 - A different machine. Only the reference machine is profiled.
 - A busy machine. A sampling profile is a distribution, so interference shifts
-  it rather than adding an obvious outlier the way a timing does.
+  it rather than adding an obvious outlier the way a timing does. Light desktop
+  load moved no entry of the recorded set by more than 1.3 points; heavier load
+  was not measured.
 - A re-framed camera on argent_weave. Its cost per ray query depends on
   how much of the frame the geometry covers, which is stated in
   [benchmarks.md](benchmarks.md).
