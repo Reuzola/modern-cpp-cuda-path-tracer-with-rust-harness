@@ -6,9 +6,10 @@
 namespace pt {
 
 // Caps the loop at a frame rate by sleeping out the rest of each frame's budget.
-// Vsync would do this, but swap intervals are not honoured everywhere (WSLg among
-// them), and an uncapped loop spends a core - and the GL driver's threads - on
-// frames no display can show, taking that time from the render threads.
+// It replaces vsync and never runs alongside it: two clocks pacing one loop at
+// nearly the same period drift in and out of phase, and frames are presented
+// unevenly. Meant for displays whose swap interval is not honoured, and for
+// measuring what a frame costs without the wait for the display folded into it.
 class FrameLimiter final {
 public:
     explicit FrameLimiter(int max_fps)

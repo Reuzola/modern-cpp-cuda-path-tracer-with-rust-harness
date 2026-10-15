@@ -19,7 +19,10 @@ using FrameClock = std::chrono::steady_clock;
 }
 
 struct FrameTimes {
-    double frame_ms{};                // Whole loop iteration, without the frame cap's sleep: what a frame costs.
+    // Whole loop iteration without the timer's sleep.
+    // Under vsync it also holds the wait for the display, wherever the driver blocks.
+    double frame_ms{};
+
     double display_ms{};              // Tone map, byte conversion and texture upload.
     double present_ms{};              // Image and UI draw plus the buffer swap.
     bool new_image{};                 // A session image arrived this frame.

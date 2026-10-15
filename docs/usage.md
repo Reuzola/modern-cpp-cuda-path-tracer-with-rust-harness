@@ -86,7 +86,7 @@ taken months apart can be concatenated. The fields are specified in
 | `-d`, `--max-depth` | from the scene | Maximum bounces along a path. |
 | `-S`, `--seed` | from the scene | Base seed for sampling. |
 | `-t`, `--threads` | every hardware thread but one | Threads that render. The window's own thread is not counted. `-1` gives the default. |
-| `-f`, `--max-fps` | the display's refresh rate | Frame rate cap. `0` removes it. |
+| `-f`, `--max-fps` | vsync | Pace frames with a timer at this rate instead of vsync. `0` removes pacing altogether. |
 | `-u`, `--ui-scale` | the platform's content scale | XWayland reports 1.0 regardless of DPI. |
 | `-l`, `--log-level` | `info` | `info`, `warning`, `error` or `off`. |
 | `-m`, `--measure-images` | off | Scripted measurement run. See below. |
@@ -111,11 +111,12 @@ The default leaves one hardware thread to the window and the GL driver. On the
 reference machine that halves the frame-time spikes at no measurable cost in
 render speed; see [benchmarks.md](benchmarks.md#default-thread-count).
 
-The frame rate is capped because vsync is not honoured everywhere, and a loop
-without it draws frames no display can show, taking that time from the render.
-The cap follows the refresh rate the platform reports. WSLg reports 60 Hz
-whatever the monitor, so a faster display needs `--max-fps` set to its own
-rate.
+Frames are paced by vsync: the loop waits for the display the window is on, at
+whatever rate that display runs. `--max-fps` replaces it with a timer, for a
+platform that does not honour the swap interval; `--max-fps 0` removes pacing
+altogether, at the price of tearing and a busy core. The two are never
+combined. A timer running beside vsync at nearly the same period drifts in and
+out of phase with it, and frames reach the screen unevenly.
 
 | | |
 |---|---|

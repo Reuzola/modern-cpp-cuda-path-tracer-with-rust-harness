@@ -103,9 +103,11 @@ int main(int argc, char** argv) {
         pt::Scene scene(pt::load_scene(opts.scene));
         pt::apply_overrides(scene, opts);
 
+        // One pacer, never two: a timer cap replaces vsync rather than running beside it.
+        const bool vsync = !opts.max_fps.has_value();
         const int img_w = scene.render.image_width;
         const int img_h = scene.render.image_height;
-        pt::Window window(img_w, img_h, "pathtracer viewer");
+        pt::Window window(img_w, img_h, "pathtracer viewer", vsync ? pt::Vsync::on : pt::Vsync::off);
         pt::Display display(img_w, img_h);
 
         // Platform scale is the default; XWayland reports 1.0 regardless of DPI, hence the override.
@@ -148,16 +150,13 @@ int main(int argc, char** argv) {
         std::optional<pt::FrameMeasurement> measurement;
         if (opts.measure_images) measurement.emplace(*opts.measure_images);
 
-        const int refresh = window.refresh_rate();
-
-        // 60 when the platform reports no rate: a guess, but a busy loop is the worse default.
-        const int max_fps = opts.max_fps.value_or(refresh > 0 ? refresh : 60);
-        pt::FrameLimiter limiter(max_fps);
-
-        if (max_fps > 0)
-            pt::log_info("Frame cap: {} fps", max_fps);
+        pt::FrameLimiter limiter(opts.max_fps.value_or(0));
+        if (vsync)
+            pt::log_info("Frame pacing: vsync");
+        else if (*opts.max_fps > 0)
+            pt::log_info("Frame pacing: {} fps timer, vsync off", *opts.max_fps);
         else
-            pt::log_info("Frame rate: uncapped");
+            pt::log_info("Frame pacing: none");
 
         auto last_time = std::chrono::steady_clock::now();
         bool looking{};
@@ -269,7 +268,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Outside the measured span: frame_ms is what a frame costs; the cap only spaces frames out.
+            // Outside the measured span, so the timer's sleep never counts as frame time.
             limiter.wait();
         }
 
