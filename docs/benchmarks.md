@@ -695,29 +695,57 @@ this cost, and a smaller tile should not be chosen without measuring it again.
 
 ## The interactive viewer
 
-Two builds were measured with `scripts/measure-viewer.sh`: a synchronous viewer and an asynchronous one. Each scene (`quads`, `cornell_box`, `gilded_orrery`, `argent_weave`) renders at its own resolution and sample count. The viewer drives its own camera with a fixed yaw step per edit, so every run renders the same sequence of views. Moving and still phases are never compared with each other, only configurations within one phase.
+Two builds were measured with `scripts/measure-viewer.sh`: a synchronous viewer
+and an asynchronous one. Each scene (`quads`, `cornell_box`, `gilded_orrery`,
+`argent_weave`) renders at its own resolution and sample count. The viewer
+drives its own camera with a fixed yaw step per edit, so every run renders the
+same sequence of views. Moving and still phases are never compared with each
+other, only configurations within one phase.
 
-Three metrics are used: frame time (one window-loop iteration, excluding the frame cap's sleep), latency (from posting a camera change to the first buffer swap showing it), and time per pass (still-phase wall time over completed passes).
+Three metrics are used: frame time (one window-loop iteration, excluding the
+frame cap's sleep), latency (from posting a camera change to the first buffer
+swap showing it), and time per pass (still-phase wall time over completed
+passes).
 
-OpenGL here is Mesa's software rasteriser (`llvmpipe`) under WSLg, so drawing and uploading are CPU work on the same cores as the renderer, and WSLg ignores the swap interval. A native GL driver would shrink most of the contention described below.
+OpenGL here is Mesa's software rasteriser (`llvmpipe`) under WSLg, so drawing
+and uploading are CPU work on the same cores as the renderer, and WSLg ignores
+the swap interval. A native GL driver would shrink most of the contention
+described below.
 
 ### Synchronous vs asynchronous
 
-The synchronous viewer rendered on the window's thread, so the interface waited for every pass. On one thread its median frame time ranged from 27 ms (`quads`) to 1250 ms (`argent_weave`); on all threads, from 8.7 ms to 127 ms. The asynchronous viewer renders on a session thread and hands finished images to the window, which never waits. Its median frame time stays at 1.7-1.9 ms on one thread and 2.3-6.8 ms on all threads, within a 60 Hz budget on every scene.
+The synchronous viewer rendered on the window's thread, so the interface waited
+for every pass. On one thread its median frame time ranged from 27 ms (`quads`)
+to 1250 ms (`argent_weave`); on all threads, from 8.7 ms to 127 ms. The
+asynchronous viewer renders on a session thread and hands finished images to
+the window, which never waits. Its median frame time stays at 1.7-1.9 ms on one
+thread and 2.3-6.8 ms on all threads, within a 60 Hz budget on every scene.
 
-The price is that images arrive later: latency is a pass, plus up to one frame of pipelining, plus display. The pass itself is also 11-23% slower, because rendering and drawing now run at once and compete for the same cores.
+The price is that images arrive later: latency is a pass, plus up to one frame
+of pipelining, plus display. The pass itself is also 11-23% slower, because
+rendering and drawing now run at once and compete for the same cores.
 
 ### Edits in flight and frame cap
 
-Only one camera change is in flight at a time; further movement accumulates and is sent as one change once the previous one is shown. Otherwise each change cancels the pass before it and the image freezes while the camera moves. The frame rate is capped at the display's reported refresh rate, since vsync isn't honoured and an uncapped loop wastes a core on frames no display can show.
+Only one camera change is in flight at a time; further movement accumulates and
+is sent as one change once the previous one is shown. Otherwise each change
+cancels the pass before it and the image freezes while the camera moves. The
+frame rate is capped at the display's reported refresh rate, since vsync isn't
+honoured and an uncapped loop wastes a core on frames no display can show.
 
 ### Default thread count
 
-The viewer leaves one hardware thread to the window and driver (15 instead of 16). The sixteenth thread changes time per pass by only -6% to +2%, which is within noise, but roughly doubles the window's p95 frame time.
+The viewer leaves one hardware thread to the window and driver (15 instead of
+16). The sixteenth thread changes time per pass by only -6% to +2%, which is
+within noise, but roughly doubles the window's p95 frame time.
 
 ### Spinning thread pool
 
-Letting idle threads spin briefly before sleeping was tested to recover the pass-boundary cost. No scene gained more than the 2% noise floor and one was slower, so the change was not kept. The remaining cost is most likely threads waiting for the last tile at the end of each pass, which was not measured directly.
+Letting idle threads spin briefly before sleeping was tested to recover the
+pass-boundary cost. No scene gained more than the 2% noise floor and one was
+slower, so the change was not kept. The remaining cost is most likely threads
+waiting for the last tile at the end of each pass, which was not measured
+directly.
 
 ## Earlier measurements
 
