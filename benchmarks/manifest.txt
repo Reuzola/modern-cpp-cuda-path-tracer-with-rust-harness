@@ -4,7 +4,7 @@
 # correctness fingerprint: the resolution and sample count exist to put every
 # scene in a timing range where scheduler noise does not dominate. They were
 # chosen for roughly ten seconds per run; the intersection work per sample has
-# changed since, and the set now spans five to thirty-two seconds. The rows are
+# changed since, and the set now spans five to thirteen seconds. The rows are
 # kept as they are anyway, because re-tuning them invalidates every profile and
 # every record taken against them.
 #

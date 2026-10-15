@@ -7,11 +7,13 @@ next to these numbers, so this file also states what invalidates one.
 This is not a comparison against other renderers. It measures this renderer
 against itself, over a fixed workload, on one named machine.
 
-The figures below were taken on 2026-09-19 from revision `40e55a0e61ca`, with
-`Float = float`, from the `release` and `release-stats` presets, single
-threaded. They replace an earlier set taken while `Float` was `double`; what
-moved between the two, and why, is in
-[What changed since the previous measurement](#what-changed-since-the-previous-measurement).
+The figures below were taken on 2026-10-15 from revision `926703c48c2d`, with
+`Float = float`, from the `release` and `release-stats` presets, on one thread
+and on sixteen, under native Linux. They replace a set taken on the same
+hardware under WSL2. The WSL2 measurements are kept below, each under its own
+date and revision, from
+[What changed since the previous measurement](#what-changed-since-the-previous-measurement)
+onwards; their figures are not comparable with these.
 
 ## Machine
 
@@ -20,15 +22,18 @@ moved between the two, and why, is in
 | CPU | Intel Core i7-11700K @ 3.60 GHz (Rocket Lake) |
 | Architecture | x86_64 |
 | Logical cores | 16 |
-| OS | Ubuntu 24.04 (WSL2) |
+| OS | Ubuntu 24.04.5, native |
+| Kernel | 7.0.0-38-generic |
 | Compiler | Clang 18.1.3 |
 | Scalar type | `float` |
+| Frequency | `intel_pstate`, `powersave` governor, turbo on, SMT on |
 
-This set was measured from a bare login shell on an otherwise idle machine,
-with the editor closed. That is a condition of the measurement, not a detail:
-the machine is a desktop running a general purpose OS, not an isolated
-benchmarking host, and anything else running competes for the same cores and
-the same cache.
+This set was measured from a terminal in the desktop session, on an otherwise
+idle machine with nothing else open. That is a condition of the measurement,
+not a detail: the machine is a desktop running a general purpose OS, not an
+isolated benchmarking host, and anything else running competes for the same
+cores and the same cache. Nothing in the frequency policy above was changed for
+it; the defaults are what the measurement describes.
 
 A second machine on a different instruction set is the only cheap way to tell
 an algorithmic improvement apart from one that happens to suit a single
@@ -60,20 +65,30 @@ slower at the worst, on `argent_weave`. Read that as an upper bound rather than
 a cost: it compares one instrumented run against the minimum of five plain
 ones, so part of it is the spread of a single sample.
 
-The spread across the five timed runs is in the timing table. It reaches 5.6%
-on `checkered_spheres` and stays under 2% on eight of the thirteen scenes. The
-two percent figure quoted as this machine's noise floor — and used as the
-default threshold by `scene-tool bench-compare` — is therefore optimistic for
-the short scenes, and a one-scene movement near that size is not a result.
+The spread across the five timed runs is in the timing table, and inside one
+process it is small: 0.6% at the worst. Between processes it is not, unless the
+process is pinned. Two unpinned one-thread passes of the same binary, taken
+back to back, differed by up to 4.0% on a scene, and the difference came in
+steps: every run of one process at one speed, the next process at another,
+occasionally a step partway through. The cores do not all reach the same clock
+— two of the eight turbo to 5.0 GHz and the rest to 4.9 — and the scheduler
+places a single thread on a fast core without promising to keep it there. A
+minimum over the runs of one process cannot remove that, because all of them
+may have run on a slower core.
+
+One-thread timing is therefore pinned to logical CPU 2, one of the two faster
+cores, with `taskset`. Two pinned passes differed by at most 1.2%, so the two
+percent figure used as the default threshold by `scene-tool bench-compare`
+holds for pinned one-thread records and not for unpinned ones. The
+sixteen-thread pass is not pinned: it uses every core by definition.
 
 ### Threads
 
-Every figure below was taken on one thread, before the renderer could use
-more, and the set remains the reference for one-thread measurements. The
-renderer now shares each sample pass out across a thread pool and defaults to
+The renderer shares each sample pass out across a thread pool and defaults to
 every hardware thread, so the thread count is part of the workload rather than
-a constant. How the pass is shared, and what that costs and gains, is in
-[Scaling across threads](#scaling-across-threads).
+a constant. The baseline below is measured on one thread and on sixteen. How
+the pass is shared, and what that costs and gains, is in
+[Scaling across threads](#scaling-across-threads), measured under WSL2.
 
 - Timing is measured at one thread and at the full thread count, into separate
   files. `scene-tool bench-compare` pairs records by scene and build, so a file
@@ -139,11 +154,12 @@ still be told apart. The fields are specified in
 validates a single line rather than the file.
 
 The raw records behind the tables below are kept at
-`benchmarks/baseline.ndjson`, so a later run can be compared against this one
-without remeasuring it:
+`benchmarks/baseline-1t.ndjson` and `benchmarks/baseline-16t.ndjson`, one file
+per thread count, so a later run can be compared against this one without
+remeasuring it:
 
 ```bash
-scene-tool bench-compare benchmarks/baseline.ndjson out/benchmarks-1t.ndjson
+scene-tool bench-compare benchmarks/baseline-1t.ndjson out/benchmarks-1t.ndjson
 ```
 
 ### Reproduce
@@ -151,17 +167,17 @@ scene-tool bench-compare benchmarks/baseline.ndjson out/benchmarks-1t.ndjson
 ```bash
 cmake --preset release       && cmake --build --preset release
 cmake --preset release-stats && cmake --build --preset release-stats
-BENCH_RUNS=5 scripts/run-benchmarks.sh --threads 1 out/benchmarks-1t.ndjson
-BENCH_RUNS=5 scripts/run-benchmarks.sh out/benchmarks-all.ndjson
+BENCH_RUNS=5 taskset -c 2 scripts/run-benchmarks.sh --threads 1 out/benchmarks-1t.ndjson
+BENCH_RUNS=5 scripts/run-benchmarks.sh --threads 16 out/benchmarks-16t.ndjson
 ```
 
-The first file is the one comparable with the baseline below; the second
-measures the same revision at every hardware thread.
+The first file is comparable with `benchmarks/baseline-1t.ndjson`, the second
+with `benchmarks/baseline-16t.ndjson`.
 
 A single scene, without the script:
 
 ```bash
-./build/release/pathtracer scenes/cornell_box.json \
+taskset -c 2 ./build/release/pathtracer scenes/cornell_box.json \
     --width 400 --height 400 --spp 49 --threads 1 --bench --bench-runs 5
 ```
 
@@ -304,27 +320,24 @@ question the rest of this document asks: is the new number explained.
 
 ### Timing and throughput
 
-From the `release` build. Five runs per scene, minimum reported.
+From the `release` build, on one thread pinned to logical CPU 2. Five runs per
+scene, minimum reported.
 
-| Scene | Res | spp | Render (s) | Spread | Mray/s | Peak RSS (MB) |
+| Scene | Res | spp | Render (s) | Spread | Mray/s | Peak RSS (MiB) |
 |---|---|---|---|---|---|---|
-| `area_lights` | 480x270 | 225 | 32.06 | 0.2% | 0.91 | 8.0 |
-| `argent_weave` | 480x270 | 9 | 12.14 | 4.2% | 0.10 | 250.9 |
-| `checkered_spheres` | 480x270 | 121 | 6.50 | 5.6% | 2.41 | 7.9 |
-| `cornell_box` | 400x400 | 49 | 9.37 | 0.8% | 0.84 | 8.7 |
-| `cornell_smoke` | 400x400 | 36 | 12.28 | 0.9% | 0.47 | 8.8 |
-| `earth` | 480x270 | 484 | 5.48 | 1.6% | 11.44 | 35.1 |
-| `gilded_orrery` | 480x270 | 16 | 12.14 | 2.1% | 0.17 | 46.7 |
-| `mesh_showcase` | 480x270 | 169 | 6.91 | 4.0% | 3.17 | 8.3 |
-| `neon_cathedral` | 480x270 | 16 | 10.30 | 0.7% | 0.20 | 8.0 |
-| `perlin_spheres` | 480x270 | 144 | 29.09 | 0.3% | 0.64 | 8.0 |
-| `quads` | 400x400 | 225 | 5.47 | 3.3% | 6.58 | 8.8 |
-| `random_spheres` | 480x270 | 81 | 15.57 | 1.1% | 0.67 | 9.0 |
-| `showcase` | 400x400 | 81 | 11.89 | 1.6% | 1.09 | 36.2 |
-
-The slowest of the five runs was the first one on four of the thirteen scenes
-and scattered over the rest, so nothing here is a warm-up effect that reporting
-the minimum hides.
+| `area_lights` | 480x270 | 225 | 6.21 | 0.6% | 4.69 | 8.1 |
+| `argent_weave` | 480x270 | 9 | 11.62 | 0.2% | 0.10 | 250.9 |
+| `checkered_spheres` | 480x270 | 121 | 6.59 | 0.4% | 2.38 | 8.1 |
+| `cornell_box` | 400x400 | 49 | 8.54 | 0.5% | 0.92 | 8.8 |
+| `cornell_smoke` | 400x400 | 36 | 10.26 | 0.1% | 0.56 | 8.7 |
+| `earth` | 480x270 | 484 | 5.48 | 0.3% | 11.44 | 35.1 |
+| `gilded_orrery` | 480x270 | 16 | 11.01 | 0.5% | 0.19 | 46.6 |
+| `mesh_showcase` | 480x270 | 169 | 7.14 | 0.4% | 3.07 | 8.3 |
+| `neon_cathedral` | 480x270 | 16 | 10.38 | 0.3% | 0.20 | 8.1 |
+| `perlin_spheres` | 480x270 | 144 | 7.25 | 0.2% | 2.57 | 8.2 |
+| `quads` | 400x400 | 225 | 5.69 | 0.0% | 6.33 | 8.8 |
+| `random_spheres` | 480x270 | 81 | 8.44 | 0.1% | 1.24 | 9.1 |
+| `showcase` | 400x400 | 81 | 12.46 | 0.2% | 1.04 | 36.2 |
 
 ### Tree and traversal
 
@@ -333,31 +346,61 @@ the `release-stats` one.
 
 | Scene | Trees | Nodes | Leaves | Depth | Build (ms) | Node tests/ray | Leaf tests/ray | Total | Ray queries | Queries/primary |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `area_lights` | 1 | 7 | 4 | 3 | 0.003 | 3.3 | 1.0 | 4.3 | 144,689,285 | 4.96 |
-| `argent_weave` | 7 | 2,297,221 | 1,148,614 | 26 | 532.104 | 118.7 | 8.0 | 126.7 | 4,855,966 | 4.16 |
-| `checkered_spheres` | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.8 | 4.8 | 52,571,828 | 3.35 |
-| `cornell_box` | 1 | 15 | 8 | 6 | 0.003 | 13.2 | 1.6 | 14.8 | 43,007,501 | 5.49 |
-| `cornell_smoke` | 1 | 11 | 6 | 4 | 0.003 | 9.3 | 1.1 | 10.4 | 33,101,843 | 5.75 |
+| `area_lights` | 1 | 7 | 4 | 3 | 0.002 | 4.1 | 0.9 | 5.0 | 46,370,305 | 1.59 |
+| `argent_weave` | 7 | 2,297,221 | 1,148,614 | 26 | 499.962 | 118.7 | 7.9 | 126.6 | 4,856,140 | 4.16 |
+| `checkered_spheres` | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.8 | 4.8 | 52,536,071 | 3.35 |
+| `cornell_box` | 1 | 15 | 8 | 6 | 0.004 | 13.3 | 1.4 | 14.6 | 43,111,046 | 5.50 |
+| `cornell_smoke` | 1 | 11 | 6 | 4 | 0.006 | 9.4 | 0.8 | 10.2 | 33,294,299 | 5.78 |
 | `earth` | 1 | 1 | 1 | 0 | 0.001 | 1.0 | 0.7 | 1.7 | 88,192,214 | 1.41 |
-| `gilded_orrery` | 15 | 168,397 | 84,206 | 19 | 27.401 | 53.6 | 6.1 | 59.7 | 9,509,310 | 4.59 |
-| `mesh_showcase` | 3 | 39 | 21 | 6 | 0.005 | 11.4 | 2.5 | 13.9 | 48,857,664 | 2.23 |
-| `neon_cathedral` | 6 | 86 | 46 | 5 | 0.012 | 43.8 | 6.4 | 50.1 | 14,065,679 | 6.78 |
-| `perlin_spheres` | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.1 | 4.1 | 124,543,231 | 6.67 |
-| `quads` | 1 | 9 | 5 | 4 | 0.003 | 7.0 | 0.5 | 7.5 | 65,572,769 | 1.82 |
-| `random_spheres` | 1 | 967 | 484 | 12 | 0.146 | 10.5 | 1.2 | 11.7 | 80,513,606 | 7.67 |
-| `showcase` | 3 | 2,811 | 1,407 | 13 | 0.525 | 17.8 | 1.3 | 19.1 | 31,824,353 | 2.46 |
+| `gilded_orrery` | 17 | 168,497 | 84,257 | 19 | 26.784 | 53.2 | 6.0 | 59.2 | 9,454,034 | 4.56 |
+| `mesh_showcase` | 3 | 39 | 21 | 6 | 0.006 | 11.4 | 2.5 | 13.9 | 48,857,291 | 2.23 |
+| `neon_cathedral` | 6 | 86 | 46 | 5 | 0.022 | 43.4 | 6.2 | 49.7 | 14,250,319 | 6.87 |
+| `perlin_spheres` | 1 | 3 | 2 | 1 | 0.002 | 3.0 | 1.2 | 4.2 | 42,438,985 | 2.27 |
+| `quads` | 1 | 9 | 5 | 4 | 0.003 | 7.0 | 0.5 | 7.5 | 65,572,774 | 1.82 |
+| `random_spheres` | 1 | 967 | 484 | 12 | 0.140 | 26.2 | 1.6 | 27.8 | 28,046,486 | 2.67 |
+| `showcase` | 3 | 2,811 | 1,407 | 13 | 0.414 | 17.7 | 1.3 | 19.0 | 31,812,234 | 2.45 |
 
-`Build (ms)` is one sample per scene. Construction runs once per process, so
-the two records of a scene supply two independent samples, and those agree to
-within about one percent everywhere except `argent_weave`, where the figure has
-been seen to move by tens of percent between runs of the same binary. Treat
-that one as an order of magnitude rather than a measurement.
+`Build (ms)` is one sample per scene, and below a millisecond it measures the
+timer rather than the work. The two trees large enough to measure,
+`argent_weave` and `gilded_orrery`, repeated to within 0.3% across two pinned
+passes.
+
+### Sixteen-thread timing
+
+From the `release` build, on sixteen threads, unpinned. Five runs per scene,
+minimum reported. Scaling is the pinned one-thread time above divided by the
+sixteen-thread time.
+
+| Scene | 1 thread (s) | 16 threads (s) | Spread | Mray/s | Scaling |
+|---|---|---|---|---|---|
+| `area_lights` | 6.21 | 0.87 | 2.9% | 33.59 | 7.16 |
+| `argent_weave` | 11.62 | 1.25 | 0.7% | 0.94 | 9.33 |
+| `checkered_spheres` | 6.59 | 0.89 | 0.4% | 17.65 | 7.42 |
+| `cornell_box` | 8.54 | 1.17 | 0.5% | 6.68 | 7.27 |
+| `cornell_smoke` | 10.26 | 1.41 | 1.6% | 4.08 | 7.27 |
+| `earth` | 5.48 | 0.72 | 1.4% | 86.81 | 7.59 |
+| `gilded_orrery` | 11.01 | 1.30 | 0.8% | 1.60 | 8.49 |
+| `mesh_showcase` | 7.14 | 1.15 | 0.7% | 19.10 | 6.23 |
+| `neon_cathedral` | 10.38 | 1.24 | 1.1% | 1.67 | 8.35 |
+| `perlin_spheres` | 7.25 | 1.04 | 2.7% | 17.88 | 6.95 |
+| `quads` | 5.69 | 0.82 | 1.5% | 43.91 | 6.94 |
+| `random_spheres` | 8.44 | 1.07 | 0.7% | 9.79 | 7.87 |
+| `showcase` | 12.46 | 1.56 | 0.9% | 8.31 | 8.00 |
+
+The geometric mean of the scaling is 7.6. Under WSL2 the same set
+scaled by 8.9. That comparison is not paired and the code changed in between,
+but its direction is consistent: of the nine scenes whose workload moved by
+less than two percent, one-thread times moved by a few percent either way,
+while eight of the nine are 4–23% slower on sixteen threads. A difference that
+appears only when every core is busy points at the clock the cores hold under
+full load, which is set by the frequency policy rather than by the renderer.
+The cause was not investigated.
 
 ### Reading the tables
 
 `argent_weave` is the traversal workload the rest of the set does not provide:
-one tree of 2.3M nodes over a 1.1M triangle mesh, 126.7 hit tests per ray query
-against 59.7 for the next heaviest scene, and the fewest ray queries in the
+one tree of 2.3M nodes over a 1.1M triangle mesh, 126.6 hit tests per ray query
+against 59.2 for the next heaviest scene, and the fewest ray queries in the
 set. Ninety-four percent of those tests are box tests, because the geometry is
 interlaced tube strands whose bounds overlap heavily — the case a hierarchy of
 axis-aligned boxes handles worst. Its cost per ray query also depends on how
@@ -367,21 +410,19 @@ a camera sixteen units further back. The camera there is a measured setting
 rather than only a composition, and re-framing the shot is a change of
 workload.
 
-`gilded_orrery` is the only scene where BVH construction is visible at all: 27
-ms across fifteen trees and 168k nodes, three orders of magnitude above every
-scene but `argent_weave`.
+`gilded_orrery` is the only other scene where BVH construction is visible at
+all: 27 ms across seventeen trees and 168k nodes.
 
 `cornell_smoke` costs what it costs volumetrically rather than geometrically.
 Free-flight sampling runs per segment against an eleven-node tree, so the BVH
 is close to irrelevant to its total.
 
 The set no longer sits in one timing range. Sample counts were originally
-chosen so that each scene took roughly ten seconds; they now span 5.5 to 32
-seconds, because the intersection work per sample has changed since they were
-chosen. The rows are kept unchanged anyway: re-tuning them would invalidate
-every profile and every record taken against them, and the spread within each
-scene is small enough that the short scenes are still measured well above the
-noise.
+chosen so that each scene took roughly ten seconds; on one thread they now span
+5.5 to 12.5 seconds, because the intersection work per sample has changed since
+they were chosen. The rows are kept unchanged anyway: re-tuning them would
+invalidate every profile and every record taken against them, and the shortest
+scene is still measured well above the noise.
 
 ## What changed since the previous measurement
 
@@ -496,12 +537,10 @@ counters remain identical on one thread and sixteen, and
 Timings. Single runs of the instrumented build, which by this document's own
 rules are not timings, put `area_lights` at 6.7 s against 33.6 s before the
 correction, `perlin_spheres` at 7.7 s against 30.7 s and `random_spheres` at
-9.1 s against 16.4 s. Until the set is remeasured, the rows for these three
-scenes in [Timing and throughput](#timing-and-throughput),
-[Tree and traversal](#tree-and-traversal) and
-[Sixteen threads](#sixteen-threads) describe the defective workload, and the
-tile size chosen in [Tile size](#tile-size) was not re-derived with them
-corrected. The viewer measurement used none of the three and stands.
+9.1 s against 16.4 s. The set was remeasured after the correction, under
+native Linux, and the [baseline](#baseline) describes the corrected workload.
+The tile size chosen in [Tile size](#tile-size) has not been re-derived with
+them corrected. The viewer measurement used none of the three and stands.
 
 ## Scaling across threads
 
@@ -774,11 +813,12 @@ run under vsync. A timer cap restores the conditions they were taken under.
 
 ## Earlier measurements
 
-Three earlier tables were removed from this file when the baseline above was
-taken: the `double` measurement of this workload, and two instrumented
-measurements of the BVH taken while the acceleration structure was being built,
-comparing a midpoint split with a pointer tree against a binned SAH with a flat
-depth-first array. All three are in the file's history. Three findings from them
+Four earlier tables were removed from this file as later baselines replaced
+them: the WSL2 baseline of 2026-09-19 at revision `40e55a0e61ca`, the `double`
+measurement of this workload, and two instrumented measurements of the BVH
+taken while the acceleration structure was being built, comparing a midpoint
+split with a pointer tree against a binned SAH with a flat depth-first array.
+All four are in the file's history. Three findings from them
 are worth keeping:
 
 - The SAH tree changes the total tests per ray query by between −22% and −45%
