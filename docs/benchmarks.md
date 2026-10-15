@@ -747,6 +747,31 @@ slower, so the change was not kept. The remaining cost is most likely threads
 waiting for the last tile at the end of each pass, which was not measured
 directly.
 
+### Frame pacing on a native driver
+
+Measured on 2026-10-15 under native Linux with the NVIDIA driver, through
+XWayland, on a 159.91 Hz display: `quads`, fifteen render threads, one run per
+configuration. The sections above describe WSLg and were not remeasured.
+
+The driver honours the swap interval. With no timer cap, frames that had no new
+image to draw were presented every 6.49 ms at the median with a swap interval
+of one, and every 0.25 ms with zero. The cap the viewer used to apply on top of
+vsync made presentation uneven rather than steady: in the moving phase the
+median interval fell to 3.42 ms, faster than the display can show, consistent
+with a late frame resetting the cap's schedule and the frame after it being
+presented at once. Frames are now paced by vsync alone, and a timer replaces it
+only on request; see [usage.md](usage.md#the-viewer). Pacing does not reach the
+renderer: passes per second stayed between 334 and 342 in every configuration.
+
+Drawing a new image cost 5.7 ms at the median under every pacing mode, so it is
+work rather than waiting: tone mapping, conversion to bytes and the texture
+upload, all on the window's thread, at 400x400. That is most of a 6.25 ms
+frame.
+
+Under vsync a frame's time includes the wait for the display, so the frame
+times recorded above, where the swap never blocked, are not comparable with a
+run under vsync. A timer cap restores the conditions they were taken under.
+
 ## Earlier measurements
 
 Three earlier tables were removed from this file when the baseline above was
