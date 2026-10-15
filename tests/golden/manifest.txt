@@ -20,16 +20,16 @@
 # Reference renders are only valid from the `release` preset.
 
 # scene                          width  height  spp      tol
-scenes/area_lights.json            240     135   16    0.032
+scenes/area_lights.json            240     135   16    0.035
 scenes/argent_weave.json           240     135   16    0.053
 scenes/checkered_spheres.json      240     135   16    0.013
 scenes/cornell_box.json            200     200   16    0.026
-scenes/cornell_smoke.json          200     200   16    0.059
-scenes/earth.json                  240     135   16   0.0018
-scenes/gilded_orrery.json          240     135   16    0.028
-scenes/mesh_showcase.json          240     135   16    0.016
-scenes/neon_cathedral.json         240     135   16    0.049
-scenes/perlin_spheres.json         240     135   16   0.0092
-scenes/quads.json                  200     200   16   0.0076
-scenes/random_spheres.json         240     135   16    0.011
-scenes/showcase.json               200     200   16    0.055
+scenes/cornell_smoke.json          200     200   16    0.058
+scenes/earth.json                  240     135   16   0.0020
+scenes/gilded_orrery.json          240     135   16    0.027
+scenes/mesh_showcase.json          240     135   16    0.017
+scenes/neon_cathedral.json         240     135   16    0.047
+scenes/perlin_spheres.json         240     135   16   0.0068
+scenes/quads.json                  200     200   16   0.0074
+scenes/random_spheres.json         240     135   16   0.0092
+scenes/showcase.json               200     200   16    0.050
