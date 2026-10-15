@@ -92,7 +92,7 @@ set(pt_clang_only_warnings
   -Wshadow-all
 )
 
-# MSVC skeleton; project currently targets WSL/Linux + Clang only.
+# MSVC skeleton; project currently targets Linux + Clang only.
 set(pt_msvc_warnings
   /W4
 )

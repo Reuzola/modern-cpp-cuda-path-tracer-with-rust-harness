@@ -637,7 +637,7 @@ its missing utilisation; on `quads` about 10%; elsewhere it is below the noise.
 It matters most where passes are cheap: the interactive viewer, which renders
 pass after pass of one view, pays it on every one. A pool whose idle threads
 spin before they sleep does not recover it; see
-[The pass boundary, revisited](#the-pass-boundary-revisited).
+[Spinning thread pool](#spinning-thread-pool).
 
 ### Tile size
 
