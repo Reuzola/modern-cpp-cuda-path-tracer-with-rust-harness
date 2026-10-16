@@ -55,6 +55,19 @@ struct BvhNode {
 // Layout guard: bounds + index data (32B float / 56B double) to preserve hot loop cache efficiency.
 static_assert(sizeof(BvhNode) == 6 * sizeof(Float) + 8);
 
+// The tree without its primitives: what a build produces and traversal walks. Its owner keeps the
+// primitives in the build's order, which is what lets a leaf's (offset, count) name a contiguous run.
+struct BvhTopology {
+    std::vector<BvhNode> nodes; // Depth first; nodes[0] is the root when non-empty
+    std::size_t leaf_count{};
+    int max_depth{};
+};
+
+struct BvhBuildResult {
+    BvhTopology topology;
+    std::vector<std::uint32_t> primitive_order; // Leaf slot k holds input primitive primitive_order[k]
+};
+
 // Read-only BVH built via binned SAH. Non-owning over primitives (permuted for contiguous leaves).
 // Implements Hittable to support nesting (e.g., mesh and group subtrees).
 class Bvh final : public Hittable {
@@ -69,18 +82,20 @@ public:
     [[nodiscard]] Aabb bounding_box() const override;
 
     // The three counters below exist for reporting; traversal never reads them.
-    [[nodiscard]] std::size_t node_count() const noexcept { return nodes_.size(); }
+    [[nodiscard]] std::size_t node_count() const noexcept { return topology_.nodes.size(); }
 
-    [[nodiscard]] std::size_t leaf_count() const noexcept { return leaf_count_; }
+    [[nodiscard]] std::size_t leaf_count() const noexcept { return topology_.leaf_count; }
 
-    [[nodiscard]] int max_depth() const noexcept { return max_depth_; }
+    [[nodiscard]] int max_depth() const noexcept { return topology_.max_depth; }
 
 private:
-    std::vector<BvhNode> nodes_;              // Depth first; nodes_[0] is the root when non-empty
+    BvhTopology topology_;
     std::vector<const Hittable*> primitives_; // Permuted by the build; leaves index into this
-    std::size_t leaf_count_{};
-    int max_depth_{};
 };
+
+/// Builds a binned SAH tree over primitives known only by their bounds: entry i is primitive i.
+/// The result names no primitive type; the caller lays its primitives out in primitive_order.
+[[nodiscard]] BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings = {});
 
 /// Builds a BVH over `list` and stores it in `arena`.
 /// The tree is owned by the arena and stays valid as long as the arena does. `list` itself is not

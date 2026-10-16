@@ -28,11 +28,10 @@ namespace pt {
 
 namespace {
 
-// Per-primitive build data, computed once up front. Hittable::bounding_box() is virtual and
-// MeshTriangle recomputes it from vertices on every call, so the build must not ask twice.
-// This array is what the build permutes; the primitive pointers are extracted from it at the end.
+// Per-primitive build data, computed once from the caller's bounds. This array is what the build
+// permutes; the primitive order is read off it at the end.
 struct PrimitiveInfo {
-    const Hittable* primitive = nullptr;
+    std::uint32_t index{};
     Aabb bbox;
     Point3 centroid; // Binned by this, bounded by bbox - a primitive is never split
 };
@@ -102,15 +101,6 @@ constexpr int max_bin_count = 32;
 // silent 16-bit wraparound in make_leaf(), which would be a corrupt tree.
 constexpr int max_leaf_size_limit = std::numeric_limits<std::uint16_t>::max();
 
-// What the builder hands back to Bvh, moved out wholesale. Build-time scratch state - info_ and the
-// settings - stays inside the builder and is destroyed with it.
-struct BvhBuildResult {
-    std::vector<BvhNode> nodes;
-    std::vector<const Hittable*> primitives;
-    std::size_t leaf_count{};
-    int max_depth{};
-};
-
 // Best split found for one node. Defaults to "none": cost infinity loses every comparison.
 struct SplitCandidate {
     Float cost{infinity};
@@ -162,18 +152,18 @@ struct SplitCandidate {
 
 // Top-down BVH builder, one instance per tree. Recursion works in place on info_, narrowing to a contiguous [first, count)
 // range per node; when it finishes, each leaf's primitives are adjacent, which is what lets a leaf be stored as (offset, count).
-// A separate type keeps this state out of both the finished Bvh and the public header.
+// A separate type keeps this state out of the finished topology and the public header.
 class BvhBuilder {
 public:
-    BvhBuilder(std::span<const Hittable* const> objects, const BvhBuildSettings& settings) : settings_(settings) {
+    BvhBuilder(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings) : settings_(settings) {
+        assert(primitive_bounds.size() <= std::numeric_limits<std::uint32_t>::max());
         settings_.bin_count = std::clamp(settings_.bin_count, 2, max_bin_count);
         settings_.max_leaf_size = std::clamp(settings_.max_leaf_size, 1, max_leaf_size_limit);
         settings_.depth_limit = std::clamp(settings_.depth_limit, 1, bvh_max_depth);
 
-        info_.reserve(objects.size());
-        for (const Hittable* obj : objects) {
-            const Aabb box = obj->bounding_box();
-            info_.push_back(PrimitiveInfo{.primitive = obj, .bbox = box, .centroid = box.centroid()});
+        for (std::uint32_t i = 0; i < primitive_bounds.size(); ++i) {
+            const Aabb& box = primitive_bounds[i];
+            info_.push_back(PrimitiveInfo{.index = i, .bbox = box, .centroid = box.centroid()});
         }
 
         // 2N-1 is the node count with one primitive per leaf, so it upper-bounds any larger-leaf tree.
@@ -183,18 +173,18 @@ public:
     // Consumes the builder: info_ is left permuted and nodes_ moved from.
     [[nodiscard]] BvhBuildResult build() && {
         if (info_.empty()) return {};
-        assert(info_.size() <= std::numeric_limits<std::uint32_t>::max());
 
         build_recursive(0, info_.size(), 0);
 
-        std::vector<const Hittable*> primitives;
-        primitives.reserve(info_.size());
+        std::vector<std::uint32_t> order;
+        order.reserve(info_.size());
         for (const PrimitiveInfo& entry : info_) {
-            primitives.push_back(entry.primitive);
+            order.push_back(entry.index);
         }
 
         return BvhBuildResult{
-            .nodes = std::move(nodes_), .primitives = std::move(primitives), .leaf_count = leaf_count_, .max_depth = max_depth_};
+            .topology = {.nodes = std::move(nodes_), .leaf_count = leaf_count_, .max_depth = max_depth_},
+            .primitive_order = std::move(order)};
     }
 
 private:
@@ -384,26 +374,35 @@ struct TraversalEntry {
 
 } // namespace
 
-Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& settings) {
-    // Assigned in the body, not the init list: all four members come out of one build pass, and
-    // BvhBuildResult lives in this file's anonymous namespace so no ctor can name it.
-    BvhBuildResult result = BvhBuilder(objects, settings).build();
-
-    nodes_ = std::move(result.nodes);
-    primitives_ = std::move(result.primitives);
-    leaf_count_ = result.leaf_count;
-    max_depth_ = result.max_depth;
+BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings) {
+    BvhBuildResult result = BvhBuilder(primitive_bounds, settings).build();
 
     // The builder caps the depth at bvh_max_depth, the traversal stack's capacity.
     // Checked because a cap that slipped by one level would overflow that stack silently.
-    assert(max_depth_ <= bvh_max_depth);
+    assert(result.topology.max_depth <= bvh_max_depth);
+    return result;
+}
+
+Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& settings) {
+    std::vector<Aabb> bounds;
+    bounds.reserve(objects.size());
+
+    // Each object's bounds are read once: bounding_box() is virtual, and some objects compute rather than store it.
+    std::ranges::transform(objects, std::back_inserter(bounds), [](const Hittable* obj) { return obj->bounding_box(); });
+
+    BvhBuildResult result = build_bvh_topology(bounds, settings);
+    topology_ = std::move(result.topology);
+    primitives_.reserve(result.primitive_order.size());
+
+    // The build orders indices, not objects; the tree's own primitive array is laid out from that order.
+    std::ranges::transform(result.primitive_order, std::back_inserter(primitives_), [objects](std::uint32_t i) { return objects[i]; });
 }
 
 // Iterative, distance-ordered traversal. The near child is descended into directly and the far one
 // is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
 // single comparison instead of a repeated slab test.
 bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    if (nodes_.empty()) return false;
+    if (topology_.nodes.empty()) return false;
 
     // Divided once per query, not once per node. It must live here rather than in Ray: Instance builds a
     // transformed ray per hit, and nested trees (meshes, groups) each see a different one.
@@ -414,16 +413,16 @@ bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     // Tested outside the loop to establish the invariant the body relies on: `current` always names a
     // node whose box has already been tested and passed.
     count_node_test();
-    if (!nodes_[0].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest))) return false;
+    if (!topology_.nodes[0].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest))) return false;
 
     // Fixed size and local: hit() is const and will be shared across threads, so no traversal state
-    // may live in the object. Capacity is guaranteed by the depth assert in the constructor.
+    // may live in the object. Capacity is guaranteed by the depth assert in build_bvh_topology.
     std::array<TraversalEntry, bvh_max_depth> stack;
     std::size_t stack_size{};
     std::uint32_t current{};
 
     while (true) {
-        const BvhNode& node = nodes_[current];
+        const BvhNode& node = topology_.nodes[current];
         if (node.is_leaf()) {
             // A leaf is a contiguous primitive range, so the whole leaf is consumed here; then fall through to the pop step.
             const std::span<const Hittable* const> leaf_prims = std::span(primitives_).subspan(node.offset, node.count);
@@ -437,9 +436,9 @@ bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
             const std::uint32_t right = node.offset;
 
             count_node_test();
-            const std::optional<Float> t_left = nodes_[left].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
+            const std::optional<Float> t_left = topology_.nodes[left].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
             count_node_test();
-            const std::optional<Float> t_right = nodes_[right].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
+            const std::optional<Float> t_right = topology_.nodes[right].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
 
             if (t_left && t_right) {
                 // Ties go left, matching the build's ordering and keeping the traversal deterministic.
@@ -478,7 +477,7 @@ bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     }
 }
 
-Aabb Bvh::bounding_box() const { return nodes_.empty() ? Aabb() : nodes_[0].bbox; }
+Aabb Bvh::bounding_box() const { return topology_.nodes.empty() ? Aabb() : topology_.nodes[0].bbox; }
 
 const Bvh* make_bvh(Arena<Hittable>& arena, const HittableList& list, BvhStats* stats, const BvhBuildSettings& settings) {
     // Timed around the arena call, so the measurement includes the allocation the scene pays for.

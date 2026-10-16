@@ -27,8 +27,10 @@
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <numeric>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -270,6 +272,70 @@ void require_same_hit(const Bvh& bvh, const HittableList& reference, const Ray& 
     // so they would leak different ones.
     REQUIRE(bvh_rec.spawn_margin == reference_rec.spawn_margin);
     require_same_vec(bvh_rec.geometric_normal, reference_rec.geometric_normal);
+}
+
+// Random boxes, built directly: the builder sees nothing but bounds, so its test needs nothing else.
+// Sizes start at zero, so some boxes are flat on an axis and carry Aabb's padding, as planar primitives do.
+[[nodiscard]] std::vector<Aabb> random_boxes(int count, std::uint64_t seed) {
+    Sampler sampler{pt::sampler_seed(seed, 3, 0)};
+
+    std::vector<Aabb> boxes;
+    boxes.reserve(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        const Point3 corner(sampler.next_scalar(-10.0_f, 10.0_f), sampler.next_scalar(-10.0_f, 10.0_f),
+                            sampler.next_scalar(-10.0_f, 10.0_f));
+        boxes.emplace_back(corner, corner + Vec3::random(0.0_f, 2.0_f, sampler));
+    }
+    return boxes;
+}
+
+void require_same_box(const Aabb& actual, const Aabb& expected) {
+    REQUIRE(actual.x.min == expected.x.min);
+    REQUIRE(actual.x.max == expected.x.max);
+    REQUIRE(actual.y.min == expected.y.min);
+    REQUIRE(actual.y.max == expected.y.max);
+    REQUIRE(actual.z.min == expected.z.min);
+    REQUIRE(actual.z.max == expected.z.max);
+}
+
+// The run of leaf slots a subtree covers.
+struct SlotRange {
+    std::size_t first{};
+    std::size_t count{};
+};
+
+struct WalkTotals {
+    std::size_t leaves{};
+    int max_depth{};
+};
+
+// Walks the subtree at `index` and returns the slots it covers, checking on the way that a left
+// subtree's slots are followed directly by the right one's, and that every node's box is exactly the
+// union of its primitives' bounds. Union is min and max, which round nothing, so exact is right.
+SlotRange check_subtree(const pt::BvhBuildResult& build, std::span<const Aabb> bounds, std::uint32_t index, int depth, WalkTotals& totals) {
+    const pt::BvhNode& node = build.topology.nodes[index];
+    totals.max_depth = std::max(totals.max_depth, depth);
+
+    SlotRange range;
+    if (node.is_leaf()) {
+        ++totals.leaves;
+        range = SlotRange{.first = node.offset, .count = node.count};
+    } else {
+        const SlotRange left = check_subtree(build, bounds, index + 1, depth + 1, totals);
+        const SlotRange right = check_subtree(build, bounds, node.offset, depth + 1, totals);
+        REQUIRE(left.first + left.count == right.first);
+        range = SlotRange{.first = left.first, .count = left.count + right.count};
+    }
+
+    REQUIRE(range.first + range.count <= build.primitive_order.size());
+
+    Aabb expected;
+    for (std::size_t slot = range.first; slot < range.first + range.count; ++slot) {
+        expected = Aabb(expected, bounds[build.primitive_order[slot]]);
+    }
+    require_same_box(node.bbox, expected);
+
+    return range;
 }
 
 constexpr int ray_count = 2000;
@@ -619,4 +685,46 @@ TEST_CASE("a bvh over loaded mesh geometry answers exactly like a brute-force li
             require_same_hit(bvh, scene.list(), ray_inside_scene(sampler, scene.bounds()), visible);
         }
     }
+}
+
+TEST_CASE("a topology built from bounds alone holds every primitive exactly once", "[geometry][bvh]") {
+    // The forced-halving path is included: it builds leaves the SAH never chose, and the same layout
+    // contract has to hold for them.
+    const BvhBuildSettings settings =
+        GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1}, BvhBuildSettings{.bin_count = 2}, BvhBuildSettings{.depth_limit = 1});
+
+    const std::vector<Aabb> boxes = random_boxes(500, 8086);
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, settings);
+
+    SECTION("the primitive order is a permutation of the input") {
+        std::vector<std::uint32_t> sorted = build.primitive_order;
+        std::ranges::sort(sorted);
+
+        std::vector<std::uint32_t> expected(boxes.size());
+        std::iota(expected.begin(), expected.end(), 0U);
+
+        REQUIRE(sorted == expected);
+    }
+
+    SECTION("subtrees cover contiguous runs, and the root covers them all") {
+        WalkTotals totals;
+        const SlotRange root = check_subtree(build, boxes, 0, 0, totals);
+
+        REQUIRE(root.first == 0);
+        REQUIRE(root.count == boxes.size());
+
+        // The reported shape is the shape the walk found, not a separately kept tally.
+        REQUIRE(totals.leaves == build.topology.leaf_count);
+        REQUIRE(totals.max_depth == build.topology.max_depth);
+        REQUIRE(build.topology.nodes.size() == 2 * build.topology.leaf_count - 1);
+    }
+}
+
+TEST_CASE("an empty input builds an empty topology", "[geometry][bvh]") {
+    const pt::BvhBuildResult build = pt::build_bvh_topology(std::span<const Aabb>{});
+
+    REQUIRE(build.topology.nodes.empty());
+    REQUIRE(build.topology.leaf_count == 0);
+    REQUIRE(build.topology.max_depth == 0);
+    REQUIRE(build.primitive_order.empty());
 }
