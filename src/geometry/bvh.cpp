@@ -11,6 +11,7 @@
 #include "pt/util/stats.hpp"
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -167,6 +168,7 @@ public:
     BvhBuilder(std::span<const Hittable* const> objects, const BvhBuildSettings& settings) : settings_(settings) {
         settings_.bin_count = std::clamp(settings_.bin_count, 2, max_bin_count);
         settings_.max_leaf_size = std::clamp(settings_.max_leaf_size, 1, max_leaf_size_limit);
+        settings_.depth_limit = std::clamp(settings_.depth_limit, 1, bvh_max_depth);
 
         info_.reserve(objects.size());
         for (const Hittable* obj : objects) {
@@ -279,6 +281,14 @@ private:
         return static_cast<Float>(count) * settings_.intersection_cost <= split_cost;
     }
 
+    // Halving a range of `count` reaches single primitives in bit_width(count - 1) levels. Once the depth
+    // plus that meets the limit, an unbalanced SAH split could no longer be paid for, so from here down
+    // the range is halved, which keeps every node below within the limit.
+    [[nodiscard]] bool depth_budget_spent(int depth, std::size_t count) const noexcept {
+        const int levels = static_cast<int>(std::bit_width(count - 1));
+        return depth + levels >= settings_.depth_limit;
+    }
+
     // Builds the subtree for info_[first, first + count) and returns its node index.
     std::uint32_t build_recursive(std::size_t first, std::size_t count, int depth) {
         // The slot is reserved before recursing, so depth-first order puts the left child at index + 1.
@@ -295,40 +305,48 @@ private:
             return index;
         }
 
-        // Split on the widest axis of the centroid bounds: the axis where the primitives are most
-        // spread out is the one where separating them buys the most.
-        const CentroidBounds cb = centroid_bounds_of(prims);
-        const auto [axis, extent] = cb.widest_axis();
-
         std::size_t mid{};
-        const Float node_area = bbox.surface_area();
+        // Out of depth budget: a leaf if one may hold the range, otherwise halve without consulting the SAH.
+        if (depth_budget_spent(depth, count)) {
+            if (count <= static_cast<std::size_t>(settings_.max_leaf_size)) {
+                make_leaf(index, bbox, first, count);
+                return index;
+            }
+        } else {
+            // Split on the widest axis of the centroid bounds: the axis where the primitives are most
+            // spread out is the one where separating them buys the most.
+            const CentroidBounds cb = centroid_bounds_of(prims);
+            const auto [axis, extent] = cb.widest_axis();
+            const Float node_area = bbox.surface_area();
 
-        // A zero extent means every centroid coincides, a zero area means the box is degenerate.
-        // Neither can be binned, and the area is the SAH's denominator.
-        if (extent > 0 && node_area > 0) {
-            const BinMapping mapping{.axis = axis,
-                                     .min = cb.min[axis],
-                                     .scale = static_cast<Float>(settings_.bin_count) / extent,
-                                     .bin_count = settings_.bin_count};
+            // A zero extent means every centroid coincides, a zero area means the box is degenerate.
+            // Neither can be binned, and the area is the SAH's denominator.
+            if (extent > 0 && node_area > 0) {
+                const BinMapping mapping{
+                    .axis = axis,
+                    .min = cb.min[axis],
+                    .scale = static_cast<Float>(settings_.bin_count) / extent,
+                    .bin_count = settings_.bin_count};
 
-            const SplitCandidate best = best_split(fill_bins(prims, mapping), node_area);
+                const SplitCandidate best = best_split(fill_bins(prims, mapping), node_area);
 
-            if (best.is_valid()) {
-                // Stopping is a cost decision, not just a size one: max_leaf_size only bounds it.
-                if (leaf_is_cheaper(count, best.cost)) {
-                    make_leaf(index, bbox, first, count);
-                    return index;
+                if (best.is_valid()) {
+                    // Stopping is a cost decision, not just a size one: max_leaf_size only bounds it.
+                    if (leaf_is_cheaper(count, best.cost)) {
+                        make_leaf(index, bbox, first, count);
+                        return index;
+                    }
+
+                    mid = partition_by_bin(prims, mapping, best.bin);
                 }
-
-                mid = partition_by_bin(prims, mapping, best.bin);
             }
         }
 
-        // Median fallback, reached only when no SAH candidate existed at all: the centroids
-        // coincide on the widest axis, the node box is degenerate, or no bin boundary separates
-        // the primitives. A candidate that does exist always leaves both sides non-empty, so
-        // mid == count is unreachable - the check stays as a guard on that invariant. The tree is
-        // worse than a SAH split, but the recursion is guaranteed to terminate.
+        // Halving fallback. Reached when the depth budget is spent, or when no SAH candidate existed at all:
+        // the centroids coincide on the widest axis, the node box is degenerate, or no bin boundary separates
+        // the primitives. A candidate that does exist always leaves both sides non-empty, so mid == count is
+        // unreachable - the check stays as a guard on that invariant. Halving needs bit_width(count - 1)
+        // levels, which keeps the recursion finite and the depth inside its budget.
         if (mid == 0 || mid == count) mid = count / 2;
 
         build_recursive(first, mid, depth + 1); // Lands at index + 1
@@ -338,11 +356,6 @@ private:
         return index;
     }
 };
-
-// Traversal pushes at most one entry per ancestor on the current root-to-leaf path, so the tree's
-// max depth bounds the stack. Deepest scene today is 13; 64 matches the industry default and
-// leaves room for meshes orders of magnitude larger.
-constexpr int max_traversal_depth = 64;
 
 // A deferred far child, already box-tested by its parent. `t_enter` is geometric and never changes,
 // so a single comparison against the narrowed `closest` reproduces the full slab test's verdict.
@@ -381,8 +394,9 @@ Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& setti
     leaf_count_ = result.leaf_count;
     max_depth_ = result.max_depth;
 
-    // The traversal stack is fixed size; a tree deeper than it would overflow.
-    assert(max_depth_ <= max_traversal_depth);
+    // The builder caps the depth at bvh_max_depth, the traversal stack's capacity.
+    // Checked because a cap that slipped by one level would overflow that stack silently.
+    assert(max_depth_ <= bvh_max_depth);
 }
 
 // Iterative, distance-ordered traversal. The near child is descended into directly and the far one
@@ -404,7 +418,7 @@ bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
 
     // Fixed size and local: hit() is const and will be shared across threads, so no traversal state
     // may live in the object. Capacity is guaranteed by the depth assert in the constructor.
-    std::array<TraversalEntry, max_traversal_depth> stack;
+    std::array<TraversalEntry, bvh_max_depth> stack;
     std::size_t stack_size{};
     std::uint32_t current{};
 

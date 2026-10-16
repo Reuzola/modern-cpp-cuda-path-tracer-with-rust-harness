@@ -16,13 +16,21 @@ namespace pt {
 class Ray;
 class HittableList;
 
+// Deepest node any tree may have; the root is depth 0. It sizes the traversal stack, which holds at
+// most one deferred child per level, and the builder never exceeds it, so no input can overflow it.
+inline constexpr int bvh_max_depth = 64;
+
 // Binned SAH build parameters (cost ratio determines tree shape).
-// Integer fields are clamped: bin_count in [2, 32], max_leaf_size in [1, 65535].
+// Integer fields are clamped: bin_count in [2, 32], max_leaf_size in [1, 65535], depth_limit in [1, bvh_max_depth].
 struct BvhBuildSettings {
     Float traversal_cost{1.0_f};
     Float intersection_cost{8.0_f};
     int bin_count{12};
     int max_leaf_size{4};
+
+    // Cap on node depth. A node that could no longer afford an SAH split under it is halved instead,
+    // so a tree over n primitives is at most max(depth_limit, ceil(log2 n)) deep.
+    int depth_limit{bvh_max_depth};
 };
 
 // Scene-wide BVH statistics accumulated across all meshes, groups, and root trees.

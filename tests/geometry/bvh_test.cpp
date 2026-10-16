@@ -453,13 +453,60 @@ TEST_CASE("the tree's shape obeys its own invariants", "[geometry][bvh]") {
     }
 
     SECTION("the tree stays within the traversal stack's fixed depth") {
-        // 64 duplicates max_traversal_depth, which is private to bvh.cpp. The constructor
-        // asserts the same bound, but assertions are compiled out of Release, where an
-        // over-deep tree would overflow a fixed-size stack silently. Deepest leaf sizes
-        // first: a cap of one produces the tallest tree this builder can make.
+        // The builder caps every tree at bvh_max_depth, the stack's capacity. The constructor asserts the
+        // same bound, but assertions are compiled out of Release, so it is checked here as well. Deepest
+        // leaf size first: a cap of one produces the tallest tree this builder can make.
         const Bvh bvh(scene.objects(), BvhBuildSettings{.max_leaf_size = 1});
 
-        REQUIRE(bvh.max_depth() <= 64);
+        REQUIRE(bvh.max_depth() <= pt::bvh_max_depth);
+    }
+}
+
+TEST_CASE("a depth limit caps the tree without changing a single answer", "[geometry][bvh]") {
+    // 500 rather than the 200 of the other cases: a cloud this size builds three levels past log2 n,
+    // where 200 builds only one, which leaves a limit room to sit strictly between the two.
+    constexpr int primitive_count = 500;
+
+    TestScene scene;
+    fill_sphere_cloud(scene, primitive_count, 4141);
+
+    Sampler sampler{pt::sampler_seed(29, 0, 0)};
+
+    SECTION("a limit the SAH would exceed is met by halving below it") {
+        // Above log2(500) = 9, so the root still splits by SAH and only the deep end of the tree is
+        // halved: the mixed case, where a budget miscounted by one level would show.
+        constexpr int limit = 10;
+
+        // Not vacuous: unconstrained, this cloud builds deeper than the limit.
+        const Bvh unlimited(scene.objects(), BvhBuildSettings{.max_leaf_size = 1});
+        REQUIRE(unlimited.max_depth() > limit);
+
+        const Bvh capped(scene.objects(), BvhBuildSettings{.max_leaf_size = 1, .depth_limit = limit});
+
+        REQUIRE(capped.max_depth() <= limit);
+
+        // Halving reorders nothing and keeps the tree binary: every sphere still in its own leaf.
+        REQUIRE(capped.leaf_count() == static_cast<std::size_t>(primitive_count));
+        REQUIRE(capped.node_count() == 2 * capped.leaf_count() - 1);
+
+        for (int i = 0; i < ray_count; ++i) {
+            require_same_hit(capped, scene.list(), ray_into_scene(sampler, scene.bounds()), visible);
+        }
+    }
+
+    SECTION("a limit no tree can meet halves from the root") {
+        // Every node is over budget, so no SAH split is ever taken. Halving 500 primitives reaches ranges
+        // of three and four after seven levels, and those fit the default leaf size of four: 128 leaves,
+        // all at depth 7. The exact shape is what proves the SAH was bypassed at every node.
+        const Bvh halved(scene.objects(), BvhBuildSettings{.depth_limit = 1});
+
+        REQUIRE(halved.max_depth() == 7);
+        REQUIRE(halved.leaf_count() == 128);
+        REQUIRE(halved.node_count() == 255);
+
+        for (int i = 0; i < ray_count; ++i) {
+            require_same_hit(halved, scene.list(), ray_into_scene(sampler, scene.bounds()), visible);
+        }
     }
 }
 
