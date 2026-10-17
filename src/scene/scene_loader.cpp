@@ -9,6 +9,7 @@
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle_bvh.hpp"
 #include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
@@ -278,11 +279,10 @@ void build_medium(const Json& j, LoadContext& ctx) {
         } else {
             const Mesh* mesh = build_mesh(ctx, resolved, mat);
 
-            // The triangles are organised into a BVH for the same reason a group's children
-            // are: a mesh is thousands of primitives, and acceleration is the renderer's
-            // decision rather than the scene author's, so the format does not name it.
-            const HittableList* triangles = mesh_triangles(ctx.scene.object_arena(), *mesh);
-            result = make_bvh(ctx.scene.object_arena(), *triangles, &ctx.scene.bvh_stats());
+            // The triangles get a tree of their own for the same reason a group's children do: a mesh is
+            // thousands of primitives, and acceleration is the renderer's decision rather than the scene
+            // author's, so the format does not name it.
+            result = make_triangle_bvh(ctx.scene.object_arena(), *mesh, &ctx.scene.bvh_stats());
             ctx.meshes.emplace(key, result);
         }
     } else if (type == "group") {
