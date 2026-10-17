@@ -51,8 +51,10 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
     // |e2| . (|tvec| x |e1|), and the division scales that by 1/|det| - the factor a sliver
     // inflates. A hit no farther than its own rounding cannot be told from the surface the ray
     // left; the bound is relative to this query, never a fixed t_min.
+    // Compared by magnitude: a query may reach behind its origin - a medium's boundary search
+    // does - and a hit there is as real as one ahead. The interval alone decides the sign.
     const Float t_error = gamma(t_error_order) * dot(component_abs(e2), abs_cross(tvec, e1)) * std::fabs(inv_det);
-    if (t <= t_error) return false;
+    if (std::fabs(t) <= t_error) return false;
 
     out.t = t;
     out.b1 = b1;

@@ -1,7 +1,9 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle_bvh.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -38,6 +40,24 @@ const Interval visible{0.0_f, pt::infinity};
 const Sphere cloud{Point3(0, 0, 15), 10.0_f, nullptr};
 
 const Ray forward{Point3(0, 0, 0), Vec3(0, 0, 1)};
+
+// A closed cube spanning [-1, 1] on every axis: twelve triangles over eight shared corners,
+// corner i having bit 0 for x, bit 1 for y and bit 2 for z. Winding does not matter here:
+// the triangle test is two-sided and a medium never reads a normal.
+[[nodiscard]] pt::MeshData closed_cube() {
+    pt::MeshData data;
+    for (int i = 0; i < 8; ++i) {
+        data.positions.emplace_back((i & 1) != 0 ? 1.0_f : -1.0_f, (i & 2) != 0 ? 1.0_f : -1.0_f,
+                                    (i & 4) != 0 ? 1.0_f : -1.0_f);
+    }
+    data.indices = {0, 1, 3, 0, 3, 2,  // z = -1
+                    4, 5, 7, 4, 7, 6,  // z = +1
+                    0, 1, 5, 0, 5, 4,  // y = -1
+                    2, 3, 7, 2, 7, 6,  // y = +1
+                    0, 2, 6, 0, 6, 4,  // x = -1
+                    1, 3, 7, 1, 7, 5}; // x = +1
+    return data;
+}
 
 } // namespace
 
@@ -225,4 +245,36 @@ TEST_CASE("a medium far from the origin still finds its exit", "[geometry][const
     REQUIRE(medium.sample_interaction(r, visible, sampler, rec));
     REQUIRE(rec.t > 9.0_f);
     REQUIRE(rec.t < 11.0_f);
+}
+
+TEST_CASE("a mesh boundary holds its medium for a ray that starts inside", "[geometry][medium]") {
+    const pt::Mesh mesh(closed_cube(), nullptr);
+    const pt::TriangleBvh boundary(mesh);
+    const ConstantMedium medium{&boundary, 50.0_f, nullptr};
+
+    Sampler sampler = make_sampler(40);
+
+    // Off the faces' diagonals, so neither crossing lands on an edge two triangles share.
+    constexpr Float x = 0.2_f;
+    constexpr Float y = -0.3_f;
+
+    // From outside: entry at t = 4, and at this density the event lands just past it. This
+    // half passes with or without the fix: the boundary itself is sound, so a failure below
+    // can only be the search behind the origin.
+    for (int i = 0; i < 16; ++i) {
+        HitRecord rec;
+        REQUIRE(medium.sample_interaction(Ray(Point3(x, y, -5.0_f), Vec3(0, 0, 1)), visible, sampler, rec));
+        REQUIRE(rec.t >= 4.0_f);
+        REQUIRE(rec.t < 4.5_f);
+    }
+
+    // From inside, where every bounce after the first scattering event starts. The entry is
+    // behind the origin at t = -1.1; unless the boundary search reports it, the exit is taken
+    // for the entry, no second crossing exists, and the medium vanishes for this ray.
+    for (int i = 0; i < 16; ++i) {
+        HitRecord rec;
+        REQUIRE(medium.sample_interaction(Ray(Point3(x, y, 0.1_f), Vec3(0, 0, 1)), visible, sampler, rec));
+        REQUIRE(rec.t >= 0.0_f);
+        REQUIRE(rec.t <= 0.9_f);
+    }
 }

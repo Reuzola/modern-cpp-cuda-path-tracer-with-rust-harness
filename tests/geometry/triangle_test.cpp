@@ -172,6 +172,19 @@ TEST_CASE("hits outside the ray interval are rejected", "[geometry][triangle]") 
     }
 }
 
+TEST_CASE("an interval that reaches behind the origin finds the triangle there", "[geometry][triangle]") {
+    // A medium's boundary search asks with Interval::universe: a hit behind the origin is
+    // where a ray that starts inside the volume entered it. The interval decides the sign;
+    // the conservative distance test may only reject hits within their own rounding of zero.
+    const Triangle tri = reference_triangle();
+    const Ray away(Point3(0.25_f, 0.25_f, 1.0_f), Vec3(0.0_f, 0.0_f, 1.0_f));
+
+    HitRecord rec;
+    REQUIRE(tri.hit(away, Interval::universe, rec));
+    REQUIRE_THAT(widen(rec.t), WithinAbs(-1.0, tolerance));
+    require_vec_near(rec.p, Point3(0.25_f, 0.25_f, 0.0_f));
+}
+
 TEST_CASE("a triangle is hit from both sides and flips only the shading normal", "[geometry][triangle]") {
     const Triangle tri = reference_triangle();
     const Vec3 geometric_normal{0.0_f, 0.0_f, 1.0_f};
