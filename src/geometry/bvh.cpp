@@ -389,7 +389,7 @@ Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& setti
     std::vector<Aabb> bounds;
     bounds.reserve(objects.size());
 
-    // Each object's bounds are read once: bounding_box() is virtual, and some objects compute rather than store it.
+    // Each object's bounds are read once: bounding_box() is a virtual call.
     std::ranges::transform(objects, std::back_inserter(bounds), [](const Hittable* obj) { return obj->bounding_box(); });
 
     BvhBuildResult result = build_bvh_topology(bounds, settings);

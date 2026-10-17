@@ -25,7 +25,6 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <filesystem>
 #include <numeric>
 #include <optional>
@@ -168,13 +167,10 @@ void fill_separated_spheres(TestScene& scene, int per_axis, std::uint64_t seed) 
     }
 }
 
-// Mesh geometry is a class of its own here: neighbouring triangles share edges and
-// vertices, so leaf bounds genuinely interpenetrate. The randomly placed triangles above
-// never touch each other, which leaves that case untested.
-//
-// Meshes are held by the scene rather than the arena: Mesh is neither copyable nor
-// movable and MeshTriangle handles are bound to its address, so it must be built in place
-// and outlive the handles. A deque never relocates its elements, unlike a vector.
+// Mesh geometry is a class of its own here: neighbouring triangles share edges and vertices, so leaf
+// bounds genuinely interpenetrate. The randomly placed triangles above never touch each other, which
+// leaves that case untested. Each mesh triangle becomes a standalone Triangle: the generic tree is what
+// is under test, and a mesh's own tree has its tests in triangle_bvh_test.
 class MeshScene {
 public:
     MeshScene() = default;
@@ -184,10 +180,13 @@ public:
     void add_obj(const std::string& filename) {
         const std::filesystem::path path = std::filesystem::path(PT_ASSETS_DIR) / filename;
 
-        meshes_.emplace_back(pt::load_obj(path), materials_.create<pt::Lambertian>(&albedo_));
+        // Read only to resolve the indices: Triangle copies its corners, so the mesh may go.
+        const pt::Mesh mesh(pt::load_obj(path), nullptr);
+        const pt::Material* mat = materials_.create<pt::Lambertian>(&albedo_);
 
-        for (const Hittable* triangle : pt::mesh_triangles(objects_, meshes_.back())->objects()) {
-            list_.add(triangle);
+        for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
+            const auto [a, b, c] = mesh.triangle(i);
+            list_.add(objects_.create<pt::Triangle>(a, b, c, mat));
         }
     }
 
@@ -201,7 +200,6 @@ private:
     const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     pt::Arena<pt::Material> materials_;
     pt::Arena<Hittable> objects_;
-    std::deque<pt::Mesh> meshes_;
     HittableList list_;
 };
 

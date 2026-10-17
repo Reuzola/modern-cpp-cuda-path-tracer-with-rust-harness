@@ -1,14 +1,8 @@
 #include "pt/geometry/mesh.hpp"
 #include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/triangle.hpp"
-#include "pt/math/aabb.hpp"
-#include "pt/math/interval.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include "pt/util/arena.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -71,46 +65,6 @@ Uv Mesh::texture_uv(std::size_t index, Float b1, Float b2) const noexcept {
     const Float b0 = 1.0_f - b1 - b2;
     if (has_uvs()) return interpolated_uv(triangle_uvs(index), b0, b1, b2);
     return Uv{.u = b1, .v = b2};
-}
-
-MeshTriangle::MeshTriangle(const Mesh* mesh, std::uint32_t triangle_index) : mesh_(mesh), triangle_index_(triangle_index) {
-    assert(mesh != nullptr);
-}
-
-bool MeshTriangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    const auto [a, b, c] = mesh_->triangle(triangle_index_);
-
-    TriangleHit tri_hit;
-    if (!intersect_triangle(r, ray_t, a, b, c, tri_hit)) return false;
-
-    const Uv uv = mesh_->texture_uv(triangle_index_, tri_hit.b1, tri_hit.b2);
-
-    rec.t = tri_hit.t;
-    rec.p = barycentric_point(a, b, c, tri_hit.b1, tri_hit.b2);
-    rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
-    rec.u = uv.u;
-    rec.v = uv.v;
-    rec.mat = mesh_->material();
-    rec.set_face_normal(r, tri_hit.normal, mesh_->shading_normal(triangle_index_, tri_hit.b1, tri_hit.b2, tri_hit.normal));
-
-    return true;
-}
-
-Aabb MeshTriangle::bounding_box() const {
-    const auto [a, b, c] = mesh_->triangle(triangle_index_);
-    return triangle_bounds(a, b, c);
-}
-
-const HittableList* mesh_triangles(Arena<Hittable>& arena, const Mesh& mesh) {
-    // Mirrors box(): fills the arena, returns a non-owning view. Wrapping the result in a BVH is the caller's decision.
-    HittableList triangles;
-
-    const std::size_t count = mesh.triangle_count();
-    for (std::size_t i = 0; i < count; i++) {
-        triangles.add(arena.create<MeshTriangle>(&mesh, static_cast<std::uint32_t>(i)));
-    }
-
-    return arena.create<HittableList>(std::move(triangles));
 }
 
 } // namespace pt

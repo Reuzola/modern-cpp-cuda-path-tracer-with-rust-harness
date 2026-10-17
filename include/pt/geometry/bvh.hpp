@@ -175,7 +175,7 @@ template <BvhLeafTest LeafTest>
 }
 
 // Read-only BVH built via binned SAH. Non-owning over primitives (permuted for contiguous leaves).
-// Implements Hittable to support nesting (e.g., mesh and group subtrees).
+// Implements Hittable to support nesting: group subtrees, and the scene's root over them.
 class Bvh final : public Hittable {
 public:
     // `objects` is read during construction only and is not retained.

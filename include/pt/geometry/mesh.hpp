@@ -1,11 +1,8 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
 #include "pt/geometry/triangle.hpp"
-#include "pt/math/aabb.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include "pt/util/arena.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -15,10 +12,7 @@
 
 namespace pt {
 
-class HittableList;
-class Interval;
 class Material;
-class Ray;
 
 // Texture coordinate for one vertex. Deliberately arithmetic-free: the only
 // operation the engine performs on it is barycentric interpolation.
@@ -55,15 +49,15 @@ struct MeshData {
     std::vector<Uv> uvs{};
 };
 
-// Shared vertex/index storage for a triangle mesh. Not a Hittable: rays
-// intersect MeshTriangle handles, which reference this data by index.
+// Shared vertex/index storage for a triangle mesh. Not a Hittable: rays intersect a TriangleBvh
+// built over it, which copies the corners out and comes back here by triangle index for the attributes.
 class Mesh {
 public:
     Mesh(MeshData data, const Material* mat);
     ~Mesh() = default;
 
-    // Neither copyable nor movable: MeshTriangle stores a Mesh*, so relocating
-    // the object would dangle every handle into it.
+    // Neither copyable nor movable: a TriangleBvh keeps a Mesh* to read attributes
+    // on a hit, so relocating the object would dangle every tree built over it.
     Mesh(const Mesh&) = delete;
     Mesh& operator=(const Mesh&) = delete;
     Mesh(Mesh&&) = delete;
@@ -131,22 +125,5 @@ private:
 };
 
 static_assert(!std::is_move_constructible_v<Mesh>);
-
-// One triangle of a Mesh, as a (mesh, index) handle. Bounding boxes are
-// recomputed rather than cached - they are read at BVH build time only.
-class MeshTriangle final : public Hittable {
-public:
-    MeshTriangle(const Mesh* mesh, std::uint32_t triangle_index);
-
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
-
-    [[nodiscard]] Aabb bounding_box() const override;
-
-private:
-    const Mesh* mesh_ = nullptr;
-    std::uint32_t triangle_index_{};
-};
-
-[[nodiscard]] const HittableList* mesh_triangles(Arena<Hittable>& arena, const Mesh& mesh);
 
 } // namespace pt
