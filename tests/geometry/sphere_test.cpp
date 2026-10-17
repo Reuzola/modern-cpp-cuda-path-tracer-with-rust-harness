@@ -335,6 +335,33 @@ TEST_CASE("the cone's density is exact at every distance", "[geometry][sphere]")
     REQUIRE(std::abs(actual / expected - 1.0) < 1.0e-5);
 }
 
+TEST_CASE("pdf_direction stays finite with the shading point on the surface", "[geometry][sphere]") {
+    // The near end of the cone: a point on the sphere itself, where distance and radius agree
+    // only to rounding. It is judged either inside (no cone, density zero) or just outside (a
+    // cone opened to a hemisphere, density 1/(2 pi)). Anything else - a NaN from sqrt(1 - x)
+    // with x a hair past one, an infinity from a vanishing solid angle - would reach the
+    // mixture estimator and stay in the pixel for good.
+    const Sphere unit{Point3(0, 0, 0), 1.0_f, nullptr};
+    Sampler sampler = make_sampler(6);
+    constexpr double hemisphere_density = 1.0 / (2.0 * std::numbers::pi);
+
+    for (int i = 0; i < 256; ++i) {
+        const Vec3 n = pt::random_unit_vector(sampler);
+
+        // Into the sphere, from the hemisphere around -n: the chord makes the test hit.
+        Vec3 into = pt::random_unit_vector(sampler);
+        if (dot(into, n) > 0.0_f) into = -into;
+
+        const pt::Float pdf = unit.pdf_direction(n, into);
+        INFO("normal (" << n.x() << ", " << n.y() << ", " << n.z() << "): pdf " << pdf);
+        REQUIRE(std::isfinite(pdf));
+
+        const bool judged_inside = pdf == 0.0_f;
+        const bool judged_hemisphere = std::abs(pt_test::widen(pdf) / hemisphere_density - 1.0) < 1.0e-2;
+        REQUIRE((judged_inside || judged_hemisphere));
+    }
+}
+
 TEST_CASE("directions sampled toward a distant light land on it", "[geometry][sphere]") {
     // The cone sampled through a cancelling 1 - cos also came out too wide, so a share
     // of the directions aimed at a far light missed it: a sample the pdf then calls
