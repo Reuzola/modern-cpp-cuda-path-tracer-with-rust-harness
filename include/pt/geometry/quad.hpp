@@ -7,10 +7,41 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <type_traits>
 
 namespace pt {
 
 class Material;
+
+// What a quad's intersection test reads: corner, edges, and the plane and inverse basis
+// derived from them once. Trivially copyable for the same reason as SphereShape.
+struct QuadShape {
+    Point3 q;
+    Vec3 u;
+    Vec3 v;
+    Vec3 normal; // Unit
+    Float d{};   // Plane offset, normal . q
+    Vec3 w;      // n / (n . n) with n = u x v: recovers (alpha, beta) without forming a matrix
+};
+
+static_assert(std::is_trivially_copyable_v<QuadShape>);
+
+// Pure geometric result of the quad test: distance, and the hit's coordinates along u_ and v_.
+struct QuadHit {
+    Float t{};
+    Float alpha{};
+    Float beta{};
+};
+
+[[nodiscard]] QuadShape make_quad_shape(const Point3& q, const Vec3& u, const Vec3& v) noexcept;
+
+[[nodiscard]] Aabb quad_bounds(const QuadShape& quad) noexcept;
+
+// Geometric test only; writes out on a hit and leaves it untouched otherwise.
+[[nodiscard]] bool intersect_quad(const Ray& r, const Interval& ray_t, const QuadShape& quad, QuadHit& out) noexcept;
+
+// Everything a hit carries beyond its distance, for the one candidate that won.
+void fill_quad_record(const Ray& r, const QuadShape& quad, const QuadHit& hit, const Material* mat, HitRecord& rec) noexcept;
 
 class Quad final : public Hittable, public Sampleable {
 public:
@@ -25,32 +56,10 @@ public:
     [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
 private:
-    Point3 q_;
-    Vec3 u_, v_;
+    QuadShape shape_;
     const Material* mat_ = nullptr;
     Aabb bbox_;
-    Vec3 normal_;
-    Float d_{};
-    Vec3 w_;
-    Float area_{};
-    Float spawn_margin_{}; // Fixed per quad: bounds the rounding of its own plane test, which scales with its coordinates.
-
-    void set_bounding_box();
-
-    // Pure geometric result of the quad test: distance, and the hit's coordinates along u_ and v_.
-    struct QuadHit {
-        Float t{};
-        Float alpha{};
-        Float beta{};
-    };
-
-    [[nodiscard]] static bool is_interior(Float a, Float b) noexcept;
-
-    // Geometric test only; writes out on a hit and leaves it untouched otherwise.
-    [[nodiscard]] bool find_hit(const Ray& r, const Interval& ray_t, QuadHit& out) const noexcept;
-
-    // Everything a hit carries beyond its distance; run once per accepted root.
-    void fill_record(const Ray& r, const QuadHit& quad_hit, HitRecord& rec) const noexcept;
+    Float area_{}; // Light sampling only: turns the area density into a solid-angle one.
 };
 
 } // namespace pt
