@@ -3,17 +3,34 @@
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
+#include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
+#include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
+#include "pt/util/stats.hpp"
+#include <array>
 #include <chrono>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 namespace pt {
 
-class Ray;
+namespace detail {
+
+// A deferred far child, already box-tested by its parent. `t_enter` is geometric and never changes,
+// so a single comparison against the narrowed `closest` reproduces the full slab test's verdict.
+struct TraversalEntry {
+    std::uint32_t index{};
+    Float t_enter{};
+};
+
+} // namespace detail
+
 class HittableList;
 
 // Deepest node any tree may have; the root is depth 0. It sizes the traversal stack, which holds at
@@ -67,6 +84,92 @@ struct BvhBuildResult {
     BvhTopology topology;
     std::vector<std::uint32_t> primitive_order; // Leaf slot k holds input primitive primitive_order[k]
 };
+
+// A leaf test: handed a leaf and the interval still open, it reports the nearest hit it found inside
+// that interval, or nothing. What a hit records is the test's own business; traversal only narrows by t.
+template <typename F>
+concept BvhLeafTest = std::invocable<F&, const BvhNode&, const Interval&> &&
+                      std::same_as<std::invoke_result_t<F&, const BvhNode&, const Interval&>, std::optional<Float>>;
+
+// Iterative, distance-ordered traversal. The near child is descended into directly and the far one
+// is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
+// single comparison instead of a repeated slab test. Shared by every tree; only the leaf differs.
+template <BvhLeafTest LeafTest>
+[[nodiscard]] bool bvh_closest_hit(const BvhTopology& topology, const Ray& r, const Interval& ray_t, LeafTest leaf_test) {
+    const std::span<const BvhNode> nodes = topology.nodes;
+    if (nodes.empty()) return false;
+
+    // Divided once per query, not once per node. It must live here rather than in Ray: Instance builds a
+    // transformed ray per hit, and nested trees (meshes, groups) each see a different one.
+    const Vec3 inv_dir(1.0_f / r.direction().x(), 1.0_f / r.direction().y(), 1.0_f / r.direction().z());
+    Float closest{ray_t.max}; // Narrowing upper bound; the parameter the recursion used to carry
+    bool is_hit{false};
+
+    // Tested outside the loop to establish the invariant the body relies on: `current` always names a
+    // node whose box has already been tested and passed.
+    count_node_test();
+    if (!nodes[0].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest))) return false;
+
+    // Fixed size and local: hit() is const and will be shared across threads, so no traversal state
+    // may live in the object. Capacity is guaranteed by the builder's depth cap, bvh_max_depth.
+    std::array<detail::TraversalEntry, bvh_max_depth> stack;
+    std::size_t stack_size{};
+    std::uint32_t current{};
+
+    while (true) {
+        const BvhNode& node = nodes[current];
+        if (node.is_leaf()) {
+            // The whole leaf is the test's to consume; then fall through to the pop step.
+            if (const std::optional<Float> t = leaf_test(node, Interval(ray_t.min, closest))) {
+                is_hit = true;
+                closest = *t;
+            }
+        } else { // interior branch
+            // Left child is implicit at index + 1 (depth-first layout); the right index is what the node stores.
+            const std::uint32_t left = current + 1;
+            const std::uint32_t right = node.offset;
+
+            count_node_test();
+            const std::optional<Float> t_left = nodes[left].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
+            count_node_test();
+            const std::optional<Float> t_right = nodes[right].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
+
+            if (t_left && t_right) {
+                // Ties go left, matching the build's ordering and keeping the traversal deterministic.
+                const bool left_is_near = *t_left <= *t_right;
+                const std::uint32_t near_child = left_is_near ? left : right;
+                const std::uint32_t far_child = left_is_near ? right : left;
+                const Float far_t = left_is_near ? *t_right : *t_left;
+
+                current = near_child;
+                stack[stack_size++] = {.index = far_child, .t_enter = far_t};
+                continue;
+            }
+            if (t_left) {
+                current = left;
+                continue;
+            }
+            if (t_right) {
+                current = right;
+                continue;
+            }
+        }
+
+        // Pops until an entry survives the narrowed bound. More than one can have gone stale, since every
+        // hit since they were pushed lowered `closest`.
+        bool found{false};
+        while (stack_size > 0) {
+            const detail::TraversalEntry entry = stack[--stack_size];
+            if (entry.t_enter <= closest) {
+                current = entry.index;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) return is_hit;
+    }
+}
 
 // Read-only BVH built via binned SAH. Non-owning over primitives (permuted for contiguous leaves).
 // Implements Hittable to support nesting (e.g., mesh and group subtrees).

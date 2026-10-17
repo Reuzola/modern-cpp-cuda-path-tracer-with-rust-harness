@@ -5,6 +5,7 @@
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
+#include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
@@ -347,13 +348,6 @@ private:
     }
 };
 
-// A deferred far child, already box-tested by its parent. `t_enter` is geometric and never changes,
-// so a single comparison against the narrowed `closest` reproduces the full slab test's verdict.
-struct TraversalEntry {
-    std::uint32_t index{};
-    Float t_enter{};
-};
-
 // Tests one leaf. A leaf is a contiguous run of primitives, which is what (offset, count) encodes.
 // The interval narrows as closer hits are found, so later primitives are rejected earlier.
 [[nodiscard]] bool hit_leaf(std::span<const Hittable* const> prims, const Ray& r,
@@ -398,83 +392,13 @@ Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& setti
     std::ranges::transform(result.primitive_order, std::back_inserter(primitives_), [objects](std::uint32_t i) { return objects[i]; });
 }
 
-// Iterative, distance-ordered traversal. The near child is descended into directly and the far one
-// is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
-// single comparison instead of a repeated slab test.
 bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    if (topology_.nodes.empty()) return false;
-
-    // Divided once per query, not once per node. It must live here rather than in Ray: Instance builds a
-    // transformed ray per hit, and nested trees (meshes, groups) each see a different one.
-    const Vec3 inv_dir(1.0_f / r.direction().x(), 1.0_f / r.direction().y(), 1.0_f / r.direction().z());
-    Float closest{ray_t.max}; // Narrowing upper bound; the parameter the recursion used to carry
-    bool is_hit{false};
-
-    // Tested outside the loop to establish the invariant the body relies on: `current` always names a
-    // node whose box has already been tested and passed.
-    count_node_test();
-    if (!topology_.nodes[0].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest))) return false;
-
-    // Fixed size and local: hit() is const and will be shared across threads, so no traversal state
-    // may live in the object. Capacity is guaranteed by the depth assert in build_bvh_topology.
-    std::array<TraversalEntry, bvh_max_depth> stack;
-    std::size_t stack_size{};
-    std::uint32_t current{};
-
-    while (true) {
-        const BvhNode& node = topology_.nodes[current];
-        if (node.is_leaf()) {
-            // A leaf is a contiguous primitive range, so the whole leaf is consumed here; then fall through to the pop step.
-            const std::span<const Hittable* const> leaf_prims = std::span(primitives_).subspan(node.offset, node.count);
-            if (hit_leaf(leaf_prims, r, Interval(ray_t.min, closest), rec)) {
-                is_hit = true;
-                closest = rec.t;
-            }
-        } else { // interior branch
-            // Left child is implicit at index + 1 (depth-first layout); the right index is what the node stores.
-            const std::uint32_t left = current + 1;
-            const std::uint32_t right = node.offset;
-
-            count_node_test();
-            const std::optional<Float> t_left = topology_.nodes[left].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
-            count_node_test();
-            const std::optional<Float> t_right = topology_.nodes[right].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest));
-
-            if (t_left && t_right) {
-                // Ties go left, matching the build's ordering and keeping the traversal deterministic.
-                const bool left_is_near = *t_left <= *t_right;
-                const std::uint32_t near_child = left_is_near ? left : right;
-                const std::uint32_t far_child = left_is_near ? right : left;
-                const Float far_t = left_is_near ? *t_right : *t_left;
-
-                current = near_child;
-                stack[stack_size++] = {.index = far_child, .t_enter = far_t};
-                continue;
-            }
-            if (t_left) {
-                current = left;
-                continue;
-            }
-            if (t_right) {
-                current = right;
-                continue;
-            }
-        }
-
-        // Pops until an entry survives the narrowed bound. More than one can have gone stale, since every
-        // hit since they were pushed lowered `closest`.
-        bool found{false};
-        while (stack_size > 0) {
-            const TraversalEntry entry = stack[--stack_size];
-            if (entry.t_enter <= closest) {
-                current = entry.index;
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) return is_hit;
-    }
+    // A Hittable leaf asks each object in turn; the record is whatever the nearest one wrote.
+    return bvh_closest_hit(topology_, r, ray_t, [this, &r, &rec](const BvhNode& leaf, const Interval& open) -> std::optional<Float> {
+        const std::span prims = std::span(primitives_).subspan(leaf.offset, leaf.count);
+        if (!hit_leaf(prims, r, open, rec)) return std::nullopt;
+        return rec.t;
+    });
 }
 
 Aabb Bvh::bounding_box() const { return topology_.nodes.empty() ? Aabb() : topology_.nodes[0].bbox; }

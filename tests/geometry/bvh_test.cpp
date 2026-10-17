@@ -28,6 +28,7 @@
 #include <deque>
 #include <filesystem>
 #include <numeric>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -288,6 +289,35 @@ void require_same_hit(const Bvh& bvh, const HittableList& reference, const Ray& 
     }
     return boxes;
 }
+
+[[nodiscard]] Vec3 reciprocal(const Vec3& d) {
+    return Vec3(1.0_f / d.x(), 1.0_f / d.y(), 1.0_f / d.z());
+}
+
+// Boxes as primitives in their own right: the nearest entry distance inside the interval. The slab test
+// narrows nothing itself, so the interval is narrowed here, the way a primitive's own test would be.
+[[nodiscard]] std::optional<Float> nearest_box(std::span<const Aabb> boxes, const Ray& r, const Vec3& inv_dir, Interval ray_t) {
+    std::optional<Float> nearest;
+    for (const Aabb& box : boxes) {
+        if (const std::optional<Float> t = box.intersect(r.origin(), inv_dir, ray_t)) {
+            nearest = t;
+            ray_t.max = *t;
+        }
+    }
+    return nearest;
+}
+
+[[nodiscard]] Aabb union_of(std::span<const Aabb> boxes) {
+    Aabb all;
+    for (const Aabb& box : boxes)
+        all = Aabb(all, box);
+    return all;
+}
+
+// The leaf-test contract is checked when the template is named, not discovered as a wrong answer later.
+static_assert(pt::BvhLeafTest<decltype([](const pt::BvhNode&, const Interval&) { return std::optional<Float>{}; })>);
+static_assert(!pt::BvhLeafTest<decltype([](const pt::BvhNode&, const Interval&) { return true; })>);
+static_assert(!pt::BvhLeafTest<decltype([](const pt::BvhNode&) { return std::optional<Float>{}; })>);
 
 void require_same_box(const Aabb& actual, const Aabb& expected) {
     REQUIRE(actual.x.min == expected.x.min);
@@ -727,4 +757,103 @@ TEST_CASE("an empty input builds an empty topology", "[geometry][bvh]") {
     REQUIRE(build.topology.leaf_count == 0);
     REQUIRE(build.topology.max_depth == 0);
     REQUIRE(build.primitive_order.empty());
+}
+
+TEST_CASE("traversal over a bare topology finds what a brute-force scan finds", "[geometry][bvh]") {
+    const BvhBuildSettings settings =
+        GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1}, BvhBuildSettings{.depth_limit = 1});
+
+    const std::vector<Aabb> boxes = random_boxes(300, 2718);
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, settings);
+
+    // Laid out in the build's order, as any owner of a topology lays out its primitives.
+    std::vector<Aabb> ordered;
+    ordered.reserve(boxes.size());
+    for (const std::uint32_t index : build.primitive_order)
+        ordered.push_back(boxes[index]);
+
+    const Aabb bounds = union_of(boxes);
+    Sampler sampler{pt::sampler_seed(31, 0, 0)};
+
+    const auto require_same_nearest = [&](const Ray& r, const Interval& ray_t) {
+        const Vec3 inv_dir = reciprocal(r.direction());
+
+        // Only reports that narrowed are kept: traversal accepts a leaf's answer only when it is
+        // nearer than everything before it, so the last one kept is the nearest overall.
+        std::optional<Float> nearest_seen;
+        const bool hit = pt::bvh_closest_hit(build.topology, r, ray_t, [&](const pt::BvhNode& leaf, const Interval& open) {
+            const std::optional<Float> t = nearest_box(std::span(ordered).subspan(leaf.offset, leaf.count), r, inv_dir, open);
+            if (t) nearest_seen = t;
+            return t;
+        });
+
+        const std::optional<Float> scanned = nearest_box(boxes, r, inv_dir, ray_t);
+
+        // Exact: both paths run the same slab test on the same boxes and the same ray. The tree only
+        // decides which boxes are asked, never what they answer. Ties need no care: equal distances
+        // are the same value whichever box reported them.
+        REQUIRE(hit == scanned.has_value());
+        REQUIRE(nearest_seen == scanned);
+    };
+
+    SECTION("rays aimed through the boxes") {
+        for (int i = 0; i < ray_count; ++i)
+            require_same_nearest(ray_into_scene(sampler, bounds), visible);
+    }
+
+    SECTION("rays starting among the boxes") {
+        for (int i = 0; i < ray_count; ++i)
+            require_same_nearest(ray_inside_scene(sampler, bounds), visible);
+    }
+
+    SECTION("rays whose interval ends among the boxes") {
+        for (int i = 0; i < ray_count; ++i) {
+            require_same_nearest(ray_into_scene(sampler, bounds), Interval(0.001_f, sampler.next_scalar(1.0_f, 30.0_f)));
+        }
+    }
+}
+
+TEST_CASE("the interval handed to leaves only ever narrows", "[geometry][bvh]") {
+    const std::vector<Aabb> boxes = random_boxes(300, 1618);
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, BvhBuildSettings{.max_leaf_size = 1});
+
+    std::vector<Aabb> ordered;
+    ordered.reserve(boxes.size());
+    for (const std::uint32_t index : build.primitive_order)
+        ordered.push_back(boxes[index]);
+
+    Sampler sampler{pt::sampler_seed(37, 0, 0)};
+    const Interval ray_t{0.0_f, 50.0_f};
+
+    for (int i = 0; i < 200; ++i) {
+        const Ray r = ray_into_scene(sampler, union_of(boxes));
+        const Vec3 inv_dir = reciprocal(r.direction());
+
+        std::vector<Interval> seen;
+        static_cast<void>(pt::bvh_closest_hit(build.topology, r, ray_t, [&](const pt::BvhNode& leaf, const Interval& open) {
+            seen.push_back(open);
+            return nearest_box(std::span(ordered).subspan(leaf.offset, leaf.count), r, inv_dir, open);
+        }));
+
+        if (seen.empty()) continue;
+
+        // The first leaf sees the caller's interval untouched, and the lower bound never moves.
+        REQUIRE(seen.front().max == ray_t.max);
+        for (std::size_t k = 0; k < seen.size(); ++k) {
+            REQUIRE(seen[k].min == ray_t.min);
+            if (k > 0) REQUIRE(seen[k].max <= seen[k - 1].max);
+        }
+    }
+}
+
+TEST_CASE("an empty topology asks no leaf", "[geometry][bvh]") {
+    int calls = 0;
+    const bool hit = pt::bvh_closest_hit(pt::BvhTopology{}, Ray(Point3(0, 0, 0), Vec3(1, 0, 0)), visible,
+                                         [&](const pt::BvhNode&, const Interval&) -> std::optional<Float> {
+                                             ++calls;
+                                             return 0.0_f;
+                                         });
+
+    REQUIRE_FALSE(hit);
+    REQUIRE(calls == 0);
 }
