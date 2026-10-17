@@ -30,6 +30,7 @@ add_executable(pathtracer_tests
   geometry/constant_medium_test.cpp
   geometry/triangle_test.cpp
   geometry/mesh_test.cpp
+  geometry/triangle_bvh_test.cpp
   geometry/bvh_test.cpp
   geometry/self_intersection_test.cpp
 

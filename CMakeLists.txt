@@ -157,6 +157,7 @@ add_library(pathtracer_core STATIC
   src/geometry/mesh.cpp
   src/geometry/quad.cpp
   src/geometry/sphere.cpp
+  src/geometry/triangle_bvh.cpp
   src/geometry/triangle.cpp
 
   src/textures/checker_texture.cpp

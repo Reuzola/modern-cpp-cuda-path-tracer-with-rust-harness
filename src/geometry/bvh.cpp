@@ -368,6 +368,14 @@ private:
 
 } // namespace
 
+void BvhStats::record(const BvhTopology& topology, std::chrono::nanoseconds time) noexcept {
+    build_time += time;
+    ++bvh_count;
+    node_count += topology.nodes.size();
+    leaf_count += topology.leaf_count;
+    max_depth = std::max(max_depth, topology.max_depth);
+}
+
 BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings) {
     BvhBuildResult result = BvhBuilder(primitive_bounds, settings).build();
 
@@ -409,15 +417,8 @@ const Bvh* make_bvh(Arena<Hittable>& arena, const HittableList& list, BvhStats* 
     const Bvh* root = arena.create<Bvh>(list.objects(), settings);
     const auto end = std::chrono::steady_clock::now();
 
-    // Folded in, not assigned: a scene builds one tree per mesh and group, and these are the totals.
-    if (stats != nullptr) {
-        stats->build_time += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        ++stats->bvh_count;
-        stats->node_count += root->node_count();
-        stats->leaf_count += root->leaf_count();
-        stats->max_depth = std::max(stats->max_depth, root->max_depth());
-    }
-
+    // A scene builds one tree per mesh and group; these are its totals.
+    if (stats != nullptr) stats->record(root->topology(), std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
     return root;
 }
 

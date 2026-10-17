@@ -50,15 +50,6 @@ struct BvhBuildSettings {
     int depth_limit{bvh_max_depth};
 };
 
-// Scene-wide BVH statistics accumulated across all meshes, groups, and root trees.
-struct BvhStats {
-    std::size_t bvh_count{};               // Trees folded in so far
-    std::size_t node_count{};              // Interior and leaf nodes, summed over all trees
-    std::size_t leaf_count{};              // Leaf nodes, summed over all trees
-    int max_depth{};                       // Deepest node of any tree (each tree's root is depth 0)
-    std::chrono::nanoseconds build_time{}; // Summed over all trees; integer ns, so lossless
-};
-
 // One node of the flat BVH. Nodes are laid out depth first, which places the left
 // child directly after its parent, so only the right child needs a stored index.
 struct BvhNode {
@@ -78,6 +69,18 @@ struct BvhTopology {
     std::vector<BvhNode> nodes; // Depth first; nodes[0] is the root when non-empty
     std::size_t leaf_count{};
     int max_depth{};
+};
+
+// Scene-wide BVH statistics accumulated across all meshes, groups, and root trees.
+struct BvhStats {
+    std::size_t bvh_count{};               // Trees folded in so far
+    std::size_t node_count{};              // Interior and leaf nodes, summed over all trees
+    std::size_t leaf_count{};              // Leaf nodes, summed over all trees
+    int max_depth{};                       // Deepest node of any tree (each tree's root is depth 0)
+    std::chrono::nanoseconds build_time{}; // Summed over all trees; integer ns, so lossless
+
+    // Folds one finished tree in. Counts add across trees; depth is the deepest of any.
+    void record(const BvhTopology& topology, std::chrono::nanoseconds time) noexcept;
 };
 
 struct BvhBuildResult {
@@ -190,6 +193,8 @@ public:
     [[nodiscard]] std::size_t leaf_count() const noexcept { return topology_.leaf_count; }
 
     [[nodiscard]] int max_depth() const noexcept { return topology_.max_depth; }
+
+    [[nodiscard]] const BvhTopology& topology() const noexcept { return topology_; }
 
 private:
     BvhTopology topology_;
