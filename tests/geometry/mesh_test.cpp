@@ -363,3 +363,49 @@ TEST_CASE("both halves of a two-triangle quad are reachable through the list", "
         REQUIRE_FALSE(triangles->hit(ray_from_above(1.5_f, 1.5_f), visible, rec));
     }
 }
+
+TEST_CASE("attribute lookups answer by triangle index and barycentrics", "[geometry][mesh]") {
+    const Vec3 flat(0.0_f, 0.0_f, 1.0_f);
+
+    SECTION("without vertex normals the geometric normal comes back untouched") {
+        const Mesh mesh = quad_mesh(nullptr);
+        const Vec3 n = mesh.shading_normal(0, 0.5_f, 0.25_f, flat);
+
+        // Exact: nothing is computed, the argument is handed back.
+        REQUIRE(n.x() == flat.x());
+        REQUIRE(n.y() == flat.y());
+        REQUIRE(n.z() == flat.z());
+    }
+    SECTION("vertex normals are blended by the barycentrics and normalised") {
+        const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
+
+        // Triangle 0 is (v0, v1, v2): weights 0.25, 0.5 and 0.25 on (0,0,1), (1,0,0) and (0,1,0).
+        require_vec_near(mesh.shading_normal(0, 0.5_f, 0.25_f, flat), unit_vector(Vec3(2.0_f, 1.0_f, 1.0_f)));
+    }
+    SECTION("vertex normals that cancel fall back to the geometric normal") {
+        std::vector<Vec3> opposing = quad_normals();
+        opposing[0] = Vec3(0.0_f, 0.0_f, 1.0_f);
+        opposing[1] = Vec3(0.0_f, 0.0_f, -1.0_f);
+        const Mesh mesh = quad_mesh_with(std::move(opposing), {}, nullptr);
+
+        // Halfway along v0-v1 the two opposite normals sum to zero.
+        const Vec3 n = mesh.shading_normal(0, 0.5_f, 0.0_f, flat);
+        REQUIRE(n.x() == flat.x());
+        REQUIRE(n.y() == flat.y());
+        REQUIRE(n.z() == flat.z());
+    }
+    SECTION("without UVs the barycentrics are the coordinates") {
+        const Mesh mesh = quad_mesh(nullptr);
+        const Uv uv = mesh.texture_uv(0, 0.5_f, 0.25_f);
+
+        REQUIRE(uv.u == 0.5_f);
+        REQUIRE(uv.v == 0.25_f);
+    }
+    SECTION("vertex UVs are blended over the triangle's own vertices") {
+        const Mesh mesh = quad_mesh_with({}, quad_uvs(), nullptr);
+
+        // Triangle 1 is (v0, v2, v3), with UVs (0,0), (1,1), (0,1) and weights 0.25, 0.5, 0.25.
+        // Triangle 0 at the same barycentrics would give (0.75, 0.25): the index is what decides.
+        require_uv_near(mesh.texture_uv(1, 0.5_f, 0.25_f).u, mesh.texture_uv(1, 0.5_f, 0.25_f).v, 0.5_f, 0.75_f);
+    }
+}

@@ -107,6 +107,14 @@ public:
         return TriangleUvs{.a = a, .b = b, .c = c};
     }
 
+    // The normal shading uses at barycentrics (b1, b2) of triangle `index`: the vertex normals blended, or
+    // `geometric` when the mesh has none or the blend cancels out. Read once per hit, never per test.
+    [[nodiscard]] Vec3 shading_normal(std::size_t index, Float b1, Float b2, const Vec3& geometric) const noexcept;
+
+    // Texture coordinate at barycentrics (b1, b2) of triangle `index`: the vertex UVs blended, or the
+    // barycentrics themselves when the mesh has none, which is what a lone triangle reports.
+    [[nodiscard]] Uv texture_uv(std::size_t index, Float b1, Float b2) const noexcept;
+
     [[nodiscard]] std::span<const Point3> positions() const noexcept { return data_.positions; }
 
     [[nodiscard]] std::span<const std::uint32_t> indices() const noexcept { return data_.indices; }

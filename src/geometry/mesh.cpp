@@ -61,6 +61,18 @@ Mesh::Mesh(MeshData data, const Material* mat) : data_(std::move(data)), mat_(ma
     }
 }
 
+Vec3 Mesh::shading_normal(std::size_t index, Float b1, Float b2, const Vec3& geometric) const noexcept {
+    const Float b0 = 1.0_f - b1 - b2;
+    if (has_normals()) return interpolated_normal(triangle_normals(index), b0, b1, b2, geometric);
+    return geometric;
+}
+
+Uv Mesh::texture_uv(std::size_t index, Float b1, Float b2) const noexcept {
+    const Float b0 = 1.0_f - b1 - b2;
+    if (has_uvs()) return interpolated_uv(triangle_uvs(index), b0, b1, b2);
+    return Uv{.u = b1, .v = b2};
+}
+
 MeshTriangle::MeshTriangle(const Mesh* mesh, std::uint32_t triangle_index) : mesh_(mesh), triangle_index_(triangle_index) {
     assert(mesh != nullptr);
 }
@@ -71,14 +83,7 @@ bool MeshTriangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) cons
     TriangleHit tri_hit;
     if (!intersect_triangle(r, ray_t, a, b, c, tri_hit)) return false;
 
-    const Float b0 = 1.0_f - tri_hit.b1 - tri_hit.b2;
-    const Vec3 shading_normal = mesh_->has_normals()
-                                    ? interpolated_normal(mesh_->triangle_normals(triangle_index_), b0, tri_hit.b1, tri_hit.b2, tri_hit.normal)
-                                    : tri_hit.normal;
-
-    const Uv uv = mesh_->has_uvs()
-                      ? interpolated_uv(mesh_->triangle_uvs(triangle_index_), b0, tri_hit.b1, tri_hit.b2)
-                      : Uv{.u = tri_hit.b1, .v = tri_hit.b2};
+    const Uv uv = mesh_->texture_uv(triangle_index_, tri_hit.b1, tri_hit.b2);
 
     rec.t = tri_hit.t;
     rec.p = barycentric_point(a, b, c, tri_hit.b1, tri_hit.b2);
@@ -86,7 +91,7 @@ bool MeshTriangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) cons
     rec.u = uv.u;
     rec.v = uv.v;
     rec.mat = mesh_->material();
-    rec.set_face_normal(r, tri_hit.normal, shading_normal);
+    rec.set_face_normal(r, tri_hit.normal, mesh_->shading_normal(triangle_index_, tri_hit.b1, tri_hit.b2, tri_hit.normal));
 
     return true;
 }
