@@ -276,7 +276,7 @@ private:
     // plus that meets the limit, an unbalanced SAH split could no longer be paid for, so from here down
     // the range is halved, which keeps every node below within the limit.
     [[nodiscard]] bool depth_budget_spent(int depth, std::size_t count) const noexcept {
-        const int levels = static_cast<int>(std::bit_width(count - 1));
+        const int levels = std::bit_width(count - 1);
         return depth + levels >= settings_.depth_limit;
     }
 
