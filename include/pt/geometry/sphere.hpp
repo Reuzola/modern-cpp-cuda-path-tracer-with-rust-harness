@@ -8,11 +8,35 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include <optional>
+#include <type_traits>
 
 namespace pt {
 
 class Material;
 
+// What a sphere's intersection test reads, and all it reads: trivially copyable, so a set can
+// lay these out in leaf order and a device buffer can hold them as they are.
+struct SphereShape {
+    Point3 center; // At shutter open
+    Vec3 motion;   // Travel over the shutter interval; zero for a static sphere
+    Float radius{};
+
+    // Where a ray at `time` finds the centre; the bounds sweep it over [0, 1].
+    [[nodiscard]] constexpr Point3 center_at(Float time) const noexcept { return center + time * motion; }
+};
+
+static_assert(std::is_trivially_copyable_v<SphereShape>);
+
+// Swept over the whole shutter interval: one tree serves every time a ray may carry.
+[[nodiscard]] Aabb sphere_bounds(const SphereShape& sphere) noexcept;
+
+// Geometric test only: the nearest root inside ray_t, at the centre the ray's time selects.
+[[nodiscard]] std::optional<Float> intersect_sphere(const Ray& r, const Interval& ray_t, const SphereShape& sphere) noexcept;
+
+// Everything a hit carries beyond its distance, for the one candidate that won.
+void fill_sphere_record(const Ray& r, const SphereShape& sphere, Float t, const Material* mat, HitRecord& rec) noexcept;
+
+// One sphere and its material: a scene object, and a target for light sampling.
 class Sphere final : public Hittable, public Sampleable {
 public:
     Sphere(const Point3& center1, const Point3& center2, Float radius, const Material* mat);
@@ -28,30 +52,9 @@ public:
     [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
 private:
-    Ray center_;
-    Float radius_;
+    SphereShape shape_;
     const Material* mat_ = nullptr;
     Aabb bbox_;
-    Float spawn_margin_{}; // Fixed per sphere: proportional to the radius, never to the hit point.
-
-    struct UvCoords {
-        Float u{}, v{};
-    };
-
-    [[nodiscard]] static UvCoords get_sphere_uv(const Point3& p);
-
-    // 1 - cos(theta_max) of the cone a sphere subtends, shared by the
-    // density and the sampler so the two describe one cone.
-    [[nodiscard]] static Float cone_one_minus_cos(Float radius, Float distance_squared) noexcept;
-
-    [[nodiscard]] static Vec3 random_to_sphere(Float radius, Float distance_squared, Sampler& sampler);
-
-    // Geometric test only: the nearest root inside ray_t. Static and handed
-    // its data, so the light pdf can ask hit-or-miss without paying for the record.
-    [[nodiscard]] static std::optional<Float> find_root(const Ray& r, const Point3& center, Float radius, const Interval& ray_t) noexcept;
-
-    // Everything a hit carries beyond its distance; run once per accepted root.
-    void fill_record(const Ray& r, const Point3& center, Float t, HitRecord& rec) const noexcept;
 };
 
 } // namespace pt
