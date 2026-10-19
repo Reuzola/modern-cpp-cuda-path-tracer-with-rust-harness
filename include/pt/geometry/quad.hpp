@@ -55,6 +55,10 @@ public:
 
     [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
+    [[nodiscard]] const QuadShape& shape() const noexcept { return shape_; }
+
+    [[nodiscard]] const Material* material() const noexcept { return mat_; }
+
 private:
     QuadShape shape_;
     const Material* mat_ = nullptr;

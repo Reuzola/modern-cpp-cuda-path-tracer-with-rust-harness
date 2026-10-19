@@ -51,6 +51,10 @@ public:
 
     [[nodiscard]] Vec3 sample_direction(const Point3& origin, Sampler& sampler) const override;
 
+    [[nodiscard]] const SphereShape& shape() const noexcept { return shape_; }
+
+    [[nodiscard]] const Material* material() const noexcept { return mat_; }
+
 private:
     SphereShape shape_;
     const Material* mat_ = nullptr;
