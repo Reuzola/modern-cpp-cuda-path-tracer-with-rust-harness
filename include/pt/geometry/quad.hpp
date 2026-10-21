@@ -13,14 +13,13 @@ namespace pt {
 
 class Material;
 
-// What a quad's intersection test reads: corner, edges, and the plane and inverse basis
+// /What a quad's intersection test reads: corner, edges, and the normal and inverse basis
 // derived from them once. Trivially copyable for the same reason as SphereShape.
 struct QuadShape {
     Point3 q;
     Vec3 u;
     Vec3 v;
     Vec3 normal; // Unit
-    Float d{};   // Plane offset, normal . q
     Vec3 w;      // n / (n . n) with n = u x v: recovers (alpha, beta) without forming a matrix
 };
 

@@ -236,21 +236,29 @@ TEST_CASE("a hit point is rebuilt from the quad's own basis", "[geometry][quad]"
     }
 }
 
-TEST_CASE("a quad's spawn margin is fixed by its own coordinates", "[geometry][quad]") {
-    // The next plane test rounds d - n . origin, whose terms are the size of the
-    // quad's coordinates, not of the hit point. So the margin is one value per
-    // quad - every hit on it carries the same - and it grows with the coordinates:
-    // scaling the quad by two doubles it exactly, a product by two being exact.
-    const Quad doubled{Point3(-2, -2, 4), Vec3(4, 0, 0), Vec3(0, 4, 0), nullptr};
+TEST_CASE("a quad's distance test is relative, so it needs no spawn margin", "[geometry][quad]") {
+    // The plane test is taken from the corner, n . (q - o): its rounding grows with the origin's
+    // distance from the quad, not with the quad's coordinates. The test can then refuse a hit within
+    // its own rounding as the surface the ray left, which is the job a margin used to do.
+    HitRecord rec;
+    REQUIRE(square.hit(forward, visible, rec));
+    REQUIRE(rec.spawn_margin == 0.0_f);
 
-    HitRecord centre;
-    HitRecord corner;
-    HitRecord larger;
-    REQUIRE(square.hit(forward, visible, centre));
-    REQUIRE(square.hit(Ray(Point3(0.9_f, -0.9_f, 0), Vec3(0, 0, 1)), visible, corner));
-    REQUIRE(doubled.hit(forward, visible, larger));
+    // Relative, not an epsilon: a genuine hit a ten-thousandth of a unit away is still found. A fixed
+    // threshold of the kind a margin amounts to would have lost it.
+    const Quad floor{Point3(-1, -1, 0), Vec3(2, 0, 0), Vec3(0, 2, 0), nullptr};
+    REQUIRE(floor.hit(Ray(Point3(0.25_f, 0.25_f, 1.0e-4_f), Vec3(0, 0, -1)), visible, rec));
+    require_near(rec.t, 1.0e-4_f, 1.0e-8);
+}
 
-    REQUIRE(centre.spawn_margin > 0.0_f);
-    REQUIRE(corner.spawn_margin == centre.spawn_margin);
-    REQUIRE(larger.spawn_margin == 2.0_f * centre.spawn_margin);
+TEST_CASE("an interval that reaches behind the origin finds the quad there", "[geometry][quad]") {
+    // A medium bounded by a box asks with Interval::universe, and needs the entry behind a ray that
+    // starts inside. The interval decides the sign; the distance test refuses only an origin on the
+    // plane itself.
+    const Ray away(Point3(0, 0, 3), Vec3(0, 0, 1));
+
+    HitRecord rec;
+    REQUIRE_FALSE(square.hit(away, visible, rec));
+    REQUIRE(square.hit(away, Interval::universe, rec));
+    require_near(rec.t, -1.0_f);
 }

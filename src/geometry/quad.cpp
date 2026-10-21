@@ -14,8 +14,9 @@ namespace pt {
 
 namespace {
 
-// gamma(1) left no self-hit in randomized tests on large tilted quads near the origin; doubled for headroom.
-constexpr int spawn_margin_order = 2;
+// gamma(4) is the smallest order that left no self-hit in randomized tests on large
+// tilted quads near the origin; doubled for headroom.
+constexpr int plane_rounding_order = 8;
 
 [[nodiscard]] bool is_interior(Float a, Float b) noexcept {
     static constexpr Interval unit_interval{0, 1};
@@ -27,9 +28,8 @@ constexpr int spawn_margin_order = 2;
 QuadShape make_quad_shape(const Point3& q, const Vec3& u, const Vec3& v) noexcept {
     const Vec3 n = cross(u, v);
     const Vec3 normal = unit_vector(n);
-    const Float d = dot(normal, q);
     const Vec3 w = n / dot(n, n);
-    return QuadShape{.q = q, .u = u, .v = v, .normal = normal, .d = d, .w = w};
+    return QuadShape{.q = q, .u = u, .v = v, .normal = normal, .w = w};
 }
 
 Aabb quad_bounds(const QuadShape& quad) noexcept {
@@ -39,12 +39,21 @@ Aabb quad_bounds(const QuadShape& quad) noexcept {
 }
 
 bool intersect_quad(const Ray& r, const Interval& ray_t, const QuadShape& quad, QuadHit& out) noexcept {
-    const Float denom = dot(quad.normal, r.direction());
-    const Float t = (quad.d - dot(quad.normal, r.origin())) / denom;
+    const Vec3 to_corner = quad.q - r.origin();
+    const Float plane_distance = dot(quad.normal, to_corner);
+
+    // Taken from the corner, so the rounding grows with how far the origin is from the quad rather
+    // than with the quad's coordinates. An origin within that rounding of the plane cannot be told
+    // from a point on it - the ray is leaving the surface or grazing it - so there is nothing to find.
+    // Tested before the division: both sides of |t| <= t_error share the same |n . d|, and the sign is
+    // left to the interval, so a query reaching behind its origin keeps the hits there.
+    if (std::fabs(plane_distance) <= gamma(plane_rounding_order) * dot(component_abs(quad.normal), component_abs(to_corner))) return false;
+
+    const Float t = plane_distance / dot(quad.normal, r.direction());
     if (!ray_t.surrounds(t)) return false;
 
-    const Point3 intersection = r.at(t);
-    const Vec3 planar_hitpt_vector = intersection - quad.q;
+    // The hit relative to the corner, not through r.at(t): no world-sized coordinate enters.
+    const Vec3 planar_hitpt_vector = t * r.direction() - to_corner;
 
     const Float alpha = dot(quad.w, cross(planar_hitpt_vector, quad.v));
     const Float beta = dot(quad.w, cross(quad.u, planar_hitpt_vector));
@@ -57,10 +66,7 @@ bool intersect_quad(const Ray& r, const Interval& ray_t, const QuadShape& quad, 
 void fill_quad_record(const Ray& r, const QuadShape& quad, const QuadHit& hit, const Material* mat, HitRecord& rec) noexcept {
     rec.t = hit.t;
     rec.p = quad.q + hit.alpha * quad.u + hit.beta * quad.v; // Rebuilt from the quad's own data; r.at(t) would carry the error of a long t.
-
-    // The next plane test rounds d - n . origin: terms the size of the quad's coordinates, however
-    // small the result. Bounded by the largest coordinate any point of the quad can have.
-    rec.spawn_margin = gamma(spawn_margin_order) * (max_abs_component(quad.q) + max_abs_component(quad.u) + max_abs_component(quad.v));
+    rec.spawn_margin = 0.0_f;                                // Covered by the conservative distance test; written because records are reused.
     rec.u = hit.alpha;
     rec.v = hit.beta;
     rec.mat = mat;
