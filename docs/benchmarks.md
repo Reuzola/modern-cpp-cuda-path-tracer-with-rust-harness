@@ -117,6 +117,10 @@ these differ:
 - The scalar type.
 - The thread count — for timing only.
 - The intersection arithmetic, which moves the counters, not just the timings.
+- How the scene's primitives are grouped into trees — for counters. Records
+  taken before primitives were gathered into per-kind sets counted a box's six
+  faces as one test, and a medium's boundary or a transformed sphere or quad as
+  none.
 - The source revision, or a dirty working tree. The record cannot see the
   latter; this one is discipline, not a check.
 - The machine, or its thermal, power or load state — except for counters; see
@@ -127,17 +131,22 @@ Statistics and timing may be quoted together only from the same record.
 ### Definitions
 
 - **Spread** — the slowest timed run against the fastest, in percent.
-- **Trees** — BVHs the scene builds. Meshes and groups get their own; a shared
-  subtree is built and counted once.
+- **Trees** — BVHs the scene builds: one per mesh; per container (the world, a
+  group), one per primitive kind it holds, plus one over those and its other
+  children when there is more than one; one for a box, sphere or quad placed
+  alone under a transform or as a medium's boundary. A shared mesh or group is
+  built once; a shared sphere or quad is copied into every container that holds
+  it.
 - **Nodes / Leaves** — size of the flat node array / leaf nodes, each holding a
   contiguous range of primitives.
 - **Depth** — the longest root-to-node path; a single-node tree is depth 0.
-- **Build** — construction time over all trees, including reading triangle
-  bounds and copying corners into leaf order for meshes.
+- **Build** — construction time over all trees, including reading primitive
+  bounds and copying each tree’s primitives into leaf order.
 - **Node tests/ray** — box tests per ray query; both children are tested before
   descending.
-- **Leaf tests/ray** — primitive tests issued by leaves per ray query. Tests
-  inside an aggregate, such as a box's six quads, are not counted.
+- **Leaf tests/ray** — primitive tests issued by leaves per ray query. Every
+  primitive test in every tree is counted, a box’s faces and a medium’s
+  boundary included.
 - **Total** — the sum of the two, and the comparable aggregate.
 - **Ray queries** — top-level `hit()` calls: primary rays plus every bounce.
 - **Queries/primary** — ray queries per primary ray: a direct measure of path
