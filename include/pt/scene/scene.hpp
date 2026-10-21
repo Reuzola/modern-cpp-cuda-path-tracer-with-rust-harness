@@ -1,9 +1,9 @@
 #pragma once
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/group_builder.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
@@ -54,7 +54,8 @@ public:
     Scene(Scene&&) noexcept = default;
     Scene& operator=(Scene&&) noexcept = default;
 
-    [[nodiscard]] const Hittable& world() const noexcept { return world_; }
+    // The built world; empty until build_bvh() has run.
+    [[nodiscard]] const Hittable& world() const noexcept;
 
     [[nodiscard]] const ImportanceTargets& importance_targets() const noexcept { return importance_targets_; }
 
@@ -86,13 +87,15 @@ public:
 
     [[nodiscard]] std::size_t mesh_count() const noexcept { return meshes_.size(); }
 
-    void add_object(const Hittable* obj);
+    // Staged: the object joins the world when build_bvh() builds it.
+    void add_object(GeometryRef object);
 
     void add_importance_target(const Sampleable* target);
 
+    // Builds the world from every staged object. Once only: an object staged afterwards would join nothing.
     void build_bvh();
 
-    void add_medium(const Hittable* boundary, Float density, const Material* phase_function);
+    void add_medium(GeometryRef boundary, Float density, const Material* phase_function);
 
     [[nodiscard]] std::span<const ConstantMedium> media() const noexcept { return media_; }
 
@@ -105,8 +108,9 @@ private:
     Arena<Material> materials_;
     std::vector<std::unique_ptr<Mesh>> meshes_;
     Arena<Hittable> objects_;
+    GroupBuilder staged_;             // Objects waiting for build_bvh()
+    const Hittable* world_ = nullptr; // Built by build_bvh(); points into objects_
     std::vector<ConstantMedium> media_;
-    HittableList world_;
     ImportanceTargets importance_targets_;
     BvhStats bvh_stats_{};
 };

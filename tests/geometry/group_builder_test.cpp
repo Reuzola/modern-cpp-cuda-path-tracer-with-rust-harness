@@ -1,6 +1,7 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
+#include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/group_builder.hpp"
 #include "pt/geometry/instance.hpp"
@@ -21,6 +22,7 @@
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -28,6 +30,7 @@
 namespace {
 
 using pt::Aabb;
+using pt::BoxFaces;
 using pt::Float;
 using pt::GeometryRef;
 using pt::GroupBuilder;
@@ -282,4 +285,45 @@ TEST_CASE("seal hands anything else back unchanged", "[geometry][group_builder]"
     const Hittable* as_hittable = &ball;
     REQUIRE(pt::seal(arena, as_hittable, &stats) == as_hittable);
     REQUIRE(stats.bvh_count == 0);
+}
+
+TEST_CASE("a box in a group joins the group's quad set", "[geometry][group_builder]") {
+    pt::Arena<Hittable> arena;
+    pt::BvhStats stats;
+
+    const Quad floor{Point3(-5, 0, -5), Vec3(10, 0, 0), Vec3(0, 0, 10), &shared_material};
+
+    GroupBuilder builder;
+    builder.add(pt::box(arena, Point3(-1, 0, -1), Point3(1, 2, 1), &shared_material));
+    builder.add(&floor);
+    const Hittable* built = std::move(builder).build(arena, &stats);
+
+    // Six faces and a floor are seven quads of one kind: one set, and no tree above it.
+    const auto* set = dynamic_cast<const QuadBvh*>(built);
+    REQUIRE(set != nullptr);
+    REQUIRE(stats.bvh_count == 1);
+
+    std::size_t quads = 0;
+    for (const pt::BvhNode& node : set->topology().nodes)
+        quads += node.count;
+    REQUIRE(quads == 7);
+
+    // The box's top face, from above: reachable through the merged set.
+    HitRecord rec;
+    REQUIRE(built->hit(Ray(Point3(0, 5, 0), Vec3(0, -1, 0)), visible, rec));
+    REQUIRE(rec.t == 3.0_f);
+}
+
+TEST_CASE("a box sealed on its own keeps its faces in one leaf", "[geometry][group_builder]") {
+    pt::Arena<Hittable> arena;
+    pt::BvhStats stats;
+
+    const BoxFaces crate = pt::box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), &shared_material);
+    const auto* set = dynamic_cast<const QuadBvh*>(pt::seal(arena, crate, &stats));
+
+    // What a transform or a medium receives: the box's own set, the six faces tested in a row.
+    REQUIRE(set != nullptr);
+    REQUIRE(set->topology().nodes.size() == 1);
+    REQUIRE(set->topology().nodes.front().count == 6);
+    REQUIRE(stats.bvh_count == 1);
 }

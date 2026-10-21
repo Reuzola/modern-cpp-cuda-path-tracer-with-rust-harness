@@ -1,6 +1,7 @@
 #include "pt/geometry/group_builder.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
+#include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/shape_bvh.hpp"
@@ -19,6 +20,12 @@ void GroupBuilder::add(GeometryRef object) {
     std::visit(Overloaded{
         [this](const Sphere* sphere)     { assert(sphere != nullptr);   spheres_.push_back(sphere); },
         [this](const Quad* quad)         { assert(quad != nullptr);     quads_.push_back(quad); },
+        [this](const BoxFaces& box_faces) {
+            for (const Quad* face : box_faces.faces) {
+                assert(face != nullptr);
+                quads_.push_back(face);
+            }
+        },
         [this](const Hittable* hittable) { assert(hittable != nullptr); others_.push_back(hittable); },
     }, object);
     // clang-format on
@@ -44,9 +51,16 @@ const Hittable* GroupBuilder::build(Arena<Hittable>& arena, BvhStats* stats, con
 }
 
 const Hittable* seal(Arena<Hittable>& arena, GeometryRef object, BvhStats* stats) {
-    GroupBuilder builder;
-    builder.add(object);
-    return std::move(builder).build(arena, stats);
+    // clang-format off
+    return std::visit(Overloaded{
+        [&](const BoxFaces& box_faces) -> const Hittable* { return make_box_bvh(arena, box_faces, stats); },
+        [&](auto other) -> const Hittable* {
+            GroupBuilder builder;
+            builder.add(other);
+            return std::move(builder).build(arena, stats);
+        },
+    }, object);
+    // clang-format on
 }
 
 } // namespace pt

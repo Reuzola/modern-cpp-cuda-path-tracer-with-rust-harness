@@ -75,7 +75,7 @@ TEST_CASE("a fresh scene is empty in every dimension", "[scene]") {
     REQUIRE(scene.render.samples_per_pixel > 0);
 }
 
-TEST_CASE("objects added to a scene are in its world", "[scene]") {
+TEST_CASE("objects added to a scene reach its world once it is built", "[scene]") {
     Scene scene;
 
     const SolidColor* grey = scene.create_texture<SolidColor>(Color(0.5_f, 0.5_f, 0.5_f));
@@ -84,7 +84,13 @@ TEST_CASE("objects added to a scene are in its world", "[scene]") {
 
     scene.add_object(sphere);
 
+    // Staged, not yet in any tree: the world is built in one go, the way an
+    // accelerator commits the geometry attached to it.
     HitRecord rec;
+    REQUIRE_FALSE(scene.world().hit(forward, visible, rec));
+
+    scene.build_bvh();
+
     REQUIRE(scene.world().hit(forward, visible, rec));
     require_near(rec.t, 4.0_f);
 
@@ -176,7 +182,7 @@ TEST_CASE("media live beside the world, not inside it", "[scene]") {
     REQUIRE(scene.media().front().sample_interaction(forward, visible, sampler, rec));
 }
 
-TEST_CASE("building the BVH replaces the world without changing it", "[scene]") {
+TEST_CASE("building the world puts every staged object in it", "[scene]") {
     Scene scene;
 
     const SolidColor* grey = scene.create_texture<SolidColor>(Color(0.5_f, 0.5_f, 0.5_f));
@@ -187,22 +193,17 @@ TEST_CASE("building the BVH replaces the world without changing it", "[scene]") 
         scene.add_object(scene.create_object<Sphere>(Point3(0, 0, z), 0.25_f, material));
     }
 
-    HitRecord before;
-    REQUIRE(scene.world().hit(forward, visible, before));
-
     scene.build_bvh();
 
-    HitRecord after;
-    REQUIRE(scene.world().hit(forward, visible, after));
+    // The nearest of the sixteen sits at z = 5, so its near surface is 4.75 away.
+    HitRecord rec;
+    REQUIRE(scene.world().hit(forward, visible, rec));
+    require_near(rec.t, 4.75_f);
+    REQUIRE(rec.mat == material);
 
-    // Same answer, different structure: the acceleration structure is an
-    // optimisation and nothing else. The world is now a list of one - the tree's
-    // root - and the primitives are still owned by the same arena.
-    require_near(after.t, before.t);
-    REQUIRE(after.mat == before.mat);
-
-    // The build reports what it produced, which is what the baseline document is
-    // written from.
+    // Spheres only, so the world is their set with nothing above it: one tree.
+    // The build reports what it produced, which is what the benchmark record
+    // is written from.
     REQUIRE(scene.bvh_stats().bvh_count == 1);
     REQUIRE(scene.bvh_stats().node_count > 1);
     REQUIRE(scene.bvh_stats().leaf_count > 0);

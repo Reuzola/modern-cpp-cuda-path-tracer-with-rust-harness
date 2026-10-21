@@ -754,7 +754,7 @@ TEST_CASE("importance targets must name objects that can be sampled", "[scene][l
     check_scene_error(compose({.importance_targets = R"(["ghost"])"}),
                       "/importance_targets/0", "Undefined object 'ghost'");
 
-    // A box is a HittableList, and a group or a wrapper is not Sampleable either.
+    // A box is a quad set, and a group or a wrapper is not Sampleable either.
     check_scene_error(compose({.objects = R"([{"type": "box", "name": "crate", "a": [0, 0, 0], "b": [1, 1, 1], "material": "grey"}])",
                                .importance_targets = R"(["crate"])"}),
                       "/importance_targets/0", "is not sampleable");

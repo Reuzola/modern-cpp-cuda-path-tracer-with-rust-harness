@@ -1,7 +1,8 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/box.hpp"
+#include "pt/geometry/bvh.hpp"
+#include "pt/geometry/shape_bvh.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -11,6 +12,7 @@
 #include "support/test_support.hpp"
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cstddef>
 
 namespace {
 
@@ -19,9 +21,10 @@ using pt::box;
 using pt::Float;
 using pt::HitRecord;
 using pt::Hittable;
-using pt::HittableList;
 using pt::Interval;
+using pt::make_box_bvh;
 using pt::Point3;
+using pt::QuadBvh;
 using pt::Ray;
 using pt::Vec3;
 using pt::operator""_f;
@@ -31,14 +34,28 @@ using pt_test::require_vec_near;
 
 const Interval visible{0.0_f, pt::infinity};
 
+// A set keeps no list of the objects it was built from, so its faces are counted where they live:
+// in the leaves. Interior nodes carry a count of zero, so every node can simply be summed.
+[[nodiscard]] std::size_t face_count(const QuadBvh& set) {
+    std::size_t total = 0;
+    for (const pt::BvhNode& node : set.topology().nodes)
+        total += node.count;
+    return total;
+}
+
 } // namespace
 
-TEST_CASE("a box is six quads in one list", "[geometry][box]") {
+TEST_CASE("a lone box is its six faces in one leaf", "[geometry][box]") {
     Arena<Hittable> arena;
-    const HittableList* cube = box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr);
+    pt::BvhStats stats;
+    const QuadBvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr), &stats);
 
     REQUIRE(cube != nullptr);
-    REQUIRE(cube->objects().size() == 6);
+
+    // A single leaf holding all six: the faces are tested in a row, as a box always was.
+    REQUIRE(cube->topology().nodes.size() == 1);
+    REQUIRE(cube->topology().nodes.front().count == 6);
+    REQUIRE(stats.bvh_count == 1);
 
     // The faces are flat, so each one pads its own degenerate axis; the hull is
     // a hair larger than the corners asked for. The margin here is wider than
@@ -48,8 +65,8 @@ TEST_CASE("a box is six quads in one list", "[geometry][box]") {
 
 TEST_CASE("the corners may arrive in any order", "[geometry][box]") {
     Arena<Hittable> arena;
-    const HittableList* forward_corners = box(arena, Point3(-1, -2, -3), Point3(1, 2, 3), nullptr);
-    const HittableList* swapped_corners = box(arena, Point3(1, 2, 3), Point3(-1, -2, -3), nullptr);
+    const QuadBvh* forward_corners = make_box_bvh(arena, box(arena, Point3(-1, -2, -3), Point3(1, 2, 3), nullptr));
+    const QuadBvh* swapped_corners = make_box_bvh(arena, box(arena, Point3(1, 2, 3), Point3(-1, -2, -3), nullptr));
 
     // The two corners are sorted componentwise before the faces are built, so a
     // scene file may give them in either order. Without that, a swapped pair
@@ -69,7 +86,7 @@ TEST_CASE("the corners may arrive in any order", "[geometry][box]") {
 
 TEST_CASE("all six faces are where they should be", "[geometry][box]") {
     Arena<Hittable> arena;
-    const HittableList* cube = box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr);
+    const QuadBvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
 
     // One ray per axis direction, each starting 5 units out and aimed at the
     // centre. Every one must stop on its own face at distance 4. A face built
@@ -103,7 +120,7 @@ TEST_CASE("all six faces are where they should be", "[geometry][box]") {
 
 TEST_CASE("each face covers its whole extent", "[geometry][box]") {
     Arena<Hittable> arena;
-    const HittableList* cube = box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr);
+    const QuadBvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
 
     // A grid across one face, out to just inside its edges. A quad built with a
     // right edge vector but the wrong origin leaves a strip of the face missing,
@@ -125,7 +142,7 @@ TEST_CASE("each face covers its whole extent", "[geometry][box]") {
 
 TEST_CASE("a ray inside a box leaves through the far face", "[geometry][box]") {
     Arena<Hittable> arena;
-    const HittableList* cube = box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr);
+    const QuadBvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
 
     HitRecord rec;
     REQUIRE(cube->hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
@@ -145,8 +162,8 @@ TEST_CASE("a flat box degrades to its two real faces", "[geometry][box]") {
     // everything it is asked. Documented rather than guarded - a scene file can
     // ask for this, and the result is a double-sided flat quad rather than a
     // crash or a stray NaN in the image.
-    const HittableList* flat = box(arena, Point3(-1, -1, 0), Point3(1, 1, 0), nullptr);
-    REQUIRE(flat->objects().size() == 6);
+    const QuadBvh* flat = make_box_bvh(arena, box(arena, Point3(-1, -1, 0), Point3(1, 1, 0), nullptr));
+    REQUIRE(face_count(*flat) == 6);
 
     HitRecord rec;
     REQUIRE(flat->hit(Ray(Point3(0, 0, -5), Vec3(0, 0, 1)), visible, rec));
