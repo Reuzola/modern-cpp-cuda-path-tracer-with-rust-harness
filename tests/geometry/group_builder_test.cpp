@@ -215,9 +215,10 @@ TEST_CASE("a single opaque child comes back as it is", "[geometry][group_builder
 
     GroupBuilder builder;
     builder.add(&moved);
+    const Hittable* built = std::move(builder).build(arena, &stats);
 
     // A group around one mesh or one transform is that child: nothing is built, nothing is counted.
-    REQUIRE(std::move(builder).build(arena, &stats) == &moved);
+    REQUIRE(built == &moved);
     REQUIRE(stats.bvh_count == 0);
 }
 
