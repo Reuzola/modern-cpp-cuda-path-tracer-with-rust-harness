@@ -2,6 +2,7 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/geometry/bvh.hpp"
+#include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/math/aabb.hpp"
@@ -25,6 +26,8 @@ struct ShapeTraits;
 
 template <>
 struct ShapeTraits<Sphere> {
+    static constexpr PrimitiveKind kind = PrimitiveKind::sphere;
+
     using Shape = SphereShape;
     using Hit = Float; // A sphere's hit is its distance; the fill rebuilds the rest
 
@@ -46,6 +49,8 @@ struct ShapeTraits<Sphere> {
 
 template <>
 struct ShapeTraits<Quad> {
+    static constexpr PrimitiveKind kind = PrimitiveKind::quad;
+
     using Shape = QuadShape;
     using Hit = QuadHit;
 

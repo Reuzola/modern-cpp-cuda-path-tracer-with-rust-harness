@@ -3,6 +3,7 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/mesh.hpp"
+#include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/triangle.hpp"
@@ -20,6 +21,8 @@
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -286,6 +289,42 @@ void require_same_hit(const Bvh& bvh, const HittableList& reference, const Ray& 
         boxes.emplace_back(corner, corner + Vec3::random(0.0_f, 2.0_f, sampler));
     }
     return boxes;
+}
+
+// The label the bounds-only tests build under. Which single kind it is changes nothing: a build over one
+// kind takes every decision it took before kinds existed.
+constexpr pt::PrimitiveKind any_kind = pt::PrimitiveKind::sphere;
+
+// Kinds drawn independently of the boxes, so neighbours in space differ as often as not: the builder
+// meets mixed ranges at every depth, not only near the root.
+[[nodiscard]] std::vector<pt::PrimitiveKind> random_kinds(std::size_t count, std::uint64_t seed) {
+    constexpr std::array all{pt::PrimitiveKind::sphere, pt::PrimitiveKind::quad, pt::PrimitiveKind::triangle,
+                             pt::PrimitiveKind::opaque};
+    Sampler sampler{pt::sampler_seed(seed, 4, 0)};
+
+    std::vector<pt::PrimitiveKind> kinds;
+    kinds.reserve(count);
+    for (std::size_t i = 0; i < count; ++i)
+        kinds.push_back(all[sampler.next_below(static_cast<std::uint32_t>(all.size()))]);
+    return kinds;
+}
+
+// Every leaf holds primitives of one kind, and it is the kind the leaf records. Leaves are found by
+// scanning the node array: this needs no structure, only leaves. FAIL rather than a REQUIRE per slot,
+// which would cost more than the build it checks.
+void require_single_kind_leaves(const pt::BvhBuildResult& build, std::span<const pt::PrimitiveKind> kinds) {
+    for (const pt::BvhNode& node : build.topology.nodes) {
+        if (!node.is_leaf()) continue;
+        for (std::size_t slot = node.offset; slot < node.offset + node.count; ++slot) {
+            if (kinds[build.primitive_order[slot]] != node.kind) FAIL("the leaf at slot " << node.offset << " mixes kinds");
+        }
+    }
+}
+
+[[nodiscard]] bool same_node(const pt::BvhNode& a, const pt::BvhNode& b) {
+    return a.offset == b.offset && a.count == b.count && a.kind == b.kind && a.bbox.x.min == b.bbox.x.min &&
+           a.bbox.x.max == b.bbox.x.max && a.bbox.y.min == b.bbox.y.min && a.bbox.y.max == b.bbox.y.max &&
+           a.bbox.z.min == b.bbox.z.min && a.bbox.z.max == b.bbox.z.max;
 }
 
 [[nodiscard]] Vec3 reciprocal(const Vec3& d) {
@@ -715,14 +754,19 @@ TEST_CASE("a bvh over loaded mesh geometry answers exactly like a brute-force li
     }
 }
 
-TEST_CASE("a topology built from bounds alone holds every primitive exactly once", "[geometry][bvh]") {
+TEST_CASE("a topology built from bounds and kinds holds every primitive exactly once", "[geometry][bvh]") {
     // The forced-halving path is included: it builds leaves the SAH never chose, and the same layout
-    // contract has to hold for them.
+    // contract has to hold for them. So is a cost that makes every range a leaf, where only kinds split.
     const BvhBuildSettings settings =
-        GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1}, BvhBuildSettings{.bin_count = 2}, BvhBuildSettings{.depth_limit = 1});
+        GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1}, BvhBuildSettings{.bin_count = 2},
+                 BvhBuildSettings{.depth_limit = 1}, BvhBuildSettings{.traversal_cost = 1.0e9_f, .max_leaf_size = 1 << 20});
+
+    // One kind is the path every tree took before kinds existed; random kinds put mixed ranges at every depth.
+    const bool mixed = GENERATE(false, true);
 
     const std::vector<Aabb> boxes = random_boxes(500, 8086);
-    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, settings);
+    const std::vector<pt::PrimitiveKind> kinds = mixed ? random_kinds(boxes.size(), 8087) : std::vector(boxes.size(), any_kind);
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, kinds, settings);
 
     SECTION("the primitive order is a permutation of the input") {
         std::vector<std::uint32_t> sorted = build.primitive_order;
@@ -745,11 +789,72 @@ TEST_CASE("a topology built from bounds alone holds every primitive exactly once
         REQUIRE(totals.leaves == build.topology.leaf_count);
         REQUIRE(totals.max_depth == build.topology.max_depth);
         REQUIRE(build.topology.nodes.size() == 2 * build.topology.leaf_count - 1);
+
+        // The bound BvhBuildSettings promises. Splits along kinds spend depth like any SAH split, and
+        // a mixed range out of budget is halved like any other, so they must keep it too.
+        REQUIRE(totals.max_depth <= std::max(settings.depth_limit, std::bit_width(boxes.size() - 1)));
+    }
+
+    SECTION("no leaf mixes kinds, and each records the one it holds") {
+        require_single_kind_leaves(build, kinds);
+    }
+}
+
+TEST_CASE("a leaf the cost would choose is split along kinds instead", "[geometry][bvh]") {
+    using enum pt::PrimitiveKind;
+
+    // Three kinds interleaved, first met in an order that is not the enumerators' own: the tree must take
+    // its order from the input, as every other tie in the build does.
+    constexpr std::array cycle{quad, opaque, sphere};
+    const std::vector<Aabb> boxes = random_boxes(30, 5577);
+    std::vector<pt::PrimitiveKind> kinds;
+    for (std::size_t i = 0; i < boxes.size(); ++i)
+        kinds.push_back(cycle[i % cycle.size()]);
+
+    // A traversal cost that dwarfs intersection makes every range cheaper as a leaf, so the only splits
+    // left are the ones a leaf of one kind forces: the root separates the first kind from the other two,
+    // its right child separates those. Three leaves, one per kind, two levels deep.
+    const pt::BvhBuildResult build =
+        pt::build_bvh_topology(boxes, kinds, BvhBuildSettings{.traversal_cost = 1.0e9_f, .max_leaf_size = 1 << 20});
+    const std::vector<pt::BvhNode>& nodes = build.topology.nodes;
+
+    REQUIRE(nodes.size() == 5);
+    REQUIRE(build.topology.leaf_count == 3);
+    REQUIRE(build.topology.max_depth == 2);
+
+    // Depth first: root, its left leaf, then the right subtree's interior node and its two leaves.
+    REQUIRE((nodes[1].is_leaf() && nodes[1].kind == quad && nodes[1].count == 10));
+    REQUIRE(!nodes[2].is_leaf());
+    REQUIRE((nodes[3].is_leaf() && nodes[3].kind == opaque && nodes[3].count == 10));
+    REQUIRE((nodes[4].is_leaf() && nodes[4].kind == sphere && nodes[4].count == 10));
+
+    require_single_kind_leaves(build, kinds);
+}
+
+TEST_CASE("a build over one kind labels every leaf with it", "[geometry][bvh]") {
+    const pt::PrimitiveKind kind =
+        GENERATE(pt::PrimitiveKind::sphere, pt::PrimitiveKind::quad, pt::PrimitiveKind::triangle, pt::PrimitiveKind::opaque);
+    const std::vector<Aabb> boxes = random_boxes(200, 9001);
+
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, kind);
+    for (const pt::BvhNode& node : build.topology.nodes) {
+        if (node.is_leaf()) REQUIRE(node.kind == kind);
+    }
+
+    // The single-kind overload is the general one with the same label everywhere. Kept as a check, not
+    // left to the implementation: a later shortcut that skips the kinds must still build this tree.
+    const std::vector<pt::PrimitiveKind> labels(boxes.size(), kind);
+    const pt::BvhBuildResult general = pt::build_bvh_topology(boxes, labels);
+
+    REQUIRE(build.primitive_order == general.primitive_order);
+    REQUIRE(build.topology.nodes.size() == general.topology.nodes.size());
+    for (std::size_t i = 0; i < general.topology.nodes.size(); ++i) {
+        if (!same_node(build.topology.nodes[i], general.topology.nodes[i])) FAIL("trees first differ at node " << i);
     }
 }
 
 TEST_CASE("an empty input builds an empty topology", "[geometry][bvh]") {
-    const pt::BvhBuildResult build = pt::build_bvh_topology(std::span<const Aabb>{});
+    const pt::BvhBuildResult build = pt::build_bvh_topology(std::span<const Aabb>{}, any_kind);
 
     REQUIRE(build.topology.nodes.empty());
     REQUIRE(build.topology.leaf_count == 0);
@@ -762,7 +867,7 @@ TEST_CASE("traversal over a bare topology finds what a brute-force scan finds", 
         GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1}, BvhBuildSettings{.depth_limit = 1});
 
     const std::vector<Aabb> boxes = random_boxes(300, 2718);
-    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, settings);
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, any_kind, settings);
 
     // Laid out in the build's order, as any owner of a topology lays out its primitives.
     std::vector<Aabb> ordered;
@@ -813,7 +918,7 @@ TEST_CASE("traversal over a bare topology finds what a brute-force scan finds", 
 
 TEST_CASE("the interval handed to leaves only ever narrows", "[geometry][bvh]") {
     const std::vector<Aabb> boxes = random_boxes(300, 1618);
-    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, BvhBuildSettings{.max_leaf_size = 1});
+    const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, any_kind, BvhBuildSettings{.max_leaf_size = 1});
 
     std::vector<Aabb> ordered;
     ordered.reserve(boxes.size());

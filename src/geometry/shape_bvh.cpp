@@ -30,7 +30,7 @@ ShapeBvh<Primitive>::ShapeBvh(std::span<const Primitive* const> primitives, cons
         bounds.push_back(Traits::bounds(p->shape()));
     }
 
-    BvhBuildResult result = build_bvh_topology(bounds, settings);
+    BvhBuildResult result = build_bvh_topology(bounds, Traits::kind, settings);
     topology_ = std::move(result.topology);
 
     // Gathered in leaf order. The order itself is not kept: nothing reads a slot back to its object.

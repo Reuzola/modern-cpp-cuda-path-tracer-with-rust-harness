@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/geometry/primitive_kind.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -56,6 +57,7 @@ struct BvhNode {
     Aabb bbox;
     std::uint32_t offset{}; // Right child index when interior, first primitive index when leaf
     std::uint16_t count{};  // Primitive count; 0 is what marks the node interior
+    PrimitiveKind kind{};   // Leaf only: whose array offset indexes. Sits in what was padding
 
     [[nodiscard]] constexpr bool is_leaf() const noexcept { return count > 0; }
 };
@@ -201,9 +203,15 @@ private:
     std::vector<const Hittable*> primitives_; // Permuted by the build; leaves index into this
 };
 
-/// Builds a binned SAH tree over primitives known only by their bounds: entry i is primitive i.
-/// The result names no primitive type; the caller lays its primitives out in primitive_order.
-[[nodiscard]] BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings = {});
+/// Builds a binned SAH tree over primitives known by their bounds and kind: entry i of both spans is
+/// primitive i. No leaf mixes kinds, and each leaf records the one it holds. Kinds are labels here, only
+/// ever compared. The result names no primitive type; the caller lays its primitives out in primitive_order.
+[[nodiscard]] BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds,
+                                                std::span<const PrimitiveKind> primitive_kinds, const BvhBuildSettings& settings = {});
+
+/// The same build over primitives that are all of one kind.
+[[nodiscard]] BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, PrimitiveKind kind,
+                                                const BvhBuildSettings& settings = {});
 
 /// Builds a BVH over `list` and stores it in `arena`.
 /// The tree is owned by the arena and stays valid as long as the arena does. `list` itself is not

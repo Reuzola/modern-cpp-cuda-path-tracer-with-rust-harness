@@ -3,6 +3,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/mesh.hpp"
+#include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
@@ -33,7 +34,7 @@ TriangleBvh::TriangleBvh(const Mesh& mesh, const BvhBuildSettings& settings) : m
         bounds.push_back(triangle_bounds(a, b, c));
     }
 
-    BvhBuildResult result = build_bvh_topology(bounds, settings);
+    BvhBuildResult result = build_bvh_topology(bounds, PrimitiveKind::triangle, settings);
     topology_ = std::move(result.topology);
     triangle_ids_ = std::move(result.primitive_order);
 

@@ -2,6 +2,7 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
+#include "pt/geometry/primitive_kind.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
@@ -34,7 +35,8 @@ namespace {
 struct PrimitiveInfo {
     std::uint32_t index{};
     Aabb bbox;
-    Point3 centroid; // Binned by this, bounded by bbox - a primitive is never split
+    Point3 centroid;      // Binned by this, bounded by bbox - a primitive is never split
+    PrimitiveKind kind{}; // Only compared: two kinds never share a leaf
 };
 
 // Widest axis of a centroid bounds, and its size.
@@ -151,20 +153,44 @@ struct SplitCandidate {
     return static_cast<std::size_t>(std::distance(prims.begin(), split_point));
 }
 
+// Whether every entry shares the first one's kind: the only ranges a leaf may hold. Non-empty only.
+[[nodiscard]] bool is_single_kind(std::span<const PrimitiveInfo> prims) {
+    assert(!prims.empty());
+
+    const PrimitiveKind kind = prims.front().kind;
+    return std::ranges::all_of(prims, [kind](const PrimitiveInfo& p) { return p.kind == kind; });
+}
+
+// Moves the first entry's kind to the front and returns how many there are: a split along kinds, not
+// space. Stable for the reason partition_by_bin is. On a range of mixed kinds both sides are non-empty.
+[[nodiscard]] std::size_t partition_by_kind(std::span<PrimitiveInfo> prims) {
+    assert(!prims.empty());
+
+    const PrimitiveKind kind = prims.front().kind;
+    const auto mid = std::stable_partition(
+        prims.begin(), prims.end(),
+        [kind](const PrimitiveInfo& p) { return p.kind == kind; });
+
+    return static_cast<std::size_t>(std::distance(prims.begin(), mid));
+}
+
 // Top-down BVH builder, one instance per tree. Recursion works in place on info_, narrowing to a contiguous [first, count)
 // range per node; when it finishes, each leaf's primitives are adjacent, which is what lets a leaf be stored as (offset, count).
 // A separate type keeps this state out of the finished topology and the public header.
 class BvhBuilder {
 public:
-    BvhBuilder(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings) : settings_(settings) {
+    BvhBuilder(std::span<const Aabb> primitive_bounds, std::span<const PrimitiveKind> primitive_kinds, const BvhBuildSettings& settings) : settings_(settings) {
         assert(primitive_bounds.size() <= std::numeric_limits<std::uint32_t>::max());
+        assert(primitive_kinds.size() == primitive_bounds.size());
+
         settings_.bin_count = std::clamp(settings_.bin_count, 2, max_bin_count);
         settings_.max_leaf_size = std::clamp(settings_.max_leaf_size, 1, max_leaf_size_limit);
         settings_.depth_limit = std::clamp(settings_.depth_limit, 1, bvh_max_depth);
 
+        info_.reserve(primitive_bounds.size());
         for (std::uint32_t i = 0; i < primitive_bounds.size(); ++i) {
             const Aabb& box = primitive_bounds[i];
-            info_.push_back(PrimitiveInfo{.index = i, .bbox = box, .centroid = box.centroid()});
+            info_.push_back(PrimitiveInfo{.index = i, .bbox = box, .centroid = box.centroid(), .kind = primitive_kinds[i]});
         }
 
         // 2N-1 is the node count with one primitive per leaf, so it upper-bounds any larger-leaf tree.
@@ -253,9 +279,12 @@ private:
     // have reallocated the vector between reserving a node's slot and filling it in.
 
     void make_leaf(std::uint32_t index, const Aabb& bbox, std::size_t first, std::size_t count) {
+        assert(count > 0);
+
         nodes_[index].bbox = bbox;
         nodes_[index].offset = static_cast<std::uint32_t>(first);
         nodes_[index].count = static_cast<std::uint16_t>(count); // Fits: max_leaf_size is clamped to 16 bits
+        nodes_[index].kind = info_[first].kind;                  // Any entry would do: the build never makes a leaf that mixes kinds.
         ++leaf_count_;
     }
 
@@ -291,15 +320,19 @@ private:
         const std::span<PrimitiveInfo> prims = range(first, count);
         const Aabb bbox = bounds_of(prims);
 
+        // Read before any reordering below, which never changes the set of kinds in the range.
+        const bool single_kind = is_single_kind(prims);
+
         if (count <= 1) {
             make_leaf(index, bbox, first, count);
             return index;
         }
 
         std::size_t mid{};
-        // Out of depth budget: a leaf if one may hold the range, otherwise halve without consulting the SAH.
+        // Out of depth budget: a leaf if one may hold the range and it is of one kind, otherwise halve
+        // without consulting the SAH. Halving ends in single primitives, which are always of one kind.
         if (depth_budget_spent(depth, count)) {
-            if (count <= static_cast<std::size_t>(settings_.max_leaf_size)) {
+            if (count <= static_cast<std::size_t>(settings_.max_leaf_size) && single_kind) {
                 make_leaf(index, bbox, first, count);
                 return index;
             }
@@ -324,20 +357,25 @@ private:
                 if (best.is_valid()) {
                     // Stopping is a cost decision, not just a size one: max_leaf_size only bounds it.
                     if (leaf_is_cheaper(count, best.cost)) {
-                        make_leaf(index, bbox, first, count);
-                        return index;
+                        if (single_kind) {
+                            make_leaf(index, bbox, first, count);
+                            return index;
+                        }
+                        // The cost says stop, but a leaf may not mix kinds: one child per kind is the
+                        // nearest the tree can come to that leaf.
+                        mid = partition_by_kind(prims);
+                    } else {
+                        mid = partition_by_bin(prims, mapping, best.bin);
                     }
-
-                    mid = partition_by_bin(prims, mapping, best.bin);
                 }
             }
         }
 
-        // Halving fallback. Reached when the depth budget is spent, or when no SAH candidate existed at all:
-        // the centroids coincide on the widest axis, the node box is degenerate, or no bin boundary separates
-        // the primitives. A candidate that does exist always leaves both sides non-empty, so mid == count is
-        // unreachable - the check stays as a guard on that invariant. Halving needs bit_width(count - 1)
-        // levels, which keeps the recursion finite and the depth inside its budget.
+        // Halving fallback. Reached when the depth budget is spent and no leaf may hold the range, or when
+        // no SAH candidate existed at all: the centroids coincide on the widest axis, the node box is
+        // degenerate, or no bin boundary separates the primitives. A candidate that does exist always leaves
+        // both sides non-empty, so mid == count is unreachable - the check stays as a guard on that invariant.
+        // Halving needs bit_width(count - 1) levels, which keeps the recursion finite and the depth inside its budget.
         if (mid == 0 || mid == count) mid = count / 2;
 
         build_recursive(first, mid, depth + 1); // Lands at index + 1
@@ -376,13 +414,19 @@ void BvhStats::record(const BvhTopology& topology, std::chrono::nanoseconds time
     max_depth = std::max(max_depth, topology.max_depth);
 }
 
-BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, const BvhBuildSettings& settings) {
-    BvhBuildResult result = BvhBuilder(primitive_bounds, settings).build();
+BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, std::span<const PrimitiveKind> primitive_kinds, const BvhBuildSettings& settings) {
+    BvhBuildResult result = BvhBuilder(primitive_bounds, primitive_kinds, settings).build();
 
     // The builder caps the depth at bvh_max_depth, the traversal stack's capacity.
     // Checked because a cap that slipped by one level would overflow that stack silently.
     assert(result.topology.max_depth <= bvh_max_depth);
     return result;
+}
+
+BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, PrimitiveKind kind, const BvhBuildSettings& settings) {
+    // One label per primitive keeps a single build path; the cost is a byte per primitive while it runs.
+    std::vector<PrimitiveKind> kinds(primitive_bounds.size(), kind);
+    return build_bvh_topology(primitive_bounds, kinds, settings);
 }
 
 Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& settings) {
@@ -392,7 +436,7 @@ Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& setti
     // Each object's bounds are read once: bounding_box() is a virtual call.
     std::ranges::transform(objects, std::back_inserter(bounds), [](const Hittable* obj) { return obj->bounding_box(); });
 
-    BvhBuildResult result = build_bvh_topology(bounds, settings);
+    BvhBuildResult result = build_bvh_topology(bounds, PrimitiveKind::opaque, settings);
     topology_ = std::move(result.topology);
     primitives_.reserve(result.primitive_order.size());
 
