@@ -46,6 +46,7 @@ using pt::Hittable;
 using pt::HittableList;
 using pt::Interval;
 using pt::Point3;
+using pt::PrimitiveRef;
 using pt::Ray;
 using pt::Sampler;
 using pt::Vec3;
@@ -66,25 +67,27 @@ public:
     TestScene(const TestScene&) = delete;
     TestScene& operator=(const TestScene&) = delete;
 
-    void add_sphere(const Point3& center, Float radius) {
-        list_.add(objects_.create<pt::Sphere>(center, radius, new_material()));
-    }
+    void add_sphere(const Point3& center, Float radius) { add(objects_.create<pt::Sphere>(center, radius, new_material())); }
 
-    void add_quad(const Point3& q, const Vec3& u, const Vec3& v) {
-        list_.add(objects_.create<pt::Quad>(q, u, v, new_material()));
-    }
+    void add_quad(const Point3& q, const Vec3& u, const Vec3& v) { add(objects_.create<pt::Quad>(q, u, v, new_material())); }
 
-    void add_triangle(const Point3& a, const Point3& b, const Point3& c) {
-        list_.add(objects_.create<pt::Triangle>(a, b, c, new_material()));
-    }
+    void add_triangle(const Point3& a, const Point3& b, const Point3& c) { add(objects_.create<pt::Triangle>(a, b, c, new_material())); }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
 
-    [[nodiscard]] std::span<const Hittable* const> objects() const noexcept { return list_.objects(); }
+    [[nodiscard]] std::span<const PrimitiveRef> objects() const noexcept { return primitives_; }
 
     [[nodiscard]] Aabb bounds() const { return list_.bounding_box(); }
 
 private:
+    // Typed as a tree takes them: a sphere or a quad by its kind, a standalone Triangle - no kind of its own
+    // outside a mesh - as an opaque child. One scene can so hold every way a leaf is tested.
+    template <typename Primitive>
+    void add(const Primitive* primitive) {
+        primitives_.emplace_back(primitive);
+        list_.add(primitive);
+    }
+
     // One material per primitive: a hit record then identifies which primitive answered,
     // not merely how far away the answer was. Never dereferenced - it is an identity tag.
     [[nodiscard]] const pt::Material* new_material() { return materials_.create<pt::Lambertian>(&albedo_); }
@@ -92,6 +95,7 @@ private:
     const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     pt::Arena<pt::Material> materials_;
     pt::Arena<Hittable> objects_;
+    std::vector<PrimitiveRef> primitives_;
     HittableList list_;
 };
 
@@ -172,8 +176,8 @@ void fill_separated_spheres(TestScene& scene, int per_axis, std::uint64_t seed) 
 
 // Mesh geometry is a class of its own here: neighbouring triangles share edges and vertices, so leaf
 // bounds genuinely interpenetrate. The randomly placed triangles above never touch each other, which
-// leaves that case untested. Each mesh triangle becomes a standalone Triangle: the generic tree is what
-// is under test, and a mesh's own tree has its tests in triangle_bvh_test.
+// leaves that case untested. Each mesh triangle becomes a standalone Triangle, an opaque child: the
+// tree's own triangle kind has its tests in mesh_bvh_test.
 class MeshScene {
 public:
     MeshScene() = default;
@@ -189,13 +193,15 @@ public:
 
         for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
             const auto [a, b, c] = mesh.triangle(i);
-            list_.add(objects_.create<pt::Triangle>(a, b, c, mat));
+            const pt::Triangle* triangle = objects_.create<pt::Triangle>(a, b, c, mat);
+            primitives_.emplace_back(triangle);
+            list_.add(triangle);
         }
     }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
 
-    [[nodiscard]] std::span<const Hittable* const> objects() const noexcept { return list_.objects(); }
+    [[nodiscard]] std::span<const PrimitiveRef> objects() const noexcept { return primitives_; }
 
     [[nodiscard]] Aabb bounds() const { return list_.bounding_box(); }
 
@@ -203,6 +209,7 @@ private:
     const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     pt::Arena<pt::Material> materials_;
     pt::Arena<Hittable> objects_;
+    std::vector<PrimitiveRef> primitives_;
     HittableList list_;
 };
 
@@ -496,7 +503,7 @@ TEST_CASE("degenerate ray directions traverse the tree exactly like the list", "
 TEST_CASE("an empty bvh is a valid empty tree", "[geometry][bvh]") {
     // The scene format allows an empty group, so this reaches the renderer rather than
     // being a purely theoretical input.
-    const Bvh bvh{std::span<const Hittable* const>{}};
+    const Bvh bvh{std::span<const PrimitiveRef>{}};
 
     REQUIRE(bvh.node_count() == 0);
     REQUIRE(bvh.leaf_count() == 0);
@@ -653,7 +660,7 @@ TEST_CASE("every primitive in the scene is reachable through the tree", "[geomet
     // Ray queries sample the tree; they do not enumerate it. A primitive dropped by the
     // build is only caught here, by asking for each one by name: a ray leaving a sphere's
     // own centre must come back with that sphere, and the spheres do not overlap.
-    for (const Hittable* primitive : scene.objects()) {
+    for (const Hittable* primitive : scene.list().objects()) {
         const Ray r(primitive->bounding_box().centroid(), pt::random_unit_vector(direction_sampler));
 
         HitRecord direct;
@@ -671,7 +678,7 @@ TEST_CASE("nested bvhs answer exactly like a flat brute-force list", "[geometry]
     TestScene scene;
     fill_sphere_cloud(scene, 90, 5150);
 
-    const std::span<const Hittable* const> primitives = scene.objects();
+    const std::span<const PrimitiveRef> primitives = scene.objects();
     const std::size_t group_size = primitives.size() / 3;
 
     // A Bvh is itself a Hittable, and the loader relies on that: meshes and groups become
@@ -681,12 +688,9 @@ TEST_CASE("nested bvhs answer exactly like a flat brute-force list", "[geometry]
     const Bvh middle(primitives.subspan(group_size, group_size));
     const Bvh right(primitives.subspan(2 * group_size));
 
-    HittableList groups;
-    groups.add(&left);
-    groups.add(&middle);
-    groups.add(&right);
-
-    const Bvh nested(groups.objects());
+    // Each inner tree joins the outer one as an opaque child, the way the loader nests a group.
+    const std::array<PrimitiveRef, 3> groups{&left, &middle, &right};
+    const Bvh nested(groups);
 
     Sampler sampler{pt::sampler_seed(13, 0, 0)};
     for (int i = 0; i < ray_count; ++i) {
@@ -702,7 +706,7 @@ TEST_CASE("make_bvh folds each tree's counts into the shared stats", "[geometry]
     pt::Arena<Hittable> arena;
     pt::BvhStats stats;
 
-    const Bvh* first = pt::make_bvh(arena, scene.list(), &stats);
+    const Bvh* first = pt::make_bvh(arena, scene.objects(), &stats);
 
     REQUIRE(stats.bvh_count == 1);
     REQUIRE(stats.node_count == first->node_count());
@@ -714,7 +718,7 @@ TEST_CASE("make_bvh folds each tree's counts into the shared stats", "[geometry]
     // A scene builds one tree per mesh and group, so these are running totals rather than
     // assignments - and they are what the baseline report publishes. Depth is a maximum,
     // not a sum: two shallow trees do not add up to a deep one.
-    const Bvh* second = pt::make_bvh(arena, scene.list(), &stats);
+    const Bvh* second = pt::make_bvh(arena, scene.objects(), &stats);
 
     REQUIRE(stats.bvh_count == 2);
     REQUIRE(stats.node_count == first->node_count() + second->node_count());
@@ -723,7 +727,7 @@ TEST_CASE("make_bvh folds each tree's counts into the shared stats", "[geometry]
     REQUIRE(stats.build_time >= after_first);
 
     // The default argument is the path a caller that wants no statistics takes.
-    REQUIRE(pt::make_bvh(arena, scene.list()) != nullptr);
+    REQUIRE(pt::make_bvh(arena, scene.objects()) != nullptr);
 }
 
 TEST_CASE("a bvh over loaded mesh geometry answers exactly like a brute-force list", "[geometry][bvh][mesh]") {

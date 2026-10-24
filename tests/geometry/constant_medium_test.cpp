@@ -1,9 +1,9 @@
 #include "pt/core/hit_record.hpp"
+#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
-#include "pt/geometry/triangle_bvh.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -249,7 +249,7 @@ TEST_CASE("a medium far from the origin still finds its exit", "[geometry][const
 
 TEST_CASE("a mesh boundary holds its medium for a ray that starts inside", "[geometry][medium]") {
     const pt::Mesh mesh(closed_cube(), nullptr);
-    const pt::TriangleBvh boundary(mesh);
+    const pt::Bvh boundary(mesh);
     const ConstantMedium medium{&boundary, 50.0_f, nullptr};
 
     Sampler sampler = make_sampler(40);

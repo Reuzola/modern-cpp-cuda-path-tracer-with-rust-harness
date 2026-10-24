@@ -1,8 +1,11 @@
 #include "pt/geometry/bvh.hpp"
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
+#include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
+#include "pt/geometry/quad.hpp"
+#include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
@@ -10,6 +13,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
+#include "pt/util/overloaded.hpp"
 #include "pt/util/stats.hpp"
 #include <algorithm>
 #include <array>
@@ -24,6 +28,7 @@
 #include <optional>
 #include <span>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace pt {
@@ -386,10 +391,81 @@ private:
     }
 };
 
+// How a leaf reaches one kind's stored shapes: the geometric test, and the distance its hit carries.
+// Specialised per stored shape; the leaf scan below is written against this and nothing else.
+template <typename Shape>
+struct ShapeTraits;
+
+// A sphere's hit is its distance; the fill rebuilds the rest
+template <>
+struct ShapeTraits<SphereShape> {
+    using Hit = Float;
+
+    [[nodiscard]] static bool intersect(const Ray& r, const Interval& ray_t, const SphereShape& shape, Hit& out) noexcept {
+        const std::optional<Float> t = intersect_sphere(r, ray_t, shape);
+        if (!t) return false;
+        out = *t;
+        return true;
+    }
+
+    [[nodiscard]] static Float distance(const Hit& hit) noexcept { return hit; }
+};
+
+template <>
+struct ShapeTraits<QuadShape> {
+    using Hit = QuadHit;
+
+    [[nodiscard]] static bool intersect(const Ray& r, const Interval& ray_t, const QuadShape& shape, Hit& out) noexcept {
+        return intersect_quad(r, ray_t, shape, out);
+    }
+
+    [[nodiscard]] static Float distance(const Hit& hit) noexcept { return hit.t; }
+};
+
+template <>
+struct ShapeTraits<TriangleCorners> {
+    using Hit = TriangleHit;
+
+    [[nodiscard]] static bool intersect(const Ray& r, const Interval& ray_t, const TriangleCorners& shape, Hit& out) noexcept {
+        return intersect_triangle(r, ray_t, shape.v0, shape.v1, shape.v2, out);
+    }
+
+    [[nodiscard]] static Float distance(const Hit& hit) noexcept { return hit.t; }
+};
+
+// The nearest candidate of one kind so far: its slot in that kind's arrays, and what its test returned.
+template <typename Shape>
+struct ShapeWinner {
+    std::uint32_t slot{};
+    typename ShapeTraits<Shape>::Hit hit{};
+};
+
+// Tests one leaf's run inside `open`, narrowing as it goes. Every candidate that narrows overwrites `winner`,
+// so the last write is the leaf's nearest; returns its distance, or nothing.
+template <typename Shape>
+[[nodiscard]] std::optional<Float> closest_in_leaf(std::span<const Shape> shapes, const BvhNode& leaf, const Ray& r,
+                                                   const Interval& open, ShapeWinner<Shape>& winner) noexcept {
+    Float closest = open.max;
+    bool leaf_hit{false};
+
+    const std::uint32_t end = leaf.offset + static_cast<std::uint32_t>(leaf.count);
+    for (std::uint32_t slot = leaf.offset; slot < end; ++slot) {
+        count_leaf_test();
+
+        typename ShapeTraits<Shape>::Hit candidate{};
+        if (ShapeTraits<Shape>::intersect(r, Interval(open.min, closest), shapes[slot], candidate)) {
+            closest = ShapeTraits<Shape>::distance(candidate);
+            winner = ShapeWinner<Shape>{.slot = slot, .hit = candidate};
+            leaf_hit = true;
+        }
+    }
+
+    return leaf_hit ? std::optional<Float>(closest) : std::nullopt;
+}
+
 // Tests one leaf. A leaf is a contiguous run of primitives, which is what (offset, count) encodes.
-// The interval narrows as closer hits are found, so later primitives are rejected earlier.
-[[nodiscard]] bool hit_leaf(std::span<const Hittable* const> prims, const Ray& r,
-                            const Interval& ray_t, HitRecord& rec) {
+// The interval narrows as closer hits are found, so later primitives are rejected earlier. The child fills the record itself.
+[[nodiscard]] std::optional<Float> closest_in_opaque_leaf(std::span<const Hittable* const> prims, const Ray& r, const Interval& ray_t, HitRecord& rec) {
     bool is_hit = false;
     Float closest = ray_t.max;
 
@@ -401,7 +477,40 @@ private:
         }
     }
 
-    return is_hit;
+    return is_hit ? std::optional<Float>(closest) : std::nullopt;
+}
+
+[[nodiscard]] PrimitiveKind kind_of(const PrimitiveRef& primitive) noexcept {
+    // clang-format off
+    return std::visit(Overloaded{
+        [](const Sphere*)   { return PrimitiveKind::sphere; },
+        [](const Quad*)     { return PrimitiveKind::quad;   },
+        [](const Hittable*) { return PrimitiveKind::opaque; },
+    }, primitive);
+    // clang-format on
+}
+
+// The bounds each object reports for itself, from the same shape: the tree is the one a build over the objects would get.
+[[nodiscard]] Aabb primitive_bounds(const PrimitiveRef& primitive) {
+    // clang-format off
+    return std::visit(Overloaded{
+        [](const Sphere* s)   { return sphere_bounds(s->shape()); },
+        [](const Quad* q)     { return quad_bounds(q->shape());   },
+        [](const Hittable* h) { return h->bounding_box();         },
+    }, primitive);
+    // clang-format on
+}
+
+// Timed around the arena call: bounds, build, gather and allocation are all part of what the scene pays.
+template <typename Source>
+[[nodiscard]] const Bvh* create_timed(Arena<Hittable>& arena, BvhStats* stats, const Source& source, const BvhBuildSettings& settings) {
+    const auto start = std::chrono::steady_clock::now();
+    const Bvh* root = arena.create<Bvh>(source, settings);
+    const auto end = std::chrono::steady_clock::now();
+
+    // A scene builds one tree per mesh and group; these are its totals.
+    if (stats != nullptr) stats->record(root->topology(), std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
+    return root;
 }
 
 } // namespace
@@ -429,41 +538,172 @@ BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, Primit
     return build_bvh_topology(primitive_bounds, kinds, settings);
 }
 
-Bvh::Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& settings) {
+Bvh::Bvh(std::span<const PrimitiveRef> primitives, const BvhBuildSettings& settings) {
+    assert(primitives.size() <= std::numeric_limits<std::uint32_t>::max());
+
     std::vector<Aabb> bounds;
-    bounds.reserve(objects.size());
+    std::vector<PrimitiveKind> kinds;
+    bounds.reserve(primitives.size());
+    kinds.reserve(primitives.size());
 
-    // Each object's bounds are read once: bounding_box() is a virtual call.
-    std::ranges::transform(objects, std::back_inserter(bounds), [](const Hittable* obj) { return obj->bounding_box(); });
+    for (const PrimitiveRef& p : primitives) {
+        bounds.push_back(primitive_bounds(p));
+        kinds.push_back(kind_of(p));
+    }
 
-    BvhBuildResult result = build_bvh_topology(bounds, PrimitiveKind::opaque, settings);
+    BvhBuildResult result = build_bvh_topology(bounds, kinds, settings);
     topology_ = std::move(result.topology);
-    primitives_.reserve(result.primitive_order.size());
 
-    // The build orders indices, not objects; the tree's own primitive array is laid out from that order.
-    std::ranges::transform(result.primitive_order, std::back_inserter(primitives_), [objects](std::uint32_t i) { return objects[i]; });
+    const auto count_of = [&kinds](PrimitiveKind kind) {
+        return static_cast<std::size_t>(std::ranges::count(kinds, kind));
+    };
+    spheres_.shapes.reserve(count_of(PrimitiveKind::sphere));
+    spheres_.materials.reserve(count_of(PrimitiveKind::sphere));
+    quads_.shapes.reserve(count_of(PrimitiveKind::quad));
+    quads_.materials.reserve(count_of(PrimitiveKind::quad));
+    opaque_.reserve(count_of(PrimitiveKind::opaque));
+
+    // Gathered in leaf order, each kind into its own arrays. A slot's index within its kind is recorded as it lands.
+    std::vector<std::uint32_t> local_index;
+    local_index.reserve(primitives.size());
+
+    for (const std::uint32_t id : result.primitive_order) {
+        // clang-format off
+        std::visit(Overloaded{
+            [&](const Sphere* s) {
+                local_index.push_back(static_cast<std::uint32_t>(spheres_.shapes.size()));
+                spheres_.shapes.push_back(s->shape());
+                spheres_.materials.push_back(s->material());
+            },
+            [&](const Quad* q) {
+                local_index.push_back(static_cast<std::uint32_t>(quads_.shapes.size()));
+                quads_.shapes.push_back(q->shape());
+                quads_.materials.push_back(q->material());
+            },
+            [&](const Hittable* h) {
+                local_index.push_back(static_cast<std::uint32_t>(opaque_.size()));
+                opaque_.push_back(h);
+            },
+        }, primitives[id]);
+        // clang-format on
+    }
+
+    // The build numbers slots across every kind. A leaf is one kind's contiguous run, so its first slot's index
+    // within that kind is where the run starts in that kind's arrays. With a single kind this changes nothing.
+    for (BvhNode& node : topology_.nodes) {
+        if (node.is_leaf()) node.offset = local_index[node.offset];
+    }
+}
+
+Bvh::Bvh(const Mesh& mesh, const BvhBuildSettings& settings) {
+    assert(mesh.triangle_count() <= std::numeric_limits<std::uint32_t>::max());
+
+    std::vector<Aabb> bounds;
+    bounds.reserve(mesh.triangle_count());
+
+    // The same bounds a per-triangle object would report, in the same order, so the tree is the one it would get.
+    for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
+        const auto [a, b, c] = mesh.triangle(i);
+        bounds.push_back(triangle_bounds(a, b, c));
+    }
+
+    BvhBuildResult result = build_bvh_topology(bounds, PrimitiveKind::triangle, settings);
+    topology_ = std::move(result.topology);
+    triangles_.ids = std::move(result.primitive_order);
+    triangles_.mesh = &mesh;
+
+    triangles_.corners.reserve(triangles_.ids.size());
+
+    // Gathered in leaf order: this copy is what the intersection test reads, the mesh's buffers never.
+    for (const std::uint32_t id : triangles_.ids) {
+        const auto [a, b, c] = mesh.triangle(id);
+        triangles_.corners.push_back(TriangleCorners{.v0 = a, .v1 = b, .v2 = c});
+    }
+
+    // One kind throughout, so a slot is already its index in the triangle arrays: nothing to rebase.
 }
 
 bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    // A Hittable leaf asks each object in turn; the record is whatever the nearest one wrote.
-    return bvh_closest_hit(topology_, r, ray_t, [this, &r, &rec](const BvhNode& leaf, const Interval& open) -> std::optional<Float> {
-        const std::span prims = std::span(primitives_).subspan(leaf.offset, leaf.count);
-        if (!hit_leaf(prims, r, open, rec)) return std::nullopt;
-        return rec.t;
-    });
+    // One winner per kind rather than one shared variant: each kernel writes only its own. A leaf reports only a
+    // candidate nearer than every earlier one, so `last`, the kind of the latest report, names the overall winner.
+    ShapeWinner<SphereShape> sphere;
+    ShapeWinner<QuadShape> quad;
+    ShapeWinner<TriangleCorners> triangle;
+    PrimitiveKind last{};
+
+    const bool found = bvh_closest_hit(
+        topology_, r, ray_t,
+        [this, &r, &rec, &sphere, &quad, &triangle, &last](
+            const BvhNode& leaf, const Interval& open) -> std::optional<Float> {
+            std::optional<Float> t;
+
+            switch (leaf.kind) {
+            case PrimitiveKind::sphere:
+                t = closest_in_leaf<SphereShape>(
+                    spheres_.shapes, leaf, r, open, sphere);
+                break;
+            case PrimitiveKind::quad:
+                t = closest_in_leaf<QuadShape>(
+                    quads_.shapes, leaf, r, open, quad);
+                break;
+            case PrimitiveKind::triangle:
+                t = closest_in_leaf<TriangleCorners>(
+                    triangles_.corners, leaf, r, open, triangle);
+                break;
+            case PrimitiveKind::opaque:
+                t = closest_in_opaque_leaf(
+                    std::span(opaque_).subspan(leaf.offset, leaf.count),
+                    r, open, rec);
+                break;
+            }
+
+            if (t) last = leaf.kind;
+            return t;
+        });
+
+    if (!found) return false;
+
+    // Written once, for the hit that survived: a miss leaves the caller's record untouched.
+    switch (last) {
+    case PrimitiveKind::sphere:
+        fill_sphere_record(r, spheres_.shapes[sphere.slot], sphere.hit, spheres_.materials[sphere.slot], rec);
+        break;
+    case PrimitiveKind::quad:
+        fill_quad_record(r, quads_.shapes[quad.slot], quad.hit, quads_.materials[quad.slot], rec);
+        break;
+    case PrimitiveKind::triangle:
+        fill_triangle_record(r, triangle.slot, triangle.hit, rec);
+        break;
+    case PrimitiveKind::opaque:
+        // The child wrote the record when it won; a nearer winner of another kind would have taken `last`.
+        break;
+    }
+
+    return true;
 }
 
 Aabb Bvh::bounding_box() const { return topology_.nodes.empty() ? Aabb() : topology_.nodes[0].bbox; }
 
-const Bvh* make_bvh(Arena<Hittable>& arena, const HittableList& list, BvhStats* stats, const BvhBuildSettings& settings) {
-    // Timed around the arena call, so the measurement includes the allocation the scene pays for.
-    const auto start = std::chrono::steady_clock::now();
-    const Bvh* root = arena.create<Bvh>(list.objects(), settings);
-    const auto end = std::chrono::steady_clock::now();
+void Bvh::fill_triangle_record(const Ray& r, std::uint32_t slot, const TriangleHit& hit, HitRecord& rec) const noexcept {
+    const TriangleCorners& tri = triangles_.corners[slot];
+    const std::uint32_t id = triangles_.ids[slot];
+    const Uv uv = triangles_.mesh->texture_uv(id, hit.b1, hit.b2);
 
-    // A scene builds one tree per mesh and group; these are its totals.
-    if (stats != nullptr) stats->record(root->topology(), std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
-    return root;
+    rec.t = hit.t;
+    rec.p = barycentric_point(tri.v0, tri.v1, tri.v2, hit.b1, hit.b2);
+    rec.spawn_margin = 0.0_f; // Written explicitly: the caller reuses records across queries.
+    rec.u = uv.u;
+    rec.v = uv.v;
+    rec.mat = triangles_.mesh->material();
+    rec.set_face_normal(r, hit.normal, triangles_.mesh->shading_normal(id, hit.b1, hit.b2, hit.normal));
+}
+
+const Bvh* make_bvh(Arena<Hittable>& arena, std::span<const PrimitiveRef> primitives, BvhStats* stats, const BvhBuildSettings& settings) {
+    return create_timed(arena, stats, primitives, settings);
+}
+
+const Bvh* make_mesh_bvh(Arena<Hittable>& arena, const Mesh& mesh, BvhStats* stats, const BvhBuildSettings& settings) {
+    return create_timed(arena, stats, mesh, settings);
 }
 
 } // namespace pt

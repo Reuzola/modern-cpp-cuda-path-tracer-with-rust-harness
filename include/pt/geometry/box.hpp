@@ -2,7 +2,6 @@
 #include "pt/core/hittable.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/quad.hpp"
-#include "pt/geometry/shape_bvh.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
 #include <array>
@@ -21,6 +20,6 @@ struct BoxFaces {
 [[nodiscard]] BoxFaces box(Arena<Hittable>& arena, const Point3& a, const Point3& b, const Material* mat);
 
 // A box on its own - under a transform, or bounding a medium - as a set of its own.
-[[nodiscard]] const QuadBvh* make_box_bvh(Arena<Hittable>& arena, const BoxFaces& box, BvhStats* stats = nullptr);
+[[nodiscard]] const Bvh* make_box_bvh(Arena<Hittable>& arena, const BoxFaces& box, BvhStats* stats = nullptr);
 
 } // namespace pt

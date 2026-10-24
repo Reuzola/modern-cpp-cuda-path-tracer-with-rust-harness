@@ -1,19 +1,19 @@
 #include "pt/scene/scene.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/group_builder.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/scalar.hpp"
 #include <cassert>
+#include <span>
 #include <utility>
 
 namespace pt {
 
 const Hittable& Scene::world() const noexcept {
     // Immutable, so one empty world serves every scene that is not built yet.
-    static const HittableList nothing;
+    static const Bvh nothing{std::span<const PrimitiveRef>{}};
     return world_ != nullptr ? *world_ : nothing;
 }
 

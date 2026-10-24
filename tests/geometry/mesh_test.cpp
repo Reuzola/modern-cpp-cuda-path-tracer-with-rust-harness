@@ -1,7 +1,7 @@
 #include "pt/core/hit_record.hpp"
+#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/triangle.hpp"
-#include "pt/geometry/triangle_bvh.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
@@ -21,6 +21,7 @@
 
 namespace {
 
+using pt::Bvh;
 using pt::Float;
 using pt::HitRecord;
 using pt::Interval;
@@ -29,7 +30,6 @@ using pt::MeshData;
 using pt::Point3;
 using pt::Ray;
 using pt::Triangle;
-using pt::TriangleBvh;
 using pt::unit_vector;
 using pt::Uv;
 using pt::Vec3;
@@ -183,7 +183,7 @@ TEST_CASE("a mesh's tree intersects exactly like a standalone triangle", "[geome
     const pt::Lambertian mat{&albedo};
 
     const Mesh mesh = quad_mesh(&mat);
-    const TriangleBvh tree(mesh);
+    const Bvh tree(mesh);
     const Triangle standalone(mesh.positions()[0], mesh.positions()[1], mesh.positions()[2], &mat);
 
     const Ray r = ray_from_above(0.75_f, 0.25_f);
@@ -206,7 +206,7 @@ TEST_CASE("a mesh's tree intersects exactly like a standalone triangle", "[geome
 
 TEST_CASE("without attributes a hit reports the flat normal and raw barycentrics", "[geometry][mesh]") {
     const Mesh mesh = quad_mesh(nullptr);
-    const TriangleBvh tree(mesh);
+    const Bvh tree(mesh);
 
     HitRecord rec;
     REQUIRE(tree.hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
@@ -218,7 +218,7 @@ TEST_CASE("without attributes a hit reports the flat normal and raw barycentrics
 
 TEST_CASE("vertex normals are interpolated across the triangle", "[geometry][mesh]") {
     const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
-    const TriangleBvh tree(mesh);
+    const Bvh tree(mesh);
 
     HitRecord rec;
 
@@ -247,7 +247,7 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
 
     SECTION("a back-face hit flips the interpolated normal") {
         const Mesh mesh = quad_mesh_with(quad_normals(), {}, nullptr);
-        const TriangleBvh tree(mesh);
+        const Bvh tree(mesh);
 
         REQUIRE(tree.hit(ray_from_below(0.75_f, 0.25_f), visible, rec));
 
@@ -259,7 +259,7 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
         // ray while the geometry still faces it. front_face must follow geometry.
         const std::vector<Vec3> inverted(4, Vec3(0.0_f, 0.0_f, -1.0_f));
         const Mesh mesh = quad_mesh_with(inverted, {}, nullptr);
-        const TriangleBvh tree(mesh);
+        const Bvh tree(mesh);
 
         REQUIRE(tree.hit(ray_from_above(0.75_f, 0.25_f), visible, rec));
 
@@ -272,7 +272,7 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
         opposing[1] = Vec3(0.0_f, 0.0_f, -1.0_f);
 
         const Mesh mesh = quad_mesh_with(std::move(opposing), {}, nullptr);
-        const TriangleBvh tree(mesh);
+        const Bvh tree(mesh);
 
         // The edge midpoint weights v0 and v1 equally, summing to the zero vector.
         REQUIRE(tree.hit(ray_from_above(0.5_f, 0.0_f), visible, rec));
@@ -284,7 +284,7 @@ TEST_CASE("orientation follows the geometric normal, not the shading normal", "[
 
 TEST_CASE("vertex UVs are interpolated across the triangle", "[geometry][mesh]") {
     const Mesh mesh = quad_mesh_with({}, quad_uvs(), nullptr);
-    const TriangleBvh tree(mesh);
+    const Bvh tree(mesh);
 
     HitRecord rec;
 
@@ -310,7 +310,7 @@ TEST_CASE("vertex UVs are interpolated across the triangle", "[geometry][mesh]")
 
 TEST_CASE("both halves of a two-triangle quad are reachable through its tree", "[geometry][mesh]") {
     const Mesh mesh = quad_mesh(nullptr);
-    const TriangleBvh tree(mesh);
+    const Bvh tree(mesh);
 
     HitRecord rec;
 

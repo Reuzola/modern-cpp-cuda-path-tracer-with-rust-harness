@@ -5,8 +5,8 @@
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/group_builder.hpp"
 #include "pt/geometry/instance.hpp"
+#include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
-#include "pt/geometry/shape_bvh.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
@@ -39,12 +39,11 @@ using pt::Hittable;
 using pt::HittableList;
 using pt::Interval;
 using pt::Point3;
+using pt::PrimitiveKind;
 using pt::Quad;
-using pt::QuadBvh;
 using pt::Ray;
 using pt::Sampler;
 using pt::Sphere;
-using pt::SphereBvh;
 using pt::Transform;
 using pt::Vec3;
 using pt::operator""_f;
@@ -156,6 +155,17 @@ bool require_same_answer(const Hittable& built, const HittableList& reference, c
     return reference_hit;
 }
 
+// What a container or a seal built, required to be a tree whose every leaf holds `kind`: the question the
+// per-kind tree types used to answer by their type alone.
+[[nodiscard]] const pt::Bvh* tree_of_kind(const pt::Hittable* built, PrimitiveKind kind) {
+    const auto* tree = dynamic_cast<const pt::Bvh*>(built);
+    REQUIRE(tree != nullptr);
+    for (const pt::BvhNode& node : tree->topology().nodes) {
+        if (node.is_leaf()) REQUIRE(node.kind == kind);
+    }
+    return tree;
+}
+
 } // namespace
 
 TEST_CASE("a mixed group answers exactly like a scan of its children", "[geometry][group_builder]") {
@@ -171,7 +181,7 @@ TEST_CASE("a mixed group answers exactly like a scan of its children", "[geometr
     const Hittable* built = std::move(builder).build(arena, &stats);
 
     // A sphere set, a quad set, and one tree over the two of them and the instance.
-    REQUIRE(dynamic_cast<const pt::Bvh*>(built) != nullptr);
+    REQUIRE(tree_of_kind(built, PrimitiveKind::opaque) != nullptr);
     REQUIRE(stats.bvh_count == 3);
 
     const Aabb bounds = children.list().bounding_box();
@@ -202,7 +212,7 @@ TEST_CASE("a group of one kind is that kind's set and nothing more", "[geometry]
     const Hittable* built = std::move(builder).build(arena, &stats);
 
     // No tree over the set: a world of spheres only is hit through the set itself.
-    REQUIRE(dynamic_cast<const SphereBvh*>(built) != nullptr);
+    REQUIRE(tree_of_kind(built, PrimitiveKind::sphere) != nullptr);
     REQUIRE(stats.bvh_count == 1);
 }
 
@@ -244,7 +254,7 @@ TEST_CASE("seal gives a lone sphere or quad a set of its own", "[geometry][group
         const Sphere ball{Point3(0, 0, 5), 1.0_f, &shared_material};
         const Hittable* sealed = pt::seal(arena, &ball, &stats);
 
-        const auto* set = dynamic_cast<const SphereBvh*>(sealed);
+        const pt::Bvh* set = tree_of_kind(sealed, PrimitiveKind::sphere);
         REQUIRE(set != nullptr);
         REQUIRE(set->topology().nodes.size() == 1);
         REQUIRE(stats.bvh_count == 1);
@@ -261,7 +271,7 @@ TEST_CASE("seal gives a lone sphere or quad a set of its own", "[geometry][group
         const Quad square{Point3(-1, -1, 2), Vec3(2, 0, 0), Vec3(0, 2, 0), &shared_material};
         const Hittable* sealed = pt::seal(arena, &square, &stats);
 
-        REQUIRE(dynamic_cast<const QuadBvh*>(sealed) != nullptr);
+        REQUIRE(tree_of_kind(sealed, PrimitiveKind::quad) != nullptr);
         REQUIRE(stats.bvh_count == 1);
 
         HitRecord through_set;
@@ -300,7 +310,7 @@ TEST_CASE("a box in a group joins the group's quad set", "[geometry][group_build
     const Hittable* built = std::move(builder).build(arena, &stats);
 
     // Six faces and a floor are seven quads of one kind: one set, and no tree above it.
-    const auto* set = dynamic_cast<const QuadBvh*>(built);
+    const pt::Bvh* set = tree_of_kind(built, PrimitiveKind::quad);
     REQUIRE(set != nullptr);
     REQUIRE(stats.bvh_count == 1);
 
@@ -320,7 +330,7 @@ TEST_CASE("a box sealed on its own keeps its faces in one leaf", "[geometry][gro
     pt::BvhStats stats;
 
     const BoxFaces crate = pt::box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), &shared_material);
-    const auto* set = dynamic_cast<const QuadBvh*>(pt::seal(arena, crate, &stats));
+    const pt::Bvh* set = tree_of_kind(pt::seal(arena, crate, &stats), PrimitiveKind::quad);
 
     // What a transform or a medium receives: the box's own set, the six faces tested in a row.
     REQUIRE(set != nullptr);

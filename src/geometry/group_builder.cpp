@@ -1,14 +1,13 @@
 #include "pt/geometry/group_builder.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/quad.hpp"
-#include "pt/geometry/shape_bvh.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/util/arena.hpp"
 #include "pt/util/overloaded.hpp"
 #include <cassert>
+#include <span>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -32,22 +31,15 @@ void GroupBuilder::add(GeometryRef object) {
 }
 
 const Hittable* GroupBuilder::build(Arena<Hittable>& arena, BvhStats* stats, const BvhBuildSettings& settings) && {
-    std::vector<const Hittable*> children;
+    std::vector<PrimitiveRef> children;
 
-    // Sets first, then the opaque children in the order they came.
-    if (!spheres_.empty()) children.push_back(make_shape_bvh<Sphere>(arena, spheres_, stats, settings));
-    if (!quads_.empty()) children.push_back(make_shape_bvh<Quad>(arena, quads_, stats, settings));
+    if (!spheres_.empty()) children.emplace_back(make_bvh(arena, spheres_, stats, settings));
+    if (!quads_.empty()) children.emplace_back(make_bvh(arena, quads_, stats, settings));
     children.insert(children.end(), others_.begin(), others_.end());
 
-    if (children.empty()) return arena.create<HittableList>();
-    if (children.size() == 1) return children.front();
-
-    HittableList list;
-    for (const Hittable* child : children) {
-        list.add(child);
-    }
-
-    return make_bvh(arena, list, stats, settings);
+    if (children.empty()) return arena.create<Bvh>(std::span<const PrimitiveRef>{});
+    if (children.size() == 1) return std::get<const Hittable*>(children.front());
+    return make_bvh(arena, children, stats, settings);
 }
 
 const Hittable* seal(Arena<Hittable>& arena, GeometryRef object, BvhStats* stats) {

@@ -2,13 +2,13 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/box.hpp"
+#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/group_builder.hpp"
 #include "pt/geometry/instance.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
-#include "pt/geometry/triangle_bvh.hpp"
 #include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
@@ -283,7 +283,7 @@ void build_medium(const Json& j, LoadContext& ctx) {
             // The triangles get a tree of their own for the same reason a group's children do: a mesh is
             // thousands of primitives, and acceleration is the renderer's decision rather than the scene
             // author's, so the format does not name it.
-            const Hittable* tree = make_triangle_bvh(ctx.scene.object_arena(), *mesh, &ctx.scene.bvh_stats());
+            const Hittable* tree = make_mesh_bvh(ctx.scene.object_arena(), *mesh, &ctx.scene.bvh_stats());
             ctx.meshes.emplace(key, tree);
             result = tree;
         }

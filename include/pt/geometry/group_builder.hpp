@@ -22,13 +22,13 @@ public:
     void add(GeometryRef object);
 
     // A single child is returned as it is: a tree over one child would only add a box test, a leaf
-    // test and a call. No child at all yields an empty list, so a scene of media alone has a world.
+    // test and a call. No child at all yields an empty tree, so a scene of media alone has a world.
     [[nodiscard]] const Hittable* build(Arena<Hittable>& arena, BvhStats* stats = nullptr, const BvhBuildSettings& settings = {}) &&;
 
 private:
-    std::vector<const Sphere*> spheres_;
-    std::vector<const Quad*> quads_;
-    std::vector<const Hittable*> others_;
+    std::vector<PrimitiveRef> spheres_;
+    std::vector<PrimitiveRef> quads_;
+    std::vector<PrimitiveRef> others_;
 };
 
 // One object as a single Hittable: a sphere or a quad gets a set of its own, anything else is handed back unchanged.

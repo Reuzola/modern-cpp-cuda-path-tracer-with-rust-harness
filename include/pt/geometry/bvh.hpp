@@ -2,6 +2,9 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/geometry/primitive_kind.hpp"
+#include "pt/geometry/quad.hpp"
+#include "pt/geometry/sphere.hpp"
+#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -17,6 +20,7 @@
 #include <optional>
 #include <span>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 namespace pt {
@@ -32,7 +36,8 @@ struct TraversalEntry {
 
 } // namespace detail
 
-class HittableList;
+class Material;
+class Mesh;
 
 // Deepest node any tree may have; the root is depth 0. It sizes the traversal stack, which holds at
 // most one deferred child per level, and the builder never exceeds it, so no input can overflow it.
@@ -55,9 +60,11 @@ struct BvhBuildSettings {
 // child directly after its parent, so only the right child needs a stored index.
 struct BvhNode {
     Aabb bbox;
-    std::uint32_t offset{}; // Right child index when interior, first primitive index when leaf
-    std::uint16_t count{};  // Primitive count; 0 is what marks the node interior
-    PrimitiveKind kind{};   // Leaf only: whose array offset indexes. Sits in what was padding
+    // Right child index when interior. When leaf, its first slot: in the build's
+    // order as built, in its kind's arrays once a tree has laid them out.
+    std::uint32_t offset{};
+    std::uint16_t count{}; // Primitive count; 0 is what marks the node interior
+    PrimitiveKind kind{};  // Leaf only: whose array offset indexes. Sits in what was padding
 
     [[nodiscard]] constexpr bool is_leaf() const noexcept { return count > 0; }
 };
@@ -95,6 +102,10 @@ struct BvhBuildResult {
 template <typename F>
 concept BvhLeafTest = std::invocable<F&, const BvhNode&, const Interval&> &&
                       std::same_as<std::invoke_result_t<F&, const BvhNode&, const Interval&>, std::optional<Float>>;
+
+// A primitive as a tree is built from it, typed by the kind it takes in a leaf. Read during the build only:
+// a sphere or a quad is copied in, anything else is an opaque child kept by pointer and hit through its own hit().
+using PrimitiveRef = std::variant<const Sphere*, const Quad*, const Hittable*>;
 
 // Iterative, distance-ordered traversal. The near child is descended into directly and the far one
 // is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
@@ -176,12 +187,17 @@ template <BvhLeafTest LeafTest>
     }
 }
 
-// Read-only BVH built via binned SAH. Non-owning over primitives (permuted for contiguous leaves).
-// Implements Hittable to support nesting: group subtrees, and the scene's root over them.
+// Read-only BVH built via binned SAH. A leaf holds primitives of one kind, laid out in leaf order in that
+// kind's own arrays, so testing it is one switch and a loop over contiguous memory. Spheres and quads are
+// copied in; a mesh's triangles have their corners copied and their attributes read from the mesh; opaque
+// children are kept by pointer. The mesh and the opaque children must outlive the tree.
 class Bvh final : public Hittable {
 public:
-    // `objects` is read during construction only and is not retained.
-    explicit Bvh(std::span<const Hittable* const> objects, const BvhBuildSettings& settings = {});
+    // Any mix of spheres, quads and opaque children. `primitives` is read during construction only.
+    explicit Bvh(std::span<const PrimitiveRef> primitives, const BvhBuildSettings& settings = {});
+
+    // Every triangle of `mesh`, which a hit reads its attributes from.
+    explicit Bvh(const Mesh& mesh, const BvhBuildSettings& settings = {});
 
     // Closest hit inside ray_t, or false when the ray misses the tree entirely.
     [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
@@ -199,8 +215,27 @@ public:
     [[nodiscard]] const BvhTopology& topology() const noexcept { return topology_; }
 
 private:
+    // Shapes and their materials side by side, both in leaf order: the test reads the first, the fill one entry of the second.
+    template <typename Shape>
+    struct ShapeArrays {
+        std::vector<Shape> shapes;
+        std::vector<const Material*> materials;
+    };
+
+    // Corners in leaf order for the test; the mesh and each slot's triangle index for the attributes of the one that wins.
+    struct TriangleArrays {
+        std::vector<TriangleCorners> corners;
+        std::vector<std::uint32_t> ids; // Leaf slot to the mesh's own triangle index
+        const Mesh* mesh = nullptr;
+    };
+
     BvhTopology topology_;
-    std::vector<const Hittable*> primitives_; // Permuted by the build; leaves index into this
+    ShapeArrays<SphereShape> spheres_;
+    ShapeArrays<QuadShape> quads_;
+    TriangleArrays triangles_;
+    std::vector<const Hittable*> opaque_;
+
+    void fill_triangle_record(const Ray& r, std::uint32_t slot, const TriangleHit& hit, HitRecord& rec) const noexcept;
 };
 
 /// Builds a binned SAH tree over primitives known by their bounds and kind: entry i of both spans is
@@ -213,11 +248,14 @@ private:
 [[nodiscard]] BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, PrimitiveKind kind,
                                                 const BvhBuildSettings& settings = {});
 
-/// Builds a BVH over `list` and stores it in `arena`.
-/// The tree is owned by the arena and stays valid as long as the arena does. `list` itself is not
-/// retained, but the primitives it points at must outlive the arena.
+/// Builds a tree over `primitives` and stores it in `arena`, which owns it.
+/// `primitives` is not retained; opaque children must outlive the arena.
 /// @param stats If non-null, this tree's counts and build time are folded into it.
-[[nodiscard]] const Bvh* make_bvh(Arena<Hittable>& arena, const HittableList& list,
+[[nodiscard]] const Bvh* make_bvh(Arena<Hittable>& arena, std::span<const PrimitiveRef> primitives,
                                   BvhStats* stats = nullptr, const BvhBuildSettings& settings = {});
+
+/// The same for every triangle of `mesh`, which must outlive the arena.
+[[nodiscard]] const Bvh* make_mesh_bvh(Arena<Hittable>& arena, const Mesh& mesh,
+                                       BvhStats* stats = nullptr, const BvhBuildSettings& settings = {});
 
 } // namespace pt

@@ -6,6 +6,7 @@
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include <type_traits>
 
 namespace pt {
 
@@ -18,6 +19,16 @@ struct TriangleHit {
     Float b2{};
     Vec3 normal;
 };
+
+// What a triangle's intersection test reads, and all it reads: its corners, copied out of the mesh's
+// indexed buffers into a tree's leaf order. Trivially copyable for the reason SphereShape is.
+struct TriangleCorners {
+    Point3 v0;
+    Point3 v1;
+    Point3 v2;
+};
+
+static_assert(std::is_trivially_copyable_v<TriangleCorners>);
 
 // The hit point rebuilt from the vertices: its rounding then scales with their coordinates, which
 // the ulp offset is built for. r.at(t) would carry the error of a long t instead.
