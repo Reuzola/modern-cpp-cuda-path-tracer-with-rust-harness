@@ -52,7 +52,9 @@ eight cores turbo to 5.0 GHz and the rest to 4.9, and an unpinned thread may
 land on either: unpinned processes differed by up to 4.0%, pinned ones by at
 most 1.2%. The default 2% threshold of `scene-tool bench-compare` therefore
 holds only for pinned one-thread records. The sixteen-thread pass is not
-pinned.
+pinned. Code layout alone, from relinking after an unrelated change, has moved
+`quads` by 8%: a change on a cheap scene is believed only once a second build
+confirms it.
 
 ### Threads
 
@@ -120,7 +122,8 @@ these differ:
 - How the scene's primitives are grouped into trees — for counters. Records
   taken before primitives were gathered into per-kind sets counted a box's six
   faces as one test, and a medium's boundary or a transformed sphere or quad as
-  none.
+  none; records taken while a container held one tree per kind count a node test
+  and a leaf test for every entry into one of them.
 - The source revision, or a dirty working tree. The record cannot see the
   latter; this one is discipline, not a check.
 - The machine, or its thermal, power or load state — except for counters; see
@@ -131,12 +134,11 @@ Statistics and timing may be quoted together only from the same record.
 ### Definitions
 
 - **Spread** — the slowest timed run against the fastest, in percent.
-- **Trees** — BVHs the scene builds: one per mesh; per container (the world, a
-  group), one per primitive kind it holds, plus one over those and its other
-  children when there is more than one; one for a box, sphere or quad placed
-  alone under a transform or as a medium's boundary. A shared mesh or group is
-  built once; a shared sphere or quad is copied into every container that holds
-  it.
+- **Trees** — BVHs the scene builds: one per mesh; one per container (the world,
+  a group) over everything it holds, unless that is a single nested object; one
+  for a box, sphere or quad placed alone under a transform or as a medium's
+  boundary. A shared mesh or group is built once; a shared sphere or quad is
+  copied into every container that holds it.
 - **Nodes / Leaves** — size of the flat node array / leaf nodes, each holding a
   contiguous range of primitives.
 - **Depth** — the longest root-to-node path; a single-node tree is depth 0.
@@ -380,3 +382,11 @@ intersection, are in this file's history. What is worth keeping:
 - The widened slab test costs in proportion to box tests: the heaviest scenes
   took 12–31% longer for the same number of tests. That comparison was
   unpaired and is an observation, not a result.
+- A container used to hold one tree per primitive kind under a tree of its own;
+  since 2026-10-26 it is one tree over every kind, no leaf mixing kinds.
+  One-thread time fell 12% on `area_lights`, `cornell_box` and `mesh_showcase`
+  and 5% on `showcase`; `neon_cathedral` does 2% more tests per query. A build
+  that split kinds apart before any spatial split, kept out of the repository,
+  separated the causes: in the small scenes most of the gain is the per-tree
+  cost — a call, a ray setup and a root test per set — and in `mesh_showcase`
+  and `showcase` most is the overlap of sets spanning the same space.
