@@ -480,7 +480,7 @@ template <typename Shape>
     return is_hit ? std::optional<Float>(closest) : std::nullopt;
 }
 
-[[nodiscard]] PrimitiveKind kind_of(const PrimitiveRef& primitive) noexcept {
+[[nodiscard]] PrimitiveKind kind_of(const PrimitiveRef& primitive) {
     // clang-format off
     return std::visit(Overloaded{
         [](const Sphere*)   { return PrimitiveKind::sphere; },
