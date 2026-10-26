@@ -17,29 +17,28 @@ namespace pt {
 void GroupBuilder::add(GeometryRef object) {
     // clang-format off
     std::visit(Overloaded{
-        [this](const Sphere* sphere)     { assert(sphere != nullptr);   spheres_.push_back(sphere); },
-        [this](const Quad* quad)         { assert(quad != nullptr);     quads_.push_back(quad); },
+        [this](const Sphere* sphere)      { assert(sphere != nullptr); primitives_.emplace_back(sphere); },
+        [this](const Quad* quad)          { assert(quad != nullptr);   primitives_.emplace_back(quad); },
         [this](const BoxFaces& box_faces) {
             for (const Quad* face : box_faces.faces) {
                 assert(face != nullptr);
-                quads_.push_back(face);
+                primitives_.emplace_back(face);
             }
         },
-        [this](const Hittable* hittable) { assert(hittable != nullptr); others_.push_back(hittable); },
+        [this](const Hittable* hittable) { assert(hittable != nullptr); primitives_.emplace_back(hittable); },
     }, object);
     // clang-format on
 }
 
 const Hittable* GroupBuilder::build(Arena<Hittable>& arena, BvhStats* stats, const BvhBuildSettings& settings) && {
-    std::vector<PrimitiveRef> children;
+    if (primitives_.empty()) return arena.create<Bvh>(std::span<const PrimitiveRef>{});
 
-    if (!spheres_.empty()) children.emplace_back(make_bvh(arena, spheres_, stats, settings));
-    if (!quads_.empty()) children.emplace_back(make_bvh(arena, quads_, stats, settings));
-    children.insert(children.end(), others_.begin(), others_.end());
+    // A lone opaque child needs no tree around it. A lone sphere or quad does: only a tree holds its copied shape.
+    if (primitives_.size() == 1) {
+        if (const auto* opaque = std::get_if<const Hittable*>(&primitives_.front())) return *opaque;
+    }
 
-    if (children.empty()) return arena.create<Bvh>(std::span<const PrimitiveRef>{});
-    if (children.size() == 1) return std::get<const Hittable*>(children.front());
-    return make_bvh(arena, children, stats, settings);
+    return make_bvh(arena, primitives_, stats, settings);
 }
 
 const Hittable* seal(Arena<Hittable>& arena, GeometryRef object, BvhStats* stats) {

@@ -54,9 +54,9 @@ const Ray forward{Point3(0, 0, 0), Vec3(0, 0, 1)};
 const pt::SolidColor albedo{pt::Color(0.5_f, 0.5_f, 0.5_f)};
 const pt::Lambertian shared_material{&albedo};
 
-// A container's worth of children, each kept twice: as the typed reference a builder receives, and as
-// a Hittable in the list the reference scans. One material per object, so a record names its object.
-// Immovable: the materials point at `albedo_`.
+// A container's worth of children, each kept three times: as the reference a builder receives, as the primitive
+// a tree is built from, and as a Hittable in the list the reference scans. One material per object, so a record
+// names its object. Immovable: the materials point at `albedo_`.
 class Children {
 public:
     Children() = default;
@@ -66,12 +66,14 @@ public:
     void add_sphere(const Point3& center, Float radius) {
         const Sphere* sphere = objects_.create<Sphere>(center, radius, new_material());
         refs_.emplace_back(sphere);
+        primitives_.emplace_back(sphere);
         list_.add(sphere);
     }
 
     void add_quad(const Point3& q, const Vec3& u, const Vec3& v) {
         const Quad* quad = objects_.create<Quad>(q, u, v, new_material());
         refs_.emplace_back(quad);
+        primitives_.emplace_back(quad);
         list_.add(quad);
     }
 
@@ -80,12 +82,15 @@ public:
         const Sphere* child = objects_.create<Sphere>(center, radius, new_material());
         const pt::Instance* moved = objects_.create<pt::Instance>(child, Transform::translation(offset));
         refs_.emplace_back(moved);
+        primitives_.emplace_back(moved);
         list_.add(moved);
     }
 
     [[nodiscard]] const std::vector<GeometryRef>& refs() const noexcept { return refs_; }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
+
+    [[nodiscard]] const std::vector<pt::PrimitiveRef>& primitives() const noexcept { return primitives_; }
 
 private:
     [[nodiscard]] const pt::Material* new_material() { return materials_.create<pt::Lambertian>(&albedo_); }
@@ -95,6 +100,7 @@ private:
     pt::Arena<Hittable> objects_;
     std::vector<GeometryRef> refs_;
     HittableList list_;
+    std::vector<pt::PrimitiveRef> primitives_;
 };
 
 // Braced, so the three draws happen left to right whatever the compiler.
@@ -166,6 +172,29 @@ bool require_same_answer(const Hittable& built, const HittableList& reference, c
     return tree;
 }
 
+[[nodiscard]] constexpr unsigned bit(PrimitiveKind kind) { return 1U << static_cast<unsigned>(kind); }
+
+// Which kinds a tree's leaves hold, as a mask of bit(kind).
+[[nodiscard]] unsigned leaf_kinds(const pt::Bvh& tree) {
+    unsigned mask = 0;
+    for (const pt::BvhNode& node : tree.topology().nodes)
+        if (node.is_leaf()) mask |= bit(node.kind);
+    return mask;
+}
+
+[[nodiscard]] bool same_node(const pt::BvhNode& a, const pt::BvhNode& b) {
+    return a.offset == b.offset && a.count == b.count && a.kind == b.kind && a.bbox.x.min == b.bbox.x.min &&
+           a.bbox.x.max == b.bbox.x.max && a.bbox.y.min == b.bbox.y.min && a.bbox.y.max == b.bbox.y.max &&
+           a.bbox.z.min == b.bbox.z.min && a.bbox.z.max == b.bbox.z.max;
+}
+
+void require_same_topology(const pt::BvhTopology& actual, const pt::BvhTopology& expected) {
+    REQUIRE(actual.nodes.size() == expected.nodes.size());
+    for (std::size_t i = 0; i < expected.nodes.size(); ++i) {
+        if (!same_node(actual.nodes[i], expected.nodes[i])) FAIL("trees first differ at node " << i);
+    }
+}
+
 } // namespace
 
 TEST_CASE("a mixed group answers exactly like a scan of its children", "[geometry][group_builder]") {
@@ -180,9 +209,11 @@ TEST_CASE("a mixed group answers exactly like a scan of its children", "[geometr
         builder.add(ref);
     const Hittable* built = std::move(builder).build(arena, &stats);
 
-    // A sphere set, a quad set, and one tree over the two of them and the instance.
-    REQUIRE(tree_of_kind(built, PrimitiveKind::opaque) != nullptr);
-    REQUIRE(stats.bvh_count == 3);
+    // One tree over all three kinds and none below it: the spheres, the quads and the instance share it.
+    const auto* tree = dynamic_cast<const pt::Bvh*>(built);
+    REQUIRE(tree != nullptr);
+    REQUIRE(leaf_kinds(*tree) == (bit(PrimitiveKind::sphere) | bit(PrimitiveKind::quad) | bit(PrimitiveKind::opaque)));
+    REQUIRE(stats.bvh_count == 1);
 
     const Aabb bounds = children.list().bounding_box();
     Sampler sampler{pt::sampler_seed(72, 0, 0)};
@@ -198,7 +229,7 @@ TEST_CASE("a mixed group answers exactly like a scan of its children", "[geometr
     REQUIRE(hits > 0);
 }
 
-TEST_CASE("a group of one kind is that kind's set and nothing more", "[geometry][group_builder]") {
+TEST_CASE("a group of one kind is one tree of that kind", "[geometry][group_builder]") {
     Children children;
     for (int i = 0; i < 20; ++i)
         children.add_sphere(Point3(3.0_f * static_cast<Float>(i), 0, 0), 1.0_f);
@@ -211,7 +242,7 @@ TEST_CASE("a group of one kind is that kind's set and nothing more", "[geometry]
         builder.add(ref);
     const Hittable* built = std::move(builder).build(arena, &stats);
 
-    // No tree over the set: a world of spheres only is hit through the set itself.
+    // No tree above it and none below: a world of spheres only is one tree of spheres.
     REQUIRE(tree_of_kind(built, PrimitiveKind::sphere) != nullptr);
     REQUIRE(stats.bvh_count == 1);
 }
@@ -246,7 +277,7 @@ TEST_CASE("an empty group builds a world that hits nothing", "[geometry][group_b
     REQUIRE_FALSE(world->hit(forward, visible, rec));
 }
 
-TEST_CASE("seal gives a lone sphere or quad a set of its own", "[geometry][group_builder]") {
+TEST_CASE("seal gives a lone sphere or quad a tree of its own", "[geometry][group_builder]") {
     pt::Arena<Hittable> arena;
     pt::BvhStats stats;
 
@@ -298,7 +329,7 @@ TEST_CASE("seal hands anything else back unchanged", "[geometry][group_builder]"
     REQUIRE(stats.bvh_count == 0);
 }
 
-TEST_CASE("a box in a group joins the group's quad set", "[geometry][group_builder]") {
+TEST_CASE("a box in a group adds its six faces to the group's tree", "[geometry][group_builder]") {
     pt::Arena<Hittable> arena;
     pt::BvhStats stats;
 
@@ -309,7 +340,7 @@ TEST_CASE("a box in a group joins the group's quad set", "[geometry][group_build
     builder.add(&floor);
     const Hittable* built = std::move(builder).build(arena, &stats);
 
-    // Six faces and a floor are seven quads of one kind: one set, and no tree above it.
+    // Six faces and a floor are seven quads: one tree of one kind.
     const pt::Bvh* set = tree_of_kind(built, PrimitiveKind::quad);
     REQUIRE(set != nullptr);
     REQUIRE(stats.bvh_count == 1);
@@ -319,7 +350,7 @@ TEST_CASE("a box in a group joins the group's quad set", "[geometry][group_build
         quads += node.count;
     REQUIRE(quads == 7);
 
-    // The box's top face, from above: reachable through the merged set.
+    // The box's top face, from above: reachable through the group's tree.
     HitRecord rec;
     REQUIRE(built->hit(Ray(Point3(0, 5, 0), Vec3(0, -1, 0)), visible, rec));
     REQUIRE(rec.t == 3.0_f);
@@ -337,4 +368,33 @@ TEST_CASE("a box sealed on its own keeps its faces in one leaf", "[geometry][gro
     REQUIRE(set->topology().nodes.size() == 1);
     REQUIRE(set->topology().nodes.front().count == 6);
     REQUIRE(stats.bvh_count == 1);
+}
+
+TEST_CASE("a group's tree is the tree its children build in the order they came", "[geometry][group_builder]") {
+    // The builder hands its children over as they were added, a box's faces in the box's place, and builds
+    // nothing else. Order breaks exact ties in the build - the stable partitions, the first kind split off -
+    // so a builder that grouped its children by kind first could build another tree from the same children.
+    pt::Arena<Hittable> arena;
+    Children children;
+    fill_children(children, 73);
+
+    GroupBuilder builder;
+    std::vector<pt::PrimitiveRef> expected;
+    for (std::size_t i = 0; i < children.refs().size(); ++i) {
+        builder.add(children.refs()[i]);
+        expected.push_back(children.primitives()[i]);
+
+        // A box partway through, so its faces have neighbours on both sides.
+        if (i == 10) {
+            const BoxFaces crate = pt::box(arena, Point3(-2, -2, -2), Point3(2, 2, 2), &shared_material);
+            builder.add(crate);
+            expected.insert(expected.end(), crate.faces.begin(), crate.faces.end());
+        }
+    }
+
+    const auto* built = dynamic_cast<const pt::Bvh*>(std::move(builder).build(arena));
+    REQUIRE(built != nullptr);
+
+    const pt::Bvh direct(expected);
+    require_same_topology(built->topology(), direct.topology());
 }
