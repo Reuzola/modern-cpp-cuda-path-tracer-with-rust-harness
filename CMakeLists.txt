@@ -150,15 +150,19 @@ add_library(pathtracer_core STATIC
   src/core/hittable.cpp
   src/core/hittable_list.cpp
 
+  src/geometry/bottom_level_bvh.cpp
   src/geometry/box.cpp
   src/geometry/bvh.cpp
   src/geometry/constant_medium.cpp
   src/geometry/group_builder.cpp
-  src/geometry/transformed_hittable.cpp
+  src/geometry/instance.cpp
+  src/geometry/level.cpp
   src/geometry/mesh.cpp
   src/geometry/primitive_store.cpp
   src/geometry/quad.cpp
   src/geometry/sphere.cpp
+  src/geometry/top_level_bvh.cpp
+  src/geometry/transformed_hittable.cpp
   src/geometry/triangle.cpp
 
   src/textures/checker_texture.cpp

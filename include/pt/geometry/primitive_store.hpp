@@ -160,7 +160,7 @@ private:
 };
 
 inline std::optional<Float> PrimitiveStore::closest_in_leaf(const BvhNode& leaf, const Ray& r, const Interval& open, PrimitiveHit& hit) const noexcept {
-    assert(leaf.kind != PrimitiveKind::opaque);
+    assert(is_primitive_kind(leaf.kind));
 
     std::optional<Float> t;
     switch (leaf.kind) {
@@ -174,8 +174,8 @@ inline std::optional<Float> PrimitiveStore::closest_in_leaf(const BvhNode& leaf,
         t = detail::closest_in_run<TriangleCorners>(triangles_.corners, leaf, r, open, hit.triangle);
         break;
     case PrimitiveKind::opaque:
-        // Excluded above: an opaque leaf is its tree's to test.
-        break;
+    case PrimitiveKind::instance:
+        break; // Excluded above: a leaf of children is its tree's to walk.
     }
 
     if (t) hit.kind = leaf.kind;

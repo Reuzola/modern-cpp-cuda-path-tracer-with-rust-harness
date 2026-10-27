@@ -59,7 +59,7 @@ std::uint32_t PrimitiveStore::add_mesh(const Mesh& mesh) {
 }
 
 void PrimitiveStore::fill(const PrimitiveHit& hit, const Ray& r, HitRecord& rec) const noexcept {
-    assert(hit.kind != PrimitiveKind::opaque);
+    assert(is_primitive_kind(hit.kind));
 
     switch (hit.kind) {
     case PrimitiveKind::sphere:
@@ -72,8 +72,8 @@ void PrimitiveStore::fill(const PrimitiveHit& hit, const Ray& r, HitRecord& rec)
         fill_triangle(r, hit.triangle, rec);
         break;
     case PrimitiveKind::opaque:
-        // Excluded above: an opaque child fills its own record.
-        break;
+    case PrimitiveKind::instance:
+        break; // Excluded above: a child's record is its tree's to fill.
     }
 }
 
