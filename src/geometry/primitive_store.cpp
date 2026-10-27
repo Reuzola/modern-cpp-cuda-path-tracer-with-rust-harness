@@ -1,6 +1,6 @@
 #include "pt/geometry/primitive_store.hpp"
 #include "pt/core/hit_record.hpp"
-#include "pt/geometry/bvh.hpp"
+#include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"

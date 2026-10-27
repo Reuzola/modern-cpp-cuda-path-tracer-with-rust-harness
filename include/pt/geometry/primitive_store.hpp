@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
+#include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
@@ -16,7 +17,6 @@ namespace pt {
 
 class Material;
 class Mesh;
-struct BvhNode;
 
 // One candidate of one kind: its slot in that kind's arrays, and what that kind's test returned.
 template <typename Hit>

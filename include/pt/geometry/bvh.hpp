@@ -1,6 +1,7 @@
 #pragma once
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/primitive_store.hpp"
 #include "pt/geometry/quad.hpp"
@@ -54,22 +55,6 @@ struct BvhBuildSettings {
     // so a tree over n primitives is at most max(depth_limit, ceil(log2 n)) deep.
     int depth_limit{bvh_max_depth};
 };
-
-// One node of the flat BVH. Nodes are laid out depth first, which places the left
-// child directly after its parent, so only the right child needs a stored index.
-struct BvhNode {
-    Aabb bbox;
-    // Right child index when interior. When leaf, its first slot: in the build's
-    // order as built, in its kind's arrays once a tree has laid them out.
-    std::uint32_t offset{};
-    std::uint16_t count{}; // Primitive count; 0 is what marks the node interior
-    PrimitiveKind kind{};  // Leaf only: whose array offset indexes. Sits in what was padding
-
-    [[nodiscard]] constexpr bool is_leaf() const noexcept { return count > 0; }
-};
-
-// Layout guard: bounds + index data (32B float / 56B double) to preserve hot loop cache efficiency.
-static_assert(sizeof(BvhNode) == 6 * sizeof(Float) + 8);
 
 // The tree without its primitives: what a build produces and traversal walks. Its owner keeps the
 // primitives in the build's order, which is what lets a leaf's (offset, count) name a contiguous run.
