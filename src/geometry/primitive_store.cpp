@@ -36,16 +36,26 @@ std::uint32_t PrimitiveStore::add_quad(const Quad& quad) {
     return slot;
 }
 
-std::uint32_t PrimitiveStore::add_triangle(const Mesh& mesh, std::uint32_t triangle_index) {
-    // One mesh per store: every slot's attributes are read back from it.
-    assert(triangles_.mesh == nullptr || triangles_.mesh == &mesh);
+std::uint32_t PrimitiveStore::add_triangle(std::uint32_t mesh, std::uint32_t triangle_index) {
+    assert(mesh < triangles_.meshes.size());
 
-    triangles_.mesh = &mesh;
+    const Mesh& source = *triangles_.meshes[mesh];
     const std::uint32_t slot = static_cast<std::uint32_t>(triangles_.corners.size());
-    const auto [a, b, c] = mesh.triangle(triangle_index);
+    const auto [a, b, c] = source.triangle(triangle_index);
     triangles_.corners.push_back(TriangleCorners{.v0 = a, .v1 = b, .v2 = c});
     triangles_.ids.push_back(triangle_index);
+
+    if (triangles_.meshes.size() > 1) triangles_.mesh_of.push_back(mesh);
     return slot;
+}
+
+std::uint32_t PrimitiveStore::add_mesh(const Mesh& mesh) {
+    const std::uint32_t index = static_cast<std::uint32_t>(triangles_.meshes.size());
+    triangles_.meshes.push_back(&mesh);
+
+    // The second mesh is the first that needs telling apart: every slot so far belongs to the first.
+    if (triangles_.meshes.size() == 2) triangles_.mesh_of.assign(triangles_.corners.size(), 0);
+    return index;
 }
 
 void PrimitiveStore::fill(const PrimitiveHit& hit, const Ray& r, HitRecord& rec) const noexcept {
@@ -68,17 +78,19 @@ void PrimitiveStore::fill(const PrimitiveHit& hit, const Ray& r, HitRecord& rec)
 }
 
 void PrimitiveStore::fill_triangle(const Ray& r, const SlotHit<TriangleHit>& winner, HitRecord& rec) const noexcept {
+    const std::uint32_t entry = triangles_.mesh_of.empty() ? 0 : triangles_.mesh_of[winner.slot];
+    const Mesh& mesh = *triangles_.meshes[entry];
     const TriangleCorners& tri = triangles_.corners[winner.slot];
     const std::uint32_t id = triangles_.ids[winner.slot];
-    const Uv uv = triangles_.mesh->texture_uv(id, winner.hit.b1, winner.hit.b2);
+    const Uv uv = mesh.texture_uv(id, winner.hit.b1, winner.hit.b2);
 
     rec.t = winner.hit.t;
     rec.p = barycentric_point(tri.v0, tri.v1, tri.v2, winner.hit.b1, winner.hit.b2);
     rec.spawn_margin = 0.0_f; // Written explicitly: the caller reuses records across queries.
     rec.u = uv.u;
     rec.v = uv.v;
-    rec.mat = triangles_.mesh->material();
-    rec.set_face_normal(r, winner.hit.normal, triangles_.mesh->shading_normal(id, winner.hit.b1, winner.hit.b2, winner.hit.normal));
+    rec.mat = mesh.material();
+    rec.set_face_normal(r, winner.hit.normal, mesh.shading_normal(id, winner.hit.b1, winner.hit.b2, winner.hit.normal));
 }
 
 } // namespace pt

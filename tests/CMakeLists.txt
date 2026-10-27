@@ -32,6 +32,7 @@ add_executable(pathtracer_tests
   geometry/mesh_test.cpp
   geometry/mesh_bvh_test.cpp
   geometry/primitive_bvh_test.cpp
+  geometry/primitive_store_test.cpp
   geometry/group_builder_test.cpp
   geometry/bvh_test.cpp
   geometry/self_intersection_test.cpp

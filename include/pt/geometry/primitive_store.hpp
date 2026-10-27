@@ -118,11 +118,14 @@ public:
     void reserve(std::size_t spheres, std::size_t quads, std::size_t triangles);
 
     // Each appends one primitive at the end of its kind's arrays and returns the slot it took there. Called in
-    // leaf order, which is what makes a leaf's run contiguous. A triangle's mesh must outlive the store, and
-    // for now one store holds the triangles of a single mesh.
+    // leaf order, which is what makes a leaf's run contiguous. A triangle names its mesh by the index add_mesh returned.
     [[nodiscard]] std::uint32_t add_sphere(const Sphere& sphere);
     [[nodiscard]] std::uint32_t add_quad(const Quad& quad);
-    [[nodiscard]] std::uint32_t add_triangle(const Mesh& mesh, std::uint32_t triangle_index);
+    [[nodiscard]] std::uint32_t add_triangle(std::uint32_t mesh, std::uint32_t triangle_index);
+
+    // Registers a mesh whose triangles the store will hold and returns the index add_triangle takes for it.
+    // The mesh must outlive the store.
+    [[nodiscard]] std::uint32_t add_mesh(const Mesh& mesh);
 
     // Tests one leaf of a kind this store holds inside `open`, narrowing as it goes. A candidate that narrows is
     // written into `hit`, and a leaf that found one sets `hit.kind` to its own. Returns the nearest distance, or nothing.
@@ -140,11 +143,13 @@ private:
         std::vector<const Material*> materials;
     };
 
-    // Corners in leaf order for the test; the mesh and each slot's triangle index for the attributes of the one that wins.
+    // Corners in leaf order for the test; each slot's mesh and triangle index for the attributes of the one that wins.
+    // One mesh names every slot, so the per-slot index exists only once a second mesh arrives.
     struct TriangleArrays {
         std::vector<TriangleCorners> corners;
-        std::vector<std::uint32_t> ids; // Leaf slot to the mesh's own triangle index
-        const Mesh* mesh = nullptr;
+        std::vector<std::uint32_t> ids;     // Leaf slot to the mesh's own triangle index
+        std::vector<const Mesh*> meshes;    // Indexed by what add_mesh returned
+        std::vector<std::uint32_t> mesh_of; // Slot to its entry in meshes; empty while there is only one
     };
 
     ShapeArrays<SphereShape> spheres_;

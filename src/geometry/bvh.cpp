@@ -1,6 +1,7 @@
 #include "pt/geometry/bvh.hpp"
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/primitive_store.hpp"
@@ -536,9 +537,10 @@ Bvh::Bvh(const Mesh& mesh, const BvhBuildSettings& settings) {
     topology_ = std::move(result.topology);
     store_.reserve(0, 0, result.primitive_order.size());
 
+    const std::uint32_t source = store_.add_mesh(mesh);
     // Gathered in leaf order: this copy is what the intersection test reads, the mesh's buffers never.
     for (std::size_t k = 0; k < result.primitive_order.size(); ++k) {
-        [[maybe_unused]] const std::uint32_t slot = store_.add_triangle(mesh, result.primitive_order[k]);
+        [[maybe_unused]] const std::uint32_t slot = store_.add_triangle(source, result.primitive_order[k]);
         assert(slot == k); // One kind throughout, so a slot is already its index in the triangle arrays: nothing to rebase.
     }
 }
