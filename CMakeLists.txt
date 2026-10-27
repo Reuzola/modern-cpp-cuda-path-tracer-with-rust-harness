@@ -160,6 +160,7 @@ add_library(pathtracer_core STATIC
   src/geometry/mesh.cpp
   src/geometry/primitive_store.cpp
   src/geometry/quad.cpp
+  src/geometry/scene_graph.cpp
   src/geometry/sphere.cpp
   src/geometry/top_level_bvh.cpp
   src/geometry/transformed_hittable.cpp

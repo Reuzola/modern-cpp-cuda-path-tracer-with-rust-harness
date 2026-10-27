@@ -36,6 +36,7 @@ add_executable(pathtracer_tests
   geometry/group_builder_test.cpp
   geometry/bvh_test.cpp
   geometry/top_level_bvh_test.cpp
+  geometry/scene_graph_test.cpp
   geometry/self_intersection_test.cpp
 
   textures/texture_test.cpp
