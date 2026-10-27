@@ -2,9 +2,9 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/geometry/primitive_kind.hpp"
+#include "pt/geometry/primitive_store.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -36,7 +36,6 @@ struct TraversalEntry {
 
 } // namespace detail
 
-class Material;
 class Mesh;
 
 // Deepest node any tree may have; the root is depth 0. It sizes the traversal stack, which holds at
@@ -215,27 +214,9 @@ public:
     [[nodiscard]] const BvhTopology& topology() const noexcept { return topology_; }
 
 private:
-    // Shapes and their materials side by side, both in leaf order: the test reads the first, the fill one entry of the second.
-    template <typename Shape>
-    struct ShapeArrays {
-        std::vector<Shape> shapes;
-        std::vector<const Material*> materials;
-    };
-
-    // Corners in leaf order for the test; the mesh and each slot's triangle index for the attributes of the one that wins.
-    struct TriangleArrays {
-        std::vector<TriangleCorners> corners;
-        std::vector<std::uint32_t> ids; // Leaf slot to the mesh's own triangle index
-        const Mesh* mesh = nullptr;
-    };
-
     BvhTopology topology_;
-    ShapeArrays<SphereShape> spheres_;
-    ShapeArrays<QuadShape> quads_;
-    TriangleArrays triangles_;
+    PrimitiveStore store_; // Every leaf of a kind the store holds; an opaque leaf indexes opaque_ instead.
     std::vector<const Hittable*> opaque_;
-
-    void fill_triangle_record(const Ray& r, std::uint32_t slot, const TriangleHit& hit, HitRecord& rec) const noexcept;
 };
 
 /// Builds a binned SAH tree over primitives known by their bounds and kind: entry i of both spans is
@@ -247,6 +228,10 @@ private:
 /// The same build over primitives that are all of one kind.
 [[nodiscard]] BvhBuildResult build_bvh_topology(std::span<const Aabb> primitive_bounds, PrimitiveKind kind,
                                                 const BvhBuildSettings& settings = {});
+
+/// Points every leaf at its run in its own kind's arrays. A build numbers slots across all kinds; once its
+/// primitives are laid out kind by kind in leaf order, `kind_slot[k]` is where the k-th landed within its kind.
+void rebase_leaf_offsets(BvhTopology& topology, std::span<const std::uint32_t> kind_slot) noexcept;
 
 /// Builds a tree over `primitives` and stores it in `arena`, which owns it.
 /// `primitives` is not retained; opaque children must outlive the arena.

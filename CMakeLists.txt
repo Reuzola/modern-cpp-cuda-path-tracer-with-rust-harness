@@ -156,6 +156,7 @@ add_library(pathtracer_core STATIC
   src/geometry/group_builder.cpp
   src/geometry/instance.cpp
   src/geometry/mesh.cpp
+  src/geometry/primitive_store.cpp
   src/geometry/quad.cpp
   src/geometry/sphere.cpp
   src/geometry/triangle.cpp
