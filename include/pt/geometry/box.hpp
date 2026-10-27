@@ -16,6 +16,11 @@ struct BoxFaces {
     std::array<const Quad*, 6> faces{};
 };
 
+// How a level holding nothing but one box is built: one leaf, the faces tested in a row, as a box always was.
+// A depth limit of one spends the root's budget at once, so the builder stops there without consulting the
+// SAH. Whether six faces deserve a tree is the cost sweep's question, not this file's.
+inline constexpr BvhBuildSettings box_build_settings{.max_leaf_size = 6, .depth_limit = 1};
+
 // An axis-aligned box as six quads. The corners may come in either order.
 [[nodiscard]] BoxFaces box(Arena<Hittable>& arena, const Point3& a, const Point3& b, const Material* mat);
 

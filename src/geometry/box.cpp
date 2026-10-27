@@ -11,15 +11,6 @@
 
 namespace pt {
 
-namespace {
-
-// One leaf: the faces are tested in a row, as a box always was. A depth limit of one spends the
-// root's budget at once, so the builder stops there without consulting the SAH. Whether six
-// faces deserve a tree is the cost sweep's question, not this file's.
-constexpr BvhBuildSettings box_settings{.max_leaf_size = 6, .depth_limit = 1};
-
-} // namespace
-
 BoxFaces box(Arena<Hittable>& arena, const Point3& a, const Point3& b, const Material* mat) {
     const Point3 min_corner(std::fmin(a.x(), b.x()), std::fmin(a.y(), b.y()), std::fmin(a.z(), b.z()));
     const Point3 max_corner(std::fmax(a.x(), b.x()), std::fmax(a.y(), b.y()), std::fmax(a.z(), b.z()));
@@ -68,7 +59,7 @@ BoxFaces box(Arena<Hittable>& arena, const Point3& a, const Point3& b, const Mat
 const Bvh* make_box_bvh(Arena<Hittable>& arena, const BoxFaces& box, BvhStats* stats) {
     std::array<PrimitiveRef, 6> faces;
     std::ranges::copy(box.faces, faces.begin());
-    return make_bvh(arena, faces, stats, box_settings);
+    return make_bvh(arena, faces, stats, box_build_settings);
 }
 
 } // namespace pt
