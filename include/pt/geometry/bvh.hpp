@@ -94,10 +94,11 @@ using PrimitiveRef = std::variant<const Sphere*, const Quad*, const Hittable*>;
 // Iterative, distance-ordered traversal. The near child is descended into directly and the far one
 // is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
 // single comparison instead of a repeated slab test. Shared by every tree; only the leaf differs.
+// Returns the nearest distance a leaf reported, or nothing: a caller one level up narrows by it.
 template <BvhLeafTest LeafTest>
-[[nodiscard]] bool bvh_closest_hit(const BvhTopology& topology, const Ray& r, const Interval& ray_t, LeafTest leaf_test) {
+[[nodiscard]] std::optional<Float> bvh_closest_hit(const BvhTopology& topology, const Ray& r, const Interval& ray_t, LeafTest leaf_test) {
     const std::span<const BvhNode> nodes = topology.nodes;
-    if (nodes.empty()) return false;
+    if (nodes.empty()) return std::nullopt;
 
     // Divided once per query, not once per node. It must live here rather than in Ray: Instance builds a
     // transformed ray per hit, and nested trees (meshes, groups) each see a different one.
@@ -108,7 +109,7 @@ template <BvhLeafTest LeafTest>
     // Tested outside the loop to establish the invariant the body relies on: `current` always names a
     // node whose box has already been tested and passed.
     count_node_test();
-    if (!nodes[0].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest))) return false;
+    if (!nodes[0].bbox.intersect(r.origin(), inv_dir, Interval(ray_t.min, closest))) return std::nullopt;
 
     // Fixed size and local: hit() is const and will be shared across threads, so no traversal state
     // may live in the object. Capacity is guaranteed by the builder's depth cap, bvh_max_depth.
@@ -167,7 +168,7 @@ template <BvhLeafTest LeafTest>
             }
         }
 
-        if (!found) return is_hit;
+        if (!found) return is_hit ? std::optional<Float>(closest) : std::nullopt;
     }
 }
 

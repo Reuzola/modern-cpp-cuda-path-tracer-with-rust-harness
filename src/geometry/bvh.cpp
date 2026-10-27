@@ -548,7 +548,7 @@ Bvh::Bvh(const Mesh& mesh, const BvhBuildSettings& settings) {
 bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     PrimitiveHit hit;
 
-    const bool found = bvh_closest_hit(
+    const std::optional<Float> found = bvh_closest_hit(
         topology_, r, ray_t,
         [this, &r, &rec, &hit](const BvhNode& leaf, const Interval& open) -> std::optional<Float> {
             if (leaf.kind != PrimitiveKind::opaque) return store_.closest_in_leaf(leaf, r, open, hit);

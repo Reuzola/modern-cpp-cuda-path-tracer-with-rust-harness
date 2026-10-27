@@ -2,6 +2,7 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
+#include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
@@ -888,7 +889,7 @@ TEST_CASE("traversal over a bare topology finds what a brute-force scan finds", 
         // Only reports that narrowed are kept: traversal accepts a leaf's answer only when it is
         // nearer than everything before it, so the last one kept is the nearest overall.
         std::optional<Float> nearest_seen;
-        const bool hit = pt::bvh_closest_hit(build.topology, r, ray_t, [&](const pt::BvhNode& leaf, const Interval& open) {
+        const std::optional<Float> nearest = pt::bvh_closest_hit(build.topology, r, ray_t, [&](const pt::BvhNode& leaf, const Interval& open) {
             const std::optional<Float> t = nearest_box(std::span(ordered).subspan(leaf.offset, leaf.count), r, inv_dir, open);
             if (t) nearest_seen = t;
             return t;
@@ -899,7 +900,7 @@ TEST_CASE("traversal over a bare topology finds what a brute-force scan finds", 
         // Exact: both paths run the same slab test on the same boxes and the same ray. The tree only
         // decides which boxes are asked, never what they answer. Ties need no care: equal distances
         // are the same value whichever box reported them.
-        REQUIRE(hit == scanned.has_value());
+        REQUIRE(nearest == scanned);
         REQUIRE(nearest_seen == scanned);
     };
 
@@ -955,12 +956,12 @@ TEST_CASE("the interval handed to leaves only ever narrows", "[geometry][bvh]") 
 
 TEST_CASE("an empty topology asks no leaf", "[geometry][bvh]") {
     int calls = 0;
-    const bool hit = pt::bvh_closest_hit(pt::BvhTopology{}, Ray(Point3(0, 0, 0), Vec3(1, 0, 0)), visible,
-                                         [&](const pt::BvhNode&, const Interval&) -> std::optional<Float> {
-                                             ++calls;
-                                             return 0.0_f;
-                                         });
+    const std::optional<Float> hit = pt::bvh_closest_hit(pt::BvhTopology{}, Ray(Point3(0, 0, 0), Vec3(1, 0, 0)), visible,
+                                                         [&](const pt::BvhNode&, const Interval&) -> std::optional<Float> {
+                                                             ++calls;
+                                                             return 0.0_f;
+                                                         });
 
-    REQUIRE_FALSE(hit);
+    REQUIRE_FALSE(hit.has_value());
     REQUIRE(calls == 0);
 }
