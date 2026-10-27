@@ -3,11 +3,12 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
+#include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/group_builder.hpp"
-#include "pt/geometry/instance.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/transformed_hittable.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/aabb.hpp"
@@ -77,10 +78,10 @@ public:
         list_.add(quad);
     }
 
-    // A sphere behind a transform. An Instance is no primitive of any kind, so the builder keeps it opaque.
+    // A sphere behind a transform. A TransformedHittable is no primitive of any kind, so the builder keeps it opaque.
     void add_moved_sphere(const Point3& center, Float radius, const Vec3& offset) {
         const Sphere* child = objects_.create<Sphere>(center, radius, new_material());
-        const pt::Instance* moved = objects_.create<pt::Instance>(child, Transform::translation(offset));
+        const pt::TransformedHittable* moved = objects_.create<pt::TransformedHittable>(child, Transform::translation(offset));
         refs_.emplace_back(moved);
         primitives_.emplace_back(moved);
         list_.add(moved);
@@ -249,7 +250,7 @@ TEST_CASE("a group of one kind is one tree of that kind", "[geometry][group_buil
 
 TEST_CASE("a single opaque child comes back as it is", "[geometry][group_builder]") {
     const Sphere ball{Point3(0, 0, 5), 1.0_f, &shared_material};
-    const pt::Instance moved{&ball, Transform::translation(Vec3(1, 0, 0))};
+    const pt::TransformedHittable moved{&ball, Transform::translation(Vec3(1, 0, 0))};
 
     pt::Arena<Hittable> arena;
     pt::BvhStats stats;
@@ -316,7 +317,7 @@ TEST_CASE("seal gives a lone sphere or quad a tree of its own", "[geometry][grou
 
 TEST_CASE("seal hands anything else back unchanged", "[geometry][group_builder]") {
     const Sphere ball{Point3(0, 0, 5), 1.0_f, &shared_material};
-    const pt::Instance moved{&ball, Transform::translation(Vec3(1, 0, 0))};
+    const pt::TransformedHittable moved{&ball, Transform::translation(Vec3(1, 0, 0))};
 
     pt::Arena<Hittable> arena;
     pt::BvhStats stats;

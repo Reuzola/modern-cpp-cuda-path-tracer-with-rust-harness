@@ -5,7 +5,7 @@
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/group_builder.hpp"
-#include "pt/geometry/instance.hpp"
+#include "pt/geometry/transformed_hittable.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
@@ -325,7 +325,7 @@ void build_medium(const Json& j, LoadContext& ctx) {
                                     Transform::scaling(scale);
 
         // An instance wraps exactly one child: a lone sphere or quad gets a set of its own for it.
-        result = ctx.scene.create_object<Instance>(seal(ctx.scene.object_arena(), child, &ctx.scene.bvh_stats()), transform);
+        result = ctx.scene.create_object<TransformedHittable>(seal(ctx.scene.object_arena(), child, &ctx.scene.bvh_stats()), transform);
     } else if (type == "constant_medium") {
         throw SceneError("Object type 'constant_medium' may only appear as a top-level entry in 'objects'");
     } else {

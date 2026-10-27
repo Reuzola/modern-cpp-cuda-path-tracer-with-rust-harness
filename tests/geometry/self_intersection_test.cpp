@@ -1,6 +1,6 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/geometry/instance.hpp"
+#include "pt/geometry/transformed_hittable.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/triangle.hpp"
@@ -35,7 +35,7 @@ using pt::Sphere;
 using pt::Vec3;
 using pt::operator""_f;
 using pt::Hittable;
-using pt::Instance;
+using pt::TransformedHittable;
 using pt::Onb;
 using pt::Quad;
 using pt::Transform;
@@ -296,7 +296,7 @@ struct TiltedPlane {
     const Transform placement = Transform::translation(-rotation.apply_point(local_centre)) * rotation;
     const Point3 local_target = local_centre + sampler.next_scalar(-0.5_f, 0.5_f) * plane.a + sampler.next_scalar(-0.5_f, 0.5_f) * plane.b;
 
-    auto instance = std::make_unique<Instance>(child.get(), placement);
+    auto instance = std::make_unique<TransformedHittable>(child.get(), placement);
     return PlanarCase{.child = std::move(child), .surface = std::move(instance), .target = placement.apply_point(local_target), .outward = unit_vector(rotation.apply_vector(local_normal)), .camera_distance = sampler.next_scalar(1.0_f, 50.0_f)};
 }
 

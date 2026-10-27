@@ -1,4 +1,4 @@
-#include "pt/geometry/instance.hpp"
+#include "pt/geometry/transformed_hittable.hpp"
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
@@ -18,14 +18,14 @@ constexpr int transform_rounding_order = 4;
 
 } // namespace
 
-Instance::Instance(const Hittable* object, const Transform& transform)
+TransformedHittable::TransformedHittable(const Hittable* object, const Transform& transform)
     : object_(object), transform_(transform),
       bbox_(transform.apply_bounds(object->bounding_box())),
       margin_scale_(transform.stretch_bound()) {
     assert(object != nullptr);
 }
 
-bool Instance::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
+bool TransformedHittable::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     // The direction is deliberately left unnormalised: t then means the same
     // distance in both spaces, so ray_t passes through and rec.t needs no rescaling.
     const Ray local_r(transform_.apply_inverse_point(r.origin()), transform_.apply_inverse_vector(r.direction()), r.time());
@@ -46,6 +46,6 @@ bool Instance::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
     return true;
 }
 
-Aabb Instance::bounding_box() const { return bbox_; }
+Aabb TransformedHittable::bounding_box() const { return bbox_; }
 
 } // namespace pt

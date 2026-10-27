@@ -154,7 +154,7 @@ add_library(pathtracer_core STATIC
   src/geometry/bvh.cpp
   src/geometry/constant_medium.cpp
   src/geometry/group_builder.cpp
-  src/geometry/instance.cpp
+  src/geometry/transformed_hittable.cpp
   src/geometry/mesh.cpp
   src/geometry/primitive_store.cpp
   src/geometry/quad.cpp

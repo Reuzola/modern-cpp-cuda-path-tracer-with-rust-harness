@@ -1,5 +1,5 @@
 #include "pt/core/hit_record.hpp"
-#include "pt/geometry/instance.hpp"
+#include "pt/geometry/transformed_hittable.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/triangle.hpp"
 #include "pt/math/constants.hpp"
@@ -14,7 +14,7 @@
 namespace {
 
 using pt::HitRecord;
-using pt::Instance;
+using pt::TransformedHittable;
 using pt::Interval;
 using pt::Point3;
 using pt::Ray;
@@ -35,7 +35,7 @@ const Sphere unit_sphere{Point3(0, 0, 0), 1.0_f, nullptr};
 } // namespace
 
 TEST_CASE("a translated instance is hit where the transform put it", "[geometry][instance]") {
-    const Instance moved{&unit_sphere, Transform::translation(Vec3(0, 0, 5))};
+    const TransformedHittable moved{&unit_sphere, Transform::translation(Vec3(0, 0, 5))};
 
     HitRecord rec;
     REQUIRE(moved.hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
@@ -51,7 +51,7 @@ TEST_CASE("a translated instance is hit where the transform put it", "[geometry]
 }
 
 TEST_CASE("t means the same distance in both spaces", "[geometry][instance]") {
-    const Instance grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
+    const TransformedHittable grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
 
     // A sphere of radius 2 at the origin, so a unit-direction ray from 10 units
     // away stops at 8.
@@ -70,7 +70,7 @@ TEST_CASE("t means the same distance in both spaces", "[geometry][instance]") {
 
 TEST_CASE("normals use the inverse transpose under non-uniform scale", "[geometry][instance]") {
     // Twice as wide in x: the unit sphere becomes an ellipsoid.
-    const Instance stretched{&unit_sphere, Transform::scaling(Vec3(2, 1, 1))};
+    const TransformedHittable stretched{&unit_sphere, Transform::scaling(Vec3(2, 1, 1))};
 
     // Aimed so that it lands on the object-space point (0.7071, 0.7071, 0),
     // which the transform carries to (1.4142, 0.7071, 0) - a place where the
@@ -97,7 +97,7 @@ TEST_CASE("normals use the inverse transpose under non-uniform scale", "[geometr
 
 TEST_CASE("a rotated instance carries its child around", "[geometry][instance]") {
     const Sphere off_axis{Point3(0, 0, 5), 1.0_f, nullptr};
-    const Instance turned{&off_axis, Transform::rotation_y(90.0_f)};
+    const TransformedHittable turned{&off_axis, Transform::rotation_y(90.0_f)};
 
     // A quarter turn about +y takes +z to +x.
     HitRecord rec;
@@ -109,8 +109,8 @@ TEST_CASE("a rotated instance carries its child around", "[geometry][instance]")
 }
 
 TEST_CASE("instances nest, outermost transform last", "[geometry][instance]") {
-    const Instance inner{&unit_sphere, Transform::translation(Vec3(3, 0, 0))};
-    const Instance outer{&inner, Transform::rotation_y(90.0_f)};
+    const TransformedHittable inner{&unit_sphere, Transform::translation(Vec3(3, 0, 0))};
+    const TransformedHittable outer{&inner, Transform::rotation_y(90.0_f)};
 
     // The child is moved to +x, then the rotation carries +x to -z.
     HitRecord rec;
@@ -125,7 +125,7 @@ TEST_CASE("instances nest, outermost transform last", "[geometry][instance]") {
 
 TEST_CASE("a mirroring transform does not invert orientation", "[geometry][instance]") {
     const Sphere to_the_right{Point3(3, 0, 5), 1.0_f, nullptr};
-    const Instance mirrored{&to_the_right, Transform::scaling(Vec3(-1, 1, 1))};
+    const TransformedHittable mirrored{&to_the_right, Transform::scaling(Vec3(-1, 1, 1))};
 
     HitRecord rec;
     REQUIRE(mirrored.hit(Ray(Point3(-8, 0, 5), Vec3(1, 0, 0)), visible, rec));
@@ -142,7 +142,7 @@ TEST_CASE("a mirroring transform does not invert orientation", "[geometry][insta
 }
 
 TEST_CASE("a miss leaves the record untouched", "[geometry][instance]") {
-    const Instance moved{&unit_sphere, Transform::translation(Vec3(0, 0, 5))};
+    const TransformedHittable moved{&unit_sphere, Transform::translation(Vec3(0, 0, 5))};
 
     HitRecord rec;
     rec.t = 42.0_f;
@@ -162,14 +162,14 @@ TEST_CASE("a child's margin is stretched into a world-space bound", "[geometry][
     REQUIRE(unit_sphere.hit(local, visible, child));
 
     // Uniform: every direction doubles.
-    const Instance grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
+    const TransformedHittable grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
     HitRecord uniform;
     REQUIRE(grown.hit(Ray(Point3(0, 0, -20), Vec3(0, 0, 2)), visible, uniform));
     REQUIRE(uniform.spawn_margin >= 2.0_f * child.spawn_margin);
 
     // Non-uniform, and hit across the axis that does not stretch: the bound has to
     // hold for the largest stretch anywhere, not for the one along the ray.
-    const Instance stretched{&unit_sphere, Transform::scaling(Vec3(3, 1, 1))};
+    const TransformedHittable stretched{&unit_sphere, Transform::scaling(Vec3(3, 1, 1))};
     HitRecord anisotropic;
     REQUIRE(stretched.hit(Ray(Point3(0, 0, -10), Vec3(0, 0, 1)), visible, anisotropic));
     REQUIRE(anisotropic.spawn_margin >= 3.0_f * child.spawn_margin);
@@ -182,8 +182,8 @@ TEST_CASE("an instance adds its own rounding to the margin", "[geometry][instanc
     // translation even though the point itself is exact - doubling the translation
     // doubles it exactly, a product by two being exact.
     const pt::Triangle child(Point3(-1, -1, 0), Point3(1, -1, 0), Point3(0, 1, 0), nullptr);
-    const Instance near_instance{&child, Transform::translation(Vec3(1000, 0, 0))};
-    const Instance far_instance{&child, Transform::translation(Vec3(2000, 0, 0))};
+    const TransformedHittable near_instance{&child, Transform::translation(Vec3(1000, 0, 0))};
+    const TransformedHittable far_instance{&child, Transform::translation(Vec3(2000, 0, 0))};
 
     HitRecord near_hit;
     HitRecord far_hit;
