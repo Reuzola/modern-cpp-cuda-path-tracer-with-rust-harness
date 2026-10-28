@@ -2,6 +2,7 @@
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/box.hpp"
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/level.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/scene_graph.hpp"
@@ -27,6 +28,7 @@
 #include "pt/textures/solid_color.hpp"
 #include "pt/textures/texture.hpp"
 #include "pt/util/overloaded.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -425,12 +427,30 @@ void parse_objects(const Json& doc, LoadContext& ctx) {
     }
 }
 
+// The spheres and quads a level holds as themselves, seen through the interface light sampling aims at.
+[[nodiscard]] std::vector<const Sampleable*> sampleables_in(const PlannedLevel& level) {
+    std::vector<const Sampleable*> sampleables;
+    for (const LevelItem& item : level.items) {
+        // clang-format off
+        std::visit(Overloaded{
+            [&](const Sphere* sphere) { sampleables.push_back(sphere); },
+            [&](const Quad* quad)     { sampleables.push_back(quad); },
+            [](const auto&)          {},
+        }, item);
+        // clang-format on
+    }
+
+    return sampleables;
+}
+
 void parse_importance_targets(const Json& doc, LoadContext& ctx) {
     // Optional; an absent list disables direct light sampling entirely.
     if (!doc.contains("importance_targets")) return;
 
     const Json& targets = doc.at("importance_targets");
     if (!targets.is_array()) throw SceneError("Field 'importance_targets' must be an array");
+
+    const std::vector<const Sampleable*> world_space = sampleables_in(ctx.scene.plan().top);
 
     std::size_t index = 0;
     for (const auto& element : targets) {
@@ -452,6 +472,9 @@ void parse_importance_targets(const Json& doc, LoadContext& ctx) {
 
             if (target == nullptr)
                 throw SceneError(std::format("Object '{}' is not sampleable: only spheres and quads can be importance targets", name));
+
+            if (std::ranges::find(world_space, target) == world_space.end())
+                throw SceneError(std::format("Object '{}' is not placed in world space: an importance target must be part of the world, outside every transform, at least once", name));
 
             ctx.scene.add_importance_target(target);
         } catch (SceneError& e) {

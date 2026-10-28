@@ -1,14 +1,18 @@
 //! Rules a JSON Schema cannot express: name resolution, ordering, geometry, placement, then importance targets, then whole-scene lints.
 use crate::report::Diagnostic;
 use crate::scene::{Material, Object, ObjectOrRef, Scene, Texture};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Names defined so far, mirroring the loader's single pass over `objects`.
 #[derive(Default)]
 struct NameTable {
-    defined: HashSet<String>,
+    /// Each name with the sampleable names it carries: those it places in whatever space it is placed in.
+    defined: HashMap<String, Vec<String>>,
     sampleable: HashSet<String>,
+
+    /// Sampleable names placed in world space at least once.
+    world_space: HashSet<String>,
     used_materials: HashSet<String>,
 }
 
@@ -98,11 +102,18 @@ fn object_name(obj: &Object) -> Option<&String> {
     }
 }
 
-fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) {
+/// Walks one child and returns the sampleable names it carries.
+fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> Vec<String> {
     match child {
         ObjectOrRef::Ref(name) => {
-            if !names.defined.contains(name) {
-                diagnostics.push(Diagnostic::error(location.to_string(), format!("undefined object '{name}'")));
+            match names.defined.get(name) {
+                Some(carried) => {
+                    carried.clone()
+                }
+                None => {
+                    diagnostics.push(Diagnostic::error(location.to_string(), format!("undefined object '{name}'")));
+                    Vec::new()
+                }
             }
         }
 
@@ -113,16 +124,19 @@ fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut Na
                     "constant_medium may only appear as a top-level entry in 'objects'".to_string(),
                 ));
             }
-            walk_object(object, location, scene, names, base_dir, diagnostics);
+            walk_object(object, location, scene, names, base_dir, diagnostics)
         }
     }
 }
 
-fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) {
-    match obj {
+/// Walks one object and returns the sampleable names it carries: itself if it is a named sphere or quad,
+/// and whatever its group children carry. A transform carries nothing: what it holds is placed in its space.
+fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> Vec<String> {
+    let mut carried = match obj {
         Object::Sphere { material, .. }
         | Object::Box { material, .. } => {
             check_material(material, location, scene, names, diagnostics);
+            Vec::new()
         }
 
         Object::Quad { material, u, v, .. } => {
@@ -136,6 +150,8 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             if dot(&n, &n) <= epsilon * epsilon * dot(u, u) * dot(v, v) {
                 diagnostics.push(Diagnostic::error(location.to_string(), "degenerate quad: 'u' and 'v' are parallel".to_string()));
             }
+
+            Vec::new()
         }
 
         // An error rather than the warning a missing image texture gets: the loader
@@ -148,18 +164,23 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             if !resolved.is_file() {
                 diagnostics.push(Diagnostic::error(location.to_string(), format!("mesh file not found: '{}'", resolved.display())));
             }
+
+            Vec::new()
         }
 
         Object::Group { children, .. } => {
+            let mut carried = Vec::new();
             for (index, child) in children.iter().enumerate() {
                 let child_location = format!("{location}/children/{index}");
-                walk_child(child, &child_location, scene, names, base_dir, diagnostics);
+                carried.extend(walk_child(child, &child_location, scene, names, base_dir, diagnostics));
             }
+            carried
         }
 
         Object::Transform { object, .. } => {
             let child_location = format!("{location}/object");
             walk_child(object, &child_location, scene, names, base_dir, diagnostics);
+            Vec::new()
         }
 
         Object::ConstantMedium { boundary, phase_function, name, .. } => {
@@ -172,28 +193,39 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
 
             check_material(phase_function, location, scene, names, diagnostics);
 
+            // A boundary bounds a volume and is no part of the world, so it carries nothing either.
             let child_location = format!("{location}/boundary");
             walk_child(boundary, &child_location, scene, names, base_dir, diagnostics);
+
+            Vec::new()
+        }
+    };
+
+    if let Some(name) = object_name(obj) {
+        if matches!(obj, Object::Sphere { .. } | Object::Quad { .. }) {
+            names.sampleable.insert(name.clone());
+            carried.push(name.clone());
+        }
+
+        // A later definition replaces an earlier one, as it does in the loader's own table.
+        if names.defined.insert(name.clone(), carried.clone()).is_some() {
+            diagnostics.push(Diagnostic::error(location.to_string(), format!("duplicate object name '{name}'")));
         }
     }
 
-    if let Some(name) = object_name(obj) {
-        if !names.defined.insert(name.clone()) {
-            diagnostics.push(Diagnostic::error(location.to_string(), format!("duplicate object name '{name}'")));
-        }
-        if matches!(obj, Object::Sphere { .. } | Object::Quad { .. }) {
-            names.sampleable.insert(name.clone());
-        }
-    }
+    carried
 }
 
 fn check_object_refs(scene: &Scene, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> NameTable {
     let mut names = NameTable::default();
-
     for (index, object) in scene.objects.iter().enumerate() {
         let location = format!("/objects/{index}");
-        walk_object(object, &location, scene, &mut names, base_dir, diagnostics);
+
+        // A top-level entry is placed in world space as it stands.
+        let carried = walk_object(object, &location, scene, &mut names, base_dir, diagnostics);
+        names.world_space.extend(carried);
     }
+
     names
 }
 
@@ -201,14 +233,18 @@ fn check_importance_targets(scene: &Scene, names: &NameTable, diagnostics: &mut 
     for (index, name) in scene.importance_targets.iter().enumerate() {
         let location = format!("/importance_targets/{index}");
 
-        if !names.defined.contains(name) {
+        if !names.defined.contains_key(name) {
             diagnostics.push(Diagnostic::error(location, format!("undefined object '{name}'")));
             continue;
         }
 
         if !names.sampleable.contains(name) {
             diagnostics.push(Diagnostic::error(location,
-            format!("object '{name}' is not sampleable: only spheres and quads can be importance targets")));
+                format!("object '{name}' is not sampleable: only spheres and quads can be importance targets")));
+        } else if !names.world_space.contains(name) {
+            // Light sampling aims at the target's own shape, which is where it renders only outside every transform.
+            diagnostics.push(Diagnostic::error(location,
+                format!("object '{name}' is not placed in world space: an importance target must be part of the world, outside every transform, at least once")));
         }
     }
 }
@@ -446,7 +482,7 @@ mod tests {
 
     // A transform wraps its child but is not itself sampleable, so a light that
     // has been moved cannot be sampled directly. The C++ loader refuses the same
-    // scene through a failed dynamic_cast; this keeps the two answers together.
+    // scene; this keeps the two answers together.
     #[test]
     fn a_transform_cannot_be_an_importance_target() {
         let json = with_objects(
@@ -579,9 +615,9 @@ mod tests {
         assert_eq!(only(&found).location, "/objects/0/object");
     }
 
-    // A mesh enters the renderer as a BVH over its triangles, and neither the
-    // node nor a triangle implements Sampleable. The C++ loader rejects the same
-    // scene; this keeps the two from drifting apart.
+    // A mesh enters the renderer as triangles in a tree's level, and no triangle
+    // implements Sampleable. The C++ loader rejects the same scene; this keeps the
+    // two from drifting apart.
     #[test]
     fn a_mesh_cannot_be_an_importance_target() {
         let json = with_objects(&MESH.replace(r#""type": "mesh""#, r#""type": "mesh", "name": "bunny""#))
@@ -592,5 +628,87 @@ mod tests {
 
         assert_eq!(diagnostic.location, "/importance_targets/0");
         assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
+    }
+
+    /// A named sphere, for the placement rules below to move around.
+    const LAMP: &str = r#"{ "type": "sphere", "name": "lamp", "center": [0, 0, 0], "radius": 1, "material": "grey" }"#;
+
+    fn with_targets(json: &str, targets: &str) -> String {
+        json.replace(r#""objects": ["#, &format!(r#""importance_targets": [{targets}], "objects": ["#))
+    }
+
+    // Light sampling aims at a target's own shape, which a transform moves away
+    // from where the light renders. The second target sits under a transform and
+    // nowhere else; the first, placed as it stands, proves the rule does not fire
+    // on every target once one fails, and fixes the index the finding carries.
+    #[test]
+    fn a_target_placed_only_under_a_transform_is_reported() {
+        let sun = LAMP.replace(r#""name": "lamp""#, r#""name": "sun""#);
+        let json = with_targets(
+            &with_objects(&format!(r#"{sun}, {{ "type": "transform", "translate": [0, 3, 0], "object": {LAMP} }}"#)),
+            r#""sun", "lamp""#,
+        );
+
+        let found = analyse(&json);
+        let diagnostic = only(&found);
+
+        assert_eq!(diagnostic.severity, Severity::Error);
+        assert_eq!(diagnostic.location, "/importance_targets/1");
+        assert!(diagnostic.message.contains("world space"), "{}", diagnostic.message);
+    }
+
+    // The transform's whole subtree is in its space, however deep: a group below
+    // it does not bring the quad back into the world.
+    #[test]
+    fn a_group_under_a_transform_does_not_place_its_children_in_world_space() {
+        let panel = r#"{ "type": "quad", "name": "panel", "q": [0, 0, 0], "u": [1, 0, 0], "v": [0, 0, 1], "material": "grey" }"#;
+        let json = with_targets(
+            &with_objects(&format!(
+                r#"{{ "type": "transform", "translate": [0, 3, 0], "object": {{ "type": "group", "children": [{panel}] }} }}"#
+            )),
+            r#""panel""#,
+        );
+
+        let found = analyse(&json);
+
+        assert_eq!(only(&found).location, "/importance_targets/0");
+    }
+
+    // A boundary is no part of the world at all, transformed or not.
+    #[test]
+    fn a_medium_boundary_does_not_place_its_shape_in_world_space() {
+        let medium = MEDIUM.replace(r#""boundary": { "type": "sphere","#, r#""boundary": { "type": "sphere", "name": "shell","#);
+        let json = with_targets(&with_objects(&medium), r#""shell""#);
+
+        let found = analyse(&json);
+
+        assert_eq!(only(&found).location, "/importance_targets/0");
+    }
+
+    // The common way to instance a light: defined as it stands, then copied under
+    // a transform. The copy is reached by scattering; the original is sampled.
+    #[test]
+    fn a_target_copied_under_a_transform_is_accepted() {
+        let json = with_targets(
+            &with_objects(&format!(r#"{LAMP}, {{ "type": "transform", "translate": [0, 3, 0], "object": "lamp" }}"#)),
+            r#""lamp""#,
+        );
+
+        assert_eq!(locations(&analyse(&json)), Vec::<&str>::new());
+    }
+
+    // Where a name is defined does not decide where it is placed: defined under a
+    // transform, the sphere is placed in world space again through a top-level
+    // group, and that placement is the one light sampling aims at.
+    #[test]
+    fn a_target_defined_under_a_transform_but_placed_in_a_top_level_group_is_accepted() {
+        let json = with_targets(
+            &with_objects(&format!(
+                r#"{{ "type": "transform", "translate": [0, 3, 0], "object": {LAMP} }}, {{ "type": "group", "children": ["lamp"] }}"#
+            )),
+            r#""lamp""#,
+        );
+
+        assert_eq!(locations(&analyse(&json)), Vec::<&str>::new());
     }
 }

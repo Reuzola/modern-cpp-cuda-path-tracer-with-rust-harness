@@ -96,6 +96,9 @@ public:
 
     void add_importance_target(const Sampleable* target);
 
+    // Where every staged object will be placed, without building anything: the plan build_bvh() builds.
+    [[nodiscard]] LevelPlan plan() const;
+
     // Builds the world from every staged object. Once only: an object staged afterwards would join nothing.
     void build_bvh();
 

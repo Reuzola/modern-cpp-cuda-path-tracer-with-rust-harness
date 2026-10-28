@@ -15,9 +15,11 @@ void Scene::add_object(SceneNode object) {
 
 void Scene::add_importance_target(const Sampleable* target) { importance_targets_.add(target); }
 
+LevelPlan Scene::plan() const { return plan_levels(roots_); }
+
 void Scene::build_bvh() {
     assert(!built_);
-    world_ = build_levels(plan_levels(roots_), &bvh_stats_);
+    world_ = build_levels(plan(), &bvh_stats_);
     built_ = true;
 }
 

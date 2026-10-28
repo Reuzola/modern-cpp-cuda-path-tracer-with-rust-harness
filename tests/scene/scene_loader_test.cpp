@@ -762,6 +762,43 @@ TEST_CASE("importance targets must name objects that can be sampled", "[scene][l
                       "/importance_targets/0", "is not sampleable");
 }
 
+TEST_CASE("an importance target must be placed outside every transform at least once", "[scene][loader]") {
+    // Light sampling aims at a target's own shape, and a transform moves the light away from it. The first
+    // target stands in the world, so the rule must not fire on it; the second is placed under a transform
+    // and nowhere else, which also fixes the index the error carries.
+    check_scene_error(compose({.objects = R"([{"type": "sphere", "name": "sun", "center": [0, 0, 0], "radius": 1, "material": "grey"}, {"type": "transform", "translate": [0, 3, 0], "object": {"type": "sphere", "name": "lamp", "center": [0, 0, 0], "radius": 1, "material": "grey"}}])",
+                               .importance_targets = R"(["sun", "lamp"])"}),
+                      "/importance_targets/1", "is not placed in world space");
+
+    // However deep below the transform: a group there does not bring the quad back into the world.
+    check_scene_error(compose({.objects = R"([{"type": "transform", "translate": [0, 3, 0], "object": {"type": "group", "children": [{"type": "quad", "name": "panel", "q": [0, 0, 0], "u": [1, 0, 0], "v": [0, 0, 1], "material": "grey"}]}}])",
+                               .importance_targets = R"(["panel"])"}),
+                      "/importance_targets/0", "is not placed in world space");
+
+    // A medium's boundary is no part of the world at all, transformed or not.
+    check_scene_error(compose({.objects = R"([{"type": "constant_medium", "boundary": {"type": "sphere", "name": "shell", "center": [0, 0, 0], "radius": 1, "material": "grey"}, "density": 1, "phase_function": "grey"}])",
+                               .importance_targets = R"(["shell"])"}),
+                      "/importance_targets/0", "is not placed in world space");
+}
+
+TEST_CASE("a target placed in world space may be placed under transforms as well", "[scene][loader]") {
+    // Copies under transforms are reached by scattering; the one in the world is the one sampled.
+    SECTION("defined in the world, copied under a transform") {
+        const TempSceneDir fixture(compose({.objects = R"([{"type": "sphere", "name": "lamp", "center": [0, 0, 0], "radius": 1, "material": "grey"}, {"type": "transform", "translate": [0, 3, 0], "object": "lamp"}])",
+                                            .importance_targets = R"(["lamp"])"}));
+        const pt::Scene scene = pt::load_scene(fixture.scene_path());
+        CHECK_FALSE(scene.importance_targets().empty());
+    }
+
+    // Where a name is defined does not decide where it is placed: the group puts the sphere in the world.
+    SECTION("defined under a transform, placed in the world through a group") {
+        const TempSceneDir fixture(compose({.objects = R"([{"type": "transform", "translate": [0, 3, 0], "object": {"type": "sphere", "name": "lamp", "center": [0, 0, 0], "radius": 1, "material": "grey"}}, {"type": "group", "children": ["lamp"]}])",
+                                            .importance_targets = R"(["lamp"])"}));
+        const pt::Scene scene = pt::load_scene(fixture.scene_path());
+        CHECK_FALSE(scene.importance_targets().empty());
+    }
+}
+
 TEST_CASE("a mesh reaches the world as geometry", "[scene][loader][mesh]") {
     const TempSceneDir fixture(mesh_scene);
     fixture.write_sibling("cube.obj", cube_obj);
