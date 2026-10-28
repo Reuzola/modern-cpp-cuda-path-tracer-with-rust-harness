@@ -188,7 +188,7 @@
       "description": "Null unless build.stats_enabled is true. Counters and a timing from this record's own build are never both trustworthy.",
       "properties": {
         "node_tests": { "type": "integer", "minimum": 0, "description": "Bounding box tests. Both children are tested before descending, leaves included." },
-        "leaf_tests": { "type": "integer", "minimum": 0, "description": "hit() calls the BVH issues on the objects it holds. Tests inside an aggregate object are not counted." },
+        "leaf_tests": { "type": "integer", "minimum": 0, "description": "Intersection tests on the primitives in BVH leaves, at every level, plus one for each instance a ray is moved into." },
         "ray_queries": { "type": "integer", "minimum": 0, "description": "Top-level hit() calls: primary rays plus every bounce." }
       }
     }
