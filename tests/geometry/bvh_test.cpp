@@ -3,10 +3,12 @@
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/bvh_node.hpp"
+#include "pt/geometry/level.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
@@ -21,37 +23,42 @@
 #include "pt/scene/obj_loader.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
+#include "support/top_level_support.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <numeric>
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
 
 using pt::Aabb;
-using pt::Bvh;
 using pt::BvhBuildSettings;
 using pt::Float;
 using pt::HitRecord;
 using pt::Hittable;
 using pt::HittableList;
 using pt::Interval;
+using pt::LevelItem;
 using pt::Point3;
-using pt::PrimitiveRef;
 using pt::Ray;
 using pt::Sampler;
+using pt::TopLevelBvh;
 using pt::Vec3;
 using pt::operator""_f;
+using pt_test::top_level_of;
 
 // The interval the renderer uses: intersections are queried from zero, and the spawn origin carries the offset.
 const Interval visible{0.0_f, pt::infinity};
@@ -72,20 +79,33 @@ public:
 
     void add_quad(const Point3& q, const Vec3& u, const Vec3& v) { add(objects_.create<pt::Quad>(q, u, v, new_material())); }
 
-    void add_triangle(const Point3& a, const Point3& b, const Point3& c) { add(objects_.create<pt::Triangle>(a, b, c, new_material())); }
+    // A triangle reaches a tree only as part of a mesh: it joins the scene's one mesh, built by build(), and
+    // the reference scans it as a standalone Triangle under the mesh's material.
+    void add_triangle(const Point3& a, const Point3& b, const Point3& c) {
+        const auto first = static_cast<std::uint32_t>(triangles_.positions.size());
+        triangles_.positions.insert(triangles_.positions.end(), {a, b, c});
+        triangles_.indices.insert(triangles_.indices.end(), {first, first + 1, first + 2});
+        list_.add(objects_.create<pt::Triangle>(a, b, c, mesh_material_));
+    }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
 
-    [[nodiscard]] std::span<const PrimitiveRef> objects() const noexcept { return primitives_; }
+    // A tree over the scene: spheres and quads in the order they were added, then the mesh. The mesh is made
+    // from the triangles at the first build, so every tree built afterwards shares it; add no triangle then.
+    [[nodiscard]] TopLevelBvh build(const BvhBuildSettings& settings = {}) {
+        if (!mesh_ && !triangles_.indices.empty()) mesh_ = std::make_unique<pt::Mesh>(std::move(triangles_), mesh_material_);
+
+        std::vector<LevelItem> items = items_;
+        if (mesh_) items.emplace_back(mesh_.get());
+        return top_level_of(items, settings);
+    }
 
     [[nodiscard]] Aabb bounds() const { return list_.bounding_box(); }
 
 private:
-    // Typed as a tree takes them: a sphere or a quad by its kind, a standalone Triangle - no kind of its own
-    // outside a mesh - as an opaque child. One scene can so hold every way a leaf is tested.
     template <typename Primitive>
     void add(const Primitive* primitive) {
-        primitives_.emplace_back(primitive);
+        items_.emplace_back(primitive);
         list_.add(primitive);
     }
 
@@ -96,7 +116,10 @@ private:
     const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     pt::Arena<pt::Material> materials_;
     pt::Arena<Hittable> objects_;
-    std::vector<PrimitiveRef> primitives_;
+    const pt::Material* mesh_material_ = new_material(); // Shared by every triangle: material lives on the mesh
+    std::vector<LevelItem> items_;
+    pt::MeshData triangles_;
+    std::unique_ptr<pt::Mesh> mesh_;
     HittableList list_;
 };
 
@@ -177,8 +200,7 @@ void fill_separated_spheres(TestScene& scene, int per_axis, std::uint64_t seed) 
 
 // Mesh geometry is a class of its own here: neighbouring triangles share edges and vertices, so leaf
 // bounds genuinely interpenetrate. The randomly placed triangles above never touch each other, which
-// leaves that case untested. Each mesh triangle becomes a standalone Triangle, an opaque child: the
-// tree's own triangle kind has its tests in mesh_bvh_test.
+// leaves that case untested. The tree holds the mesh; the reference scans each triangle standalone.
 class MeshScene {
 public:
     MeshScene() = default;
@@ -188,21 +210,26 @@ public:
     void add_obj(const std::string& filename) {
         const std::filesystem::path path = std::filesystem::path(PT_ASSETS_DIR) / filename;
 
-        // Read only to resolve the indices: Triangle copies its corners, so the mesh may go.
-        const pt::Mesh mesh(pt::load_obj(path), nullptr);
+        pt::MeshData data = pt::load_obj(path);
+        // Without normals or uvs the store reports the flat normal and the raw barycentrics, exactly what a
+        // standalone Triangle reports: this test is about which triangle the tree finds, not its attributes.
+        data.normals.clear();
+        data.uvs.clear();
+
         const pt::Material* mat = materials_.create<pt::Lambertian>(&albedo_);
+        meshes_.push_back(std::make_unique<pt::Mesh>(std::move(data), mat));
+        const pt::Mesh& mesh = *meshes_.back();
+        items_.emplace_back(&mesh);
 
         for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
             const auto [a, b, c] = mesh.triangle(i);
-            const pt::Triangle* triangle = objects_.create<pt::Triangle>(a, b, c, mat);
-            primitives_.emplace_back(triangle);
-            list_.add(triangle);
+            list_.add(objects_.create<pt::Triangle>(a, b, c, mat));
         }
     }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
 
-    [[nodiscard]] std::span<const PrimitiveRef> objects() const noexcept { return primitives_; }
+    [[nodiscard]] std::span<const LevelItem> items() const noexcept { return items_; }
 
     [[nodiscard]] Aabb bounds() const { return list_.bounding_box(); }
 
@@ -210,7 +237,8 @@ private:
     const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     pt::Arena<pt::Material> materials_;
     pt::Arena<Hittable> objects_;
-    std::vector<PrimitiveRef> primitives_;
+    std::vector<std::unique_ptr<pt::Mesh>> meshes_;
+    std::vector<LevelItem> items_;
     HittableList list_;
 };
 
@@ -250,7 +278,7 @@ void require_same_vec(const Vec3& actual, const Vec3& expected) {
 }
 
 // Runs one query through both paths and requires them to agree exactly.
-void require_same_hit(const Bvh& bvh, const HittableList& reference, const Ray& r, const Interval& ray_t) {
+void require_same_hit(const TopLevelBvh& bvh, const HittableList& reference, const Ray& r, const Interval& ray_t) {
     HitRecord bvh_rec;
     HitRecord reference_rec;
 
@@ -307,7 +335,7 @@ constexpr pt::PrimitiveKind any_kind = pt::PrimitiveKind::sphere;
 // meets mixed ranges at every depth, not only near the root.
 [[nodiscard]] std::vector<pt::PrimitiveKind> random_kinds(std::size_t count, std::uint64_t seed) {
     constexpr std::array all{pt::PrimitiveKind::sphere, pt::PrimitiveKind::quad, pt::PrimitiveKind::triangle,
-                             pt::PrimitiveKind::opaque};
+                             pt::PrimitiveKind::instance};
     Sampler sampler{pt::sampler_seed(seed, 4, 0)};
 
     std::vector<pt::PrimitiveKind> kinds;
@@ -433,7 +461,7 @@ TEST_CASE("a bvh answers exactly like a brute-force list", "[geometry][bvh]") {
     TestScene scene;
     fill_sphere_cloud(scene, 200, 20260823);
 
-    const Bvh bvh(scene.objects(), settings);
+    const TopLevelBvh bvh = scene.build(settings);
     Sampler sampler{pt::sampler_seed(7, 0, 0)};
 
     SECTION("rays aimed through the scene") {
@@ -470,7 +498,7 @@ TEST_CASE("a bvh over mixed primitive types answers exactly like a brute-force l
     TestScene scene;
     fill_mixed_scene(scene, 150, 424242);
 
-    const Bvh bvh(scene.objects(), settings);
+    const TopLevelBvh bvh = scene.build(settings);
     Sampler sampler{pt::sampler_seed(11, 0, 0)};
 
     for (int i = 0; i < ray_count; ++i) {
@@ -482,7 +510,7 @@ TEST_CASE("degenerate ray directions traverse the tree exactly like the list", "
     TestScene scene;
     fill_lattice(scene);
 
-    const Bvh bvh(scene.objects());
+    const TopLevelBvh bvh = scene.build();
 
     // Lattice sphere boxes span [c - 0.4, c + 0.4] on every axis. An axis-aligned ray has an
     // infinite reciprocal on the two flat axes; when its origin also sits exactly on a slab
@@ -504,11 +532,11 @@ TEST_CASE("degenerate ray directions traverse the tree exactly like the list", "
 TEST_CASE("an empty bvh is a valid empty tree", "[geometry][bvh]") {
     // The scene format allows an empty group, so this reaches the renderer rather than
     // being a purely theoretical input.
-    const Bvh bvh{std::span<const PrimitiveRef>{}};
+    const TopLevelBvh bvh = top_level_of(std::span<const LevelItem>{});
 
-    REQUIRE(bvh.node_count() == 0);
-    REQUIRE(bvh.leaf_count() == 0);
-    REQUIRE(bvh.max_depth() == 0);
+    REQUIRE(bvh.topology().nodes.size() == 0);
+    REQUIRE(bvh.topology().leaf_count == 0);
+    REQUIRE(bvh.topology().max_depth == 0);
 
     // A default Aabb has min above max on every axis, so no point is inside it.
     REQUIRE(bvh.bounding_box().x.size() < 0.0_f);
@@ -521,14 +549,14 @@ TEST_CASE("a single-primitive bvh is one leaf and still finds it", "[geometry][b
     TestScene scene;
     scene.add_sphere(Point3(0.0_f, 0.0_f, 0.0_f), 1.0_f);
 
-    const Bvh bvh(scene.objects());
+    const TopLevelBvh bvh = scene.build();
 
     // The pointer tree this replaced linked a lone primitive into both children and tested
     // it twice on every visit - docs/benchmark.md records a single-sphere scene at 1.5
     // leaf tests per ray. A leaf is a range now: one primitive, one node, one leaf, one test.
-    REQUIRE(bvh.node_count() == 1);
-    REQUIRE(bvh.leaf_count() == 1);
-    REQUIRE(bvh.max_depth() == 0);
+    REQUIRE(bvh.topology().nodes.size() == 1);
+    REQUIRE(bvh.topology().leaf_count == 1);
+    REQUIRE(bvh.topology().max_depth == 0);
 
     Sampler sampler{pt::sampler_seed(3, 0, 0)};
     for (int i = 0; i < 200; ++i) {
@@ -543,7 +571,7 @@ TEST_CASE("the tree's shape obeys its own invariants", "[geometry][bvh]") {
     fill_sphere_cloud(scene, primitive_count, 777);
 
     SECTION("the root box is the union the list computes, exactly") {
-        const Bvh bvh(scene.objects());
+        const TopLevelBvh bvh = scene.build();
 
         const Aabb tree = bvh.bounding_box();
         const Aabb list = scene.bounds();
@@ -563,43 +591,43 @@ TEST_CASE("the tree's shape obeys its own invariants", "[geometry][bvh]") {
         const BvhBuildSettings settings = GENERATE(BvhBuildSettings{}, BvhBuildSettings{.max_leaf_size = 1},
                                                    BvhBuildSettings{.bin_count = 2}, BvhBuildSettings{.bin_count = 32});
 
-        const Bvh bvh(scene.objects(), settings);
+        const TopLevelBvh bvh = scene.build(settings);
 
         // A binary tree whose interior nodes all have two children holds 2L - 1 nodes for
         // L leaves. A dangling single-child branch or a stray empty node breaks the identity,
         // and neither is visible from a hit query.
-        REQUIRE(bvh.leaf_count() > 0);
-        REQUIRE(bvh.node_count() == 2 * bvh.leaf_count() - 1);
+        REQUIRE(bvh.topology().leaf_count > 0);
+        REQUIRE(bvh.topology().nodes.size() == 2 * bvh.topology().leaf_count - 1);
     }
 
     SECTION("a leaf size of one puts every primitive in its own leaf") {
-        const Bvh bvh(scene.objects(), BvhBuildSettings{.max_leaf_size = 1});
+        const TopLevelBvh bvh = scene.build(BvhBuildSettings{.max_leaf_size = 1});
 
         // Leaves partition the primitives, so with at most one each the counts must match
         // exactly. This is the numeric proof that the build's permutation neither drops a
         // primitive nor stores one twice.
-        REQUIRE(bvh.leaf_count() == static_cast<std::size_t>(primitive_count));
-        REQUIRE(bvh.node_count() == static_cast<std::size_t>(2 * primitive_count - 1));
+        REQUIRE(bvh.topology().leaf_count == static_cast<std::size_t>(primitive_count));
+        REQUIRE(bvh.topology().nodes.size() == static_cast<std::size_t>(2 * primitive_count - 1));
     }
 
     SECTION("a traversal cost that dwarfs intersection collapses the tree into one leaf") {
         // Both gates in leaf_is_cheaper have to open: the size cap is checked first, the
         // cost second. This is the degenerate end of the parameter space, where the BVH
         // becomes a linear scan and only the leaf path of traversal runs.
-        const Bvh bvh(scene.objects(), BvhBuildSettings{.traversal_cost = 1.0e9_f, .max_leaf_size = 1 << 20});
+        const TopLevelBvh bvh = scene.build(BvhBuildSettings{.traversal_cost = 1.0e9_f, .max_leaf_size = 1 << 20});
 
-        REQUIRE(bvh.node_count() == 1);
-        REQUIRE(bvh.leaf_count() == 1);
-        REQUIRE(bvh.max_depth() == 0);
+        REQUIRE(bvh.topology().nodes.size() == 1);
+        REQUIRE(bvh.topology().leaf_count == 1);
+        REQUIRE(bvh.topology().max_depth == 0);
     }
 
     SECTION("the tree stays within the traversal stack's fixed depth") {
         // The builder caps every tree at bvh_max_depth, the stack's capacity. The constructor asserts the
         // same bound, but assertions are compiled out of Release, so it is checked here as well. Deepest
         // leaf size first: a cap of one produces the tallest tree this builder can make.
-        const Bvh bvh(scene.objects(), BvhBuildSettings{.max_leaf_size = 1});
+        const TopLevelBvh bvh = scene.build(BvhBuildSettings{.max_leaf_size = 1});
 
-        REQUIRE(bvh.max_depth() <= pt::bvh_max_depth);
+        REQUIRE(bvh.topology().max_depth <= pt::bvh_max_depth);
     }
 }
 
@@ -619,16 +647,16 @@ TEST_CASE("a depth limit caps the tree without changing a single answer", "[geom
         constexpr int limit = 10;
 
         // Not vacuous: unconstrained, this cloud builds deeper than the limit.
-        const Bvh unlimited(scene.objects(), BvhBuildSettings{.max_leaf_size = 1});
-        REQUIRE(unlimited.max_depth() > limit);
+        const TopLevelBvh unlimited = scene.build(BvhBuildSettings{.max_leaf_size = 1});
+        REQUIRE(unlimited.topology().max_depth > limit);
 
-        const Bvh capped(scene.objects(), BvhBuildSettings{.max_leaf_size = 1, .depth_limit = limit});
+        const TopLevelBvh capped = scene.build(BvhBuildSettings{.max_leaf_size = 1, .depth_limit = limit});
 
-        REQUIRE(capped.max_depth() <= limit);
+        REQUIRE(capped.topology().max_depth <= limit);
 
         // Halving reorders nothing and keeps the tree binary: every sphere still in its own leaf.
-        REQUIRE(capped.leaf_count() == static_cast<std::size_t>(primitive_count));
-        REQUIRE(capped.node_count() == 2 * capped.leaf_count() - 1);
+        REQUIRE(capped.topology().leaf_count == static_cast<std::size_t>(primitive_count));
+        REQUIRE(capped.topology().nodes.size() == 2 * capped.topology().leaf_count - 1);
 
         for (int i = 0; i < ray_count; ++i) {
             require_same_hit(capped, scene.list(), ray_into_scene(sampler, scene.bounds()), visible);
@@ -639,11 +667,11 @@ TEST_CASE("a depth limit caps the tree without changing a single answer", "[geom
         // Every node is over budget, so no SAH split is ever taken. Halving 500 primitives reaches ranges
         // of three and four after seven levels, and those fit the default leaf size of four: 128 leaves,
         // all at depth 7. The exact shape is what proves the SAH was bypassed at every node.
-        const Bvh halved(scene.objects(), BvhBuildSettings{.depth_limit = 1});
+        const TopLevelBvh halved = scene.build(BvhBuildSettings{.depth_limit = 1});
 
-        REQUIRE(halved.max_depth() == 7);
-        REQUIRE(halved.leaf_count() == 128);
-        REQUIRE(halved.node_count() == 255);
+        REQUIRE(halved.topology().max_depth == 7);
+        REQUIRE(halved.topology().leaf_count == 128);
+        REQUIRE(halved.topology().nodes.size() == 255);
 
         for (int i = 0; i < ray_count; ++i) {
             require_same_hit(halved, scene.list(), ray_into_scene(sampler, scene.bounds()), visible);
@@ -655,7 +683,7 @@ TEST_CASE("every primitive in the scene is reachable through the tree", "[geomet
     TestScene scene;
     fill_separated_spheres(scene, 4, 31337);
 
-    const Bvh bvh(scene.objects());
+    const TopLevelBvh bvh = scene.build();
     Sampler direction_sampler{pt::sampler_seed(17, 0, 0)};
 
     // Ray queries sample the tree; they do not enumerate it. A primitive dropped by the
@@ -675,60 +703,29 @@ TEST_CASE("every primitive in the scene is reachable through the tree", "[geomet
     }
 }
 
-TEST_CASE("nested bvhs answer exactly like a flat brute-force list", "[geometry][bvh]") {
-    TestScene scene;
-    fill_sphere_cloud(scene, 90, 5150);
+TEST_CASE("a tree's counts fold into the scene's statistics", "[geometry][bvh]") {
+    const pt::BvhBuildResult small = pt::build_bvh_topology(random_boxes(60, 909), any_kind);
+    const pt::BvhBuildResult large = pt::build_bvh_topology(random_boxes(300, 910), any_kind, BvhBuildSettings{.max_leaf_size = 1});
 
-    const std::span<const PrimitiveRef> primitives = scene.objects();
-    const std::size_t group_size = primitives.size() / 3;
-
-    // A Bvh is itself a Hittable, and the loader relies on that: meshes and groups become
-    // subtrees inside the scene's own tree. Grouping changes the traversal completely -
-    // three inner trees behind one outer one - and must change nothing else.
-    const Bvh left(primitives.subspan(0, group_size));
-    const Bvh middle(primitives.subspan(group_size, group_size));
-    const Bvh right(primitives.subspan(2 * group_size));
-
-    // Each inner tree joins the outer one as an opaque child, the way the loader nests a group.
-    const std::array<PrimitiveRef, 3> groups{&left, &middle, &right};
-    const Bvh nested(groups);
-
-    Sampler sampler{pt::sampler_seed(13, 0, 0)};
-    for (int i = 0; i < ray_count; ++i) {
-        // The reference stays the flat list of all 90 spheres: it knows nothing of groups.
-        require_same_hit(nested, scene.list(), ray_into_scene(sampler, scene.bounds()), visible);
-    }
-}
-
-TEST_CASE("make_bvh folds each tree's counts into the shared stats", "[geometry][bvh]") {
-    TestScene scene;
-    fill_sphere_cloud(scene, 60, 909);
-
-    pt::Arena<Hittable> arena;
     pt::BvhStats stats;
-
-    const Bvh* first = pt::make_bvh(arena, scene.objects(), &stats);
+    stats.record(small.topology, std::chrono::nanoseconds(5));
 
     REQUIRE(stats.bvh_count == 1);
-    REQUIRE(stats.node_count == first->node_count());
-    REQUIRE(stats.leaf_count == first->leaf_count());
-    REQUIRE(stats.max_depth == first->max_depth());
+    REQUIRE(stats.node_count == small.topology.nodes.size());
+    REQUIRE(stats.leaf_count == small.topology.leaf_count);
+    REQUIRE(stats.max_depth == small.topology.max_depth);
+    REQUIRE(stats.build_time == std::chrono::nanoseconds(5));
 
-    const auto after_first = stats.build_time;
-
-    // A scene builds one tree per mesh and group, so these are running totals rather than
-    // assignments - and they are what the baseline report publishes. Depth is a maximum,
-    // not a sum: two shallow trees do not add up to a deep one.
-    const Bvh* second = pt::make_bvh(arena, scene.objects(), &stats);
+    // A scene builds one tree per level, so these are running totals rather than assignments - and they are
+    // what the benchmark record publishes. Depth is a maximum, not a sum: two shallow trees do not add up
+    // to a deep one.
+    stats.record(large.topology, std::chrono::nanoseconds(7));
 
     REQUIRE(stats.bvh_count == 2);
-    REQUIRE(stats.node_count == first->node_count() + second->node_count());
-    REQUIRE(stats.leaf_count == first->leaf_count() + second->leaf_count());
-    REQUIRE(stats.max_depth == std::max(first->max_depth(), second->max_depth()));
-    REQUIRE(stats.build_time >= after_first);
-
-    // The default argument is the path a caller that wants no statistics takes.
-    REQUIRE(pt::make_bvh(arena, scene.objects()) != nullptr);
+    REQUIRE(stats.node_count == small.topology.nodes.size() + large.topology.nodes.size());
+    REQUIRE(stats.leaf_count == small.topology.leaf_count + large.topology.leaf_count);
+    REQUIRE(stats.max_depth == std::max(small.topology.max_depth, large.topology.max_depth));
+    REQUIRE(stats.build_time == std::chrono::nanoseconds(12));
 }
 
 TEST_CASE("a bvh over loaded mesh geometry answers exactly like a brute-force list", "[geometry][bvh][mesh]") {
@@ -741,7 +738,7 @@ TEST_CASE("a bvh over loaded mesh geometry answers exactly like a brute-force li
     MeshScene scene;
     scene.add_obj(filename);
 
-    const Bvh bvh(scene.objects(), settings);
+    const TopLevelBvh bvh = top_level_of(scene.items(), settings);
     Sampler sampler{pt::sampler_seed(23, 0, 0)};
 
     // Rays are aimed at interior points, never at edges. A ray hitting a shared edge meets
@@ -810,7 +807,7 @@ TEST_CASE("a leaf the cost would choose is split along kinds instead", "[geometr
 
     // Three kinds interleaved, first met in an order that is not the enumerators' own: the tree must take
     // its order from the input, as every other tie in the build does.
-    constexpr std::array cycle{quad, opaque, sphere};
+    constexpr std::array cycle{quad, instance, sphere};
     const std::vector<Aabb> boxes = random_boxes(30, 5577);
     std::vector<pt::PrimitiveKind> kinds;
     for (std::size_t i = 0; i < boxes.size(); ++i)
@@ -830,7 +827,7 @@ TEST_CASE("a leaf the cost would choose is split along kinds instead", "[geometr
     // Depth first: root, its left leaf, then the right subtree's interior node and its two leaves.
     REQUIRE((nodes[1].is_leaf() && nodes[1].kind == quad && nodes[1].count == 10));
     REQUIRE(!nodes[2].is_leaf());
-    REQUIRE((nodes[3].is_leaf() && nodes[3].kind == opaque && nodes[3].count == 10));
+    REQUIRE((nodes[3].is_leaf() && nodes[3].kind == instance && nodes[3].count == 10));
     REQUIRE((nodes[4].is_leaf() && nodes[4].kind == sphere && nodes[4].count == 10));
 
     require_single_kind_leaves(build, kinds);
@@ -838,7 +835,7 @@ TEST_CASE("a leaf the cost would choose is split along kinds instead", "[geometr
 
 TEST_CASE("a build over one kind labels every leaf with it", "[geometry][bvh]") {
     const pt::PrimitiveKind kind =
-        GENERATE(pt::PrimitiveKind::sphere, pt::PrimitiveKind::quad, pt::PrimitiveKind::triangle, pt::PrimitiveKind::opaque);
+        GENERATE(pt::PrimitiveKind::sphere, pt::PrimitiveKind::quad, pt::PrimitiveKind::triangle, pt::PrimitiveKind::instance);
     const std::vector<Aabb> boxes = random_boxes(200, 9001);
 
     const pt::BvhBuildResult build = pt::build_bvh_topology(boxes, kind);

@@ -2,9 +2,10 @@
 #include "pt/core/hittable.hpp"
 #include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
-#include "pt/geometry/primitive_kind.hpp"
+#include "pt/geometry/level.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/aabb.hpp"
@@ -18,9 +19,9 @@
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
 #include "support/test_support.hpp"
+#include "support/top_level_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
-#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -30,22 +31,21 @@
 namespace {
 
 using pt::Aabb;
-using pt::Bvh;
 using pt::BvhBuildSettings;
-using pt::BvhTopology;
 using pt::Float;
 using pt::HitRecord;
 using pt::HittableList;
 using pt::Interval;
+using pt::LevelItem;
 using pt::Point3;
-using pt::PrimitiveKind;
-using pt::PrimitiveRef;
 using pt::Quad;
 using pt::Ray;
 using pt::Sampler;
 using pt::Sphere;
+using pt::TopLevelBvh;
 using pt::Vec3;
 using pt::operator""_f;
+using pt_test::top_level_of;
 
 const Interval visible{0.0_f, pt::infinity};
 
@@ -56,10 +56,9 @@ constexpr int rays_per_family = 256;
 const pt::SolidColor albedo{pt::Color(0.5_f, 0.5_f, 0.5_f)};
 const pt::Lambertian shared_material{&albedo};
 
-// Primitives of one kind with a material each, offered three ways: typed by their kind, as a tree takes
-// them; as opaque children, hit through their own hit(); and as the list the reference scans. One material
-// per primitive makes a record name the primitive that answered, not merely the distance. Immovable: the
-// materials point at `albedo_`.
+// Primitives of one kind with a material each, offered two ways: as the items a tree is built from, and as
+// the list the reference scans. One material per primitive makes a record name the primitive that answered,
+// not merely the distance. Immovable: the materials point at `albedo_`.
 template <typename Primitive>
 class Population {
 public:
@@ -70,14 +69,11 @@ public:
     template <typename... Args>
     void add(Args&&... args) {
         const Primitive* primitive = objects_.create<Primitive>(std::forward<Args>(args)..., new_material());
-        typed_.emplace_back(primitive);
-        opaque_.emplace_back(static_cast<const pt::Hittable*>(primitive));
+        items_.emplace_back(primitive);
         list_.add(primitive);
     }
 
-    [[nodiscard]] std::span<const PrimitiveRef> primitives() const noexcept { return typed_; }
-
-    [[nodiscard]] std::span<const PrimitiveRef> as_opaque() const noexcept { return opaque_; }
+    [[nodiscard]] std::span<const LevelItem> items() const noexcept { return items_; }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
 
@@ -89,8 +85,7 @@ private:
     const pt::SolidColor albedo_{pt::Color(0.5_f, 0.5_f, 0.5_f)};
     pt::Arena<pt::Material> materials_;
     pt::Arena<pt::Hittable> objects_;
-    std::vector<PrimitiveRef> typed_;
-    std::vector<PrimitiveRef> opaque_;
+    std::vector<LevelItem> items_;
     HittableList list_;
 };
 
@@ -198,7 +193,7 @@ void fill_quads(Population<Quad>& quads, int count, std::uint64_t seed) {
 }
 
 // One ray through both; reports whether the reference hit. The message is built only on failure.
-bool require_same_hit(const Bvh& tree, const HittableList& reference, const Ray& r, const Interval& ray_t) {
+bool require_same_hit(const TopLevelBvh& tree, const HittableList& reference, const Ray& r, const Interval& ray_t) {
     HitRecord tree_rec = poisoned_record();
     HitRecord reference_rec;
 
@@ -218,7 +213,7 @@ bool require_same_hit(const Bvh& tree, const HittableList& reference, const Ray&
 }
 
 template <typename Primitive>
-void require_tree_matches_scan(const Bvh& tree, const Population<Primitive>& population, std::uint64_t seed) {
+void require_tree_matches_scan(const TopLevelBvh& tree, const Population<Primitive>& population, std::uint64_t seed) {
     const Aabb bounds = population.bounds();
     Sampler sampler{pt::sampler_seed(seed, 0, 0)};
 
@@ -243,29 +238,6 @@ void require_tree_matches_scan(const Bvh& tree, const Population<Primitive>& pop
     REQUIRE(hits > 0);
 }
 
-// Shape only: the kind is left out on purpose, since it is the one field the trees compared below must differ in.
-[[nodiscard]] bool same_node(const pt::BvhNode& a, const pt::BvhNode& b) {
-    return a.offset == b.offset && a.count == b.count && a.bbox.x.min == b.bbox.x.min && a.bbox.x.max == b.bbox.x.max &&
-           a.bbox.y.min == b.bbox.y.min && a.bbox.y.max == b.bbox.y.max && a.bbox.z.min == b.bbox.z.min &&
-           a.bbox.z.max == b.bbox.z.max;
-}
-
-void require_same_topology(const BvhTopology& actual, const BvhTopology& expected) {
-    REQUIRE(actual.nodes.size() == expected.nodes.size());
-    REQUIRE(actual.leaf_count == expected.leaf_count);
-    REQUIRE(actual.max_depth == expected.max_depth);
-
-    for (std::size_t i = 0; i < expected.nodes.size(); ++i) {
-        if (!same_node(actual.nodes[i], expected.nodes[i])) FAIL("trees first differ at node " << i);
-    }
-}
-
-void require_leaf_kind(const BvhTopology& topology, PrimitiveKind kind) {
-    for (const pt::BvhNode& node : topology.nodes) {
-        if (node.is_leaf() && node.kind != kind) FAIL("a leaf carries the wrong kind");
-    }
-}
-
 } // namespace
 
 TEST_CASE("a tree of spheres answers exactly like a scan of its spheres", "[geometry][primitive_bvh]") {
@@ -275,7 +247,7 @@ TEST_CASE("a tree of spheres answers exactly like a scan of its spheres", "[geom
     Population<Sphere> spheres;
     fill_spheres(spheres, 120, 61);
 
-    const Bvh tree(spheres.primitives(), settings);
+    const TopLevelBvh tree = top_level_of(spheres.items(), settings);
     require_tree_matches_scan(tree, spheres, 62);
 }
 
@@ -286,34 +258,8 @@ TEST_CASE("a tree of quads answers exactly like a scan of its quads", "[geometry
     Population<Quad> quads;
     fill_quads(quads, 120, 63);
 
-    const Bvh tree(quads.primitives(), settings);
+    const TopLevelBvh tree = top_level_of(quads.items(), settings);
     require_tree_matches_scan(tree, quads, 64);
-}
-
-TEST_CASE("a tree's shape does not depend on the kind its leaves are tested as", "[geometry][primitive_bvh]") {
-    // The scene relies on this: an object that moves from an opaque child to a kind of its own keeps its
-    // tree, its node tests and its leaf tests, so only the cost of a test changes.
-    SECTION("spheres") {
-        Population<Sphere> spheres;
-        fill_spheres(spheres, 90, 65);
-
-        const Bvh typed(spheres.primitives());
-        const Bvh opaque(spheres.as_opaque());
-        require_same_topology(typed.topology(), opaque.topology());
-        require_leaf_kind(typed.topology(), PrimitiveKind::sphere);
-        require_leaf_kind(opaque.topology(), PrimitiveKind::opaque);
-    }
-
-    SECTION("quads") {
-        Population<Quad> quads;
-        fill_quads(quads, 90, 66);
-
-        const Bvh typed(quads.primitives());
-        const Bvh opaque(quads.as_opaque());
-        require_same_topology(typed.topology(), opaque.topology());
-        require_leaf_kind(typed.topology(), PrimitiveKind::quad);
-        require_leaf_kind(opaque.topology(), PrimitiveKind::opaque);
-    }
 }
 
 TEST_CASE("a miss leaves the caller's record untouched", "[geometry][primitive_bvh]") {
@@ -321,8 +267,7 @@ TEST_CASE("a miss leaves the caller's record untouched", "[geometry][primitive_b
     // no winner. The record is written after traversal, from the winner; without one, nothing is.
     SECTION("a sphere, passed at its box's corner") {
         const Sphere ball{Point3(0, 0, 0), 1.0_f, &shared_material};
-        const std::vector<PrimitiveRef> one{&ball};
-        const Bvh tree(one);
+        const TopLevelBvh tree = top_level_of({&ball});
 
         // Inside the box on x and y, outside the sphere: 0.9^2 + 0.9^2 > 1.
         HitRecord rec = poisoned_record();
@@ -334,8 +279,7 @@ TEST_CASE("a miss leaves the caller's record untouched", "[geometry][primitive_b
     SECTION("a parallelogram, passed in a corner its box covers and it does not") {
         // Points are (2a + b, 2b): at y = 0.2 the quad spans x in [0.1, 2.1], the box [0, 3].
         const Quad sheared{Point3(0, 0, 0), Vec3(2, 0, 0), Vec3(1, 2, 0), &shared_material};
-        const std::vector<PrimitiveRef> one{&sheared};
-        const Bvh tree(one);
+        const TopLevelBvh tree = top_level_of({&sheared});
 
         HitRecord rec = poisoned_record();
         REQUIRE_FALSE(tree.hit(Ray(Point3(2.8_f, 0.2_f, -5.0_f), Vec3(0, 0, 1)), visible, rec));
@@ -345,7 +289,7 @@ TEST_CASE("a miss leaves the caller's record untouched", "[geometry][primitive_b
 }
 
 TEST_CASE("an empty span builds an empty tree", "[geometry][primitive_bvh]") {
-    const Bvh tree(std::span<const PrimitiveRef>{});
+    const TopLevelBvh tree = top_level_of(std::span<const LevelItem>{});
 
     REQUIRE(tree.topology().nodes.empty());
     REQUIRE(tree.bounding_box().x.size() < 0.0_f);
@@ -355,43 +299,20 @@ TEST_CASE("an empty span builds an empty tree", "[geometry][primitive_bvh]") {
 }
 
 TEST_CASE("a tree keeps nothing of the spheres it was built from", "[geometry][primitive_bvh]") {
-    // Spheres and quads are copied in; only opaque children are kept by pointer. The sphere is destroyed
-    // before the query: a tree that kept a pointer to it would read freed memory here, which the
-    // sanitizer build reports and an ordinary build may not.
-    std::optional<Bvh> tree;
+    // Spheres and quads are copied in, with their materials. The sphere is destroyed before the query: a
+    // tree that kept a pointer to it would read freed memory here, which the sanitizer build reports and an
+    // ordinary build may not.
+    std::optional<TopLevelBvh> tree;
     {
         std::vector<Sphere> spheres;
         spheres.reserve(1);
         spheres.emplace_back(Point3(0, 0, 5), 1.0_f, &shared_material);
 
-        const std::vector<PrimitiveRef> refs{&spheres.front()};
-        tree.emplace(refs);
+        tree.emplace(top_level_of({&spheres.front()}));
     }
 
     HitRecord rec;
     REQUIRE(tree->hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
     pt_test::require_near(rec.t, 4.0_f);
     REQUIRE(rec.mat == &shared_material);
-}
-
-TEST_CASE("make_bvh folds its tree into the shared stats", "[geometry][primitive_bvh]") {
-    Population<Quad> quads;
-    fill_quads(quads, 40, 67);
-
-    pt::Arena<pt::Hittable> arena;
-    pt::BvhStats stats;
-
-    const Bvh* first = pt::make_bvh(arena, quads.primitives(), &stats);
-    REQUIRE(stats.bvh_count == 1);
-    REQUIRE(stats.node_count == first->topology().nodes.size());
-    REQUIRE(stats.leaf_count == first->topology().leaf_count);
-    REQUIRE(stats.max_depth == first->topology().max_depth);
-
-    // Totals across trees, as a scene with several trees reports them.
-    const Bvh* second = pt::make_bvh(arena, quads.primitives(), &stats, BvhBuildSettings{.max_leaf_size = 1});
-    REQUIRE(stats.bvh_count == 2);
-    REQUIRE(stats.node_count == first->topology().nodes.size() + second->topology().nodes.size());
-    REQUIRE(stats.leaf_count == first->topology().leaf_count + second->topology().leaf_count);
-
-    REQUIRE(pt::make_bvh(arena, quads.primitives()) != nullptr);
 }

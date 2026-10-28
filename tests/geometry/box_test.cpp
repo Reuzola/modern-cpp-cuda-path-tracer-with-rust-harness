@@ -2,6 +2,8 @@
 #include "pt/core/hittable.hpp"
 #include "pt/geometry/box.hpp"
 #include "pt/geometry/bvh.hpp"
+#include "pt/geometry/scene_graph.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -17,14 +19,14 @@ namespace {
 
 using pt::Arena;
 using pt::box;
-using pt::Bvh;
+using pt::BoxFaces;
 using pt::Float;
 using pt::HitRecord;
 using pt::Hittable;
 using pt::Interval;
-using pt::make_box_bvh;
 using pt::Point3;
 using pt::Ray;
+using pt::TopLevelBvh;
 using pt::Vec3;
 using pt::operator""_f;
 using pt_test::require_aabb_near;
@@ -33,11 +35,18 @@ using pt_test::require_vec_near;
 
 const Interval visible{0.0_f, pt::infinity};
 
-// A set keeps no list of the objects it was built from, so its faces are counted where they live:
+// A box as a scene places one on its own - a medium's boundary, a lone world - through the graph, so the
+// rule that keeps a lone box in one leaf is part of what these cases test.
+[[nodiscard]] TopLevelBvh lone_box(const BoxFaces& faces, pt::BvhStats* stats = nullptr) {
+    const std::array<pt::SceneNode, 1> roots{faces};
+    return pt::build_levels(pt::plan_levels(roots), stats);
+}
+
+// A tree keeps no list of the objects it was built from, so its faces are counted where they live:
 // in the leaves. Interior nodes carry a count of zero, so every node can simply be summed.
-[[nodiscard]] std::size_t face_count(const Bvh& set) {
+[[nodiscard]] std::size_t face_count(const TopLevelBvh& tree) {
     std::size_t total = 0;
-    for (const pt::BvhNode& node : set.topology().nodes)
+    for (const pt::BvhNode& node : tree.topology().nodes)
         total += node.count;
     return total;
 }
@@ -47,45 +56,43 @@ const Interval visible{0.0_f, pt::infinity};
 TEST_CASE("a lone box is its six faces in one leaf", "[geometry][box]") {
     Arena<Hittable> arena;
     pt::BvhStats stats;
-    const Bvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr), &stats);
-
-    REQUIRE(cube != nullptr);
+    const TopLevelBvh cube = lone_box(box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr), &stats);
 
     // A single leaf holding all six: the faces are tested in a row, as a box always was.
-    REQUIRE(cube->topology().nodes.size() == 1);
-    REQUIRE(cube->topology().nodes.front().count == 6);
+    REQUIRE(cube.topology().nodes.size() == 1);
+    REQUIRE(cube.topology().nodes.front().count == 6);
     REQUIRE(stats.bvh_count == 1);
 
     // The faces are flat, so each one pads its own degenerate axis; the hull is
     // a hair larger than the corners asked for. The margin here is wider than
     // that pad and far narrower than a missing face.
-    require_aabb_near(cube->bounding_box(), Point3(-1, -1, -1), Point3(1, 1, 1), 1e-3);
+    require_aabb_near(cube.bounding_box(), Point3(-1, -1, -1), Point3(1, 1, 1), 1e-3);
 }
 
 TEST_CASE("the corners may arrive in any order", "[geometry][box]") {
     Arena<Hittable> arena;
-    const Bvh* forward_corners = make_box_bvh(arena, box(arena, Point3(-1, -2, -3), Point3(1, 2, 3), nullptr));
-    const Bvh* swapped_corners = make_box_bvh(arena, box(arena, Point3(1, 2, 3), Point3(-1, -2, -3), nullptr));
+    const TopLevelBvh forward_corners = lone_box(box(arena, Point3(-1, -2, -3), Point3(1, 2, 3), nullptr));
+    const TopLevelBvh swapped_corners = lone_box(box(arena, Point3(1, 2, 3), Point3(-1, -2, -3), nullptr));
 
     // The two corners are sorted componentwise before the faces are built, so a
     // scene file may give them in either order. Without that, a swapped pair
     // produces faces with negative extents and a box that is invisible from
     // outside but hits from within.
-    require_aabb_near(forward_corners->bounding_box(), Point3(-1, -2, -3), Point3(1, 2, 3), 1e-3);
-    require_aabb_near(swapped_corners->bounding_box(), Point3(-1, -2, -3), Point3(1, 2, 3), 1e-3);
+    require_aabb_near(forward_corners.bounding_box(), Point3(-1, -2, -3), Point3(1, 2, 3), 1e-3);
+    require_aabb_near(swapped_corners.bounding_box(), Point3(-1, -2, -3), Point3(1, 2, 3), 1e-3);
 
     HitRecord from_forward;
     HitRecord from_swapped;
     const Ray probe{Point3(0, 0, -8), Vec3(0, 0, 1)};
 
-    REQUIRE(forward_corners->hit(probe, visible, from_forward));
-    REQUIRE(swapped_corners->hit(probe, visible, from_swapped));
+    REQUIRE(forward_corners.hit(probe, visible, from_forward));
+    REQUIRE(swapped_corners.hit(probe, visible, from_swapped));
     require_near(from_forward.t, from_swapped.t);
 }
 
 TEST_CASE("all six faces are where they should be", "[geometry][box]") {
     Arena<Hittable> arena;
-    const Bvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
+    const TopLevelBvh cube = lone_box(box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
 
     // One ray per axis direction, each starting 5 units out and aimed at the
     // centre. Every one must stop on its own face at distance 4. A face built
@@ -108,7 +115,7 @@ TEST_CASE("all six faces are where they should be", "[geometry][box]") {
 
     for (const Probe& probe : probes) {
         HitRecord rec;
-        REQUIRE(cube->hit(Ray(Point3(probe.from), probe.direction), visible, rec));
+        REQUIRE(cube.hit(Ray(Point3(probe.from), probe.direction), visible, rec));
         require_near(rec.t, 4.0_f);
         require_vec_near(rec.p, probe.expected);
 
@@ -119,7 +126,7 @@ TEST_CASE("all six faces are where they should be", "[geometry][box]") {
 
 TEST_CASE("each face covers its whole extent", "[geometry][box]") {
     Arena<Hittable> arena;
-    const Bvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
+    const TopLevelBvh cube = lone_box(box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
 
     // A grid across one face, out to just inside its edges. A quad built with a
     // right edge vector but the wrong origin leaves a strip of the face missing,
@@ -129,22 +136,22 @@ TEST_CASE("each face covers its whole extent", "[geometry][box]") {
     for (const Float x : offsets) {
         for (const Float y : offsets) {
             HitRecord rec;
-            REQUIRE(cube->hit(Ray(Point3(x, y, -5), Vec3(0, 0, 1)), visible, rec));
+            REQUIRE(cube.hit(Ray(Point3(x, y, -5), Vec3(0, 0, 1)), visible, rec));
             require_near(rec.t, 4.0_f);
         }
     }
 
     // Just outside the same face: the box ends where it says it does.
     HitRecord rec;
-    REQUIRE_FALSE(cube->hit(Ray(Point3(1.05_f, 0, -5), Vec3(0, 0, 1)), visible, rec));
+    REQUIRE_FALSE(cube.hit(Ray(Point3(1.05_f, 0, -5), Vec3(0, 0, 1)), visible, rec));
 }
 
 TEST_CASE("a ray inside a box leaves through the far face", "[geometry][box]") {
     Arena<Hittable> arena;
-    const Bvh* cube = make_box_bvh(arena, box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
+    const TopLevelBvh cube = lone_box(box(arena, Point3(-1, -1, -1), Point3(1, 1, 1), nullptr));
 
     HitRecord rec;
-    REQUIRE(cube->hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
+    REQUIRE(cube.hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
 
     // Seen from inside, so the surface is a back face - which is how a Cornell
     // box works at all, and how a participating medium finds its exit point.
@@ -161,12 +168,12 @@ TEST_CASE("a flat box degrades to its two real faces", "[geometry][box]") {
     // everything it is asked. Documented rather than guarded - a scene file can
     // ask for this, and the result is a double-sided flat quad rather than a
     // crash or a stray NaN in the image.
-    const Bvh* flat = make_box_bvh(arena, box(arena, Point3(-1, -1, 0), Point3(1, 1, 0), nullptr));
-    REQUIRE(face_count(*flat) == 6);
+    const TopLevelBvh flat = lone_box(box(arena, Point3(-1, -1, 0), Point3(1, 1, 0), nullptr));
+    REQUIRE(face_count(flat) == 6);
 
     HitRecord rec;
-    REQUIRE(flat->hit(Ray(Point3(0, 0, -5), Vec3(0, 0, 1)), visible, rec));
+    REQUIRE(flat.hit(Ray(Point3(0, 0, -5), Vec3(0, 0, 1)), visible, rec));
     require_near(rec.t, 5.0_f);
 
-    REQUIRE_FALSE(flat->hit(Ray(Point3(3, 0, -5), Vec3(0, 0, 1)), visible, rec));
+    REQUIRE_FALSE(flat.hit(Ray(Point3(3, 0, -5), Vec3(0, 0, 1)), visible, rec));
 }

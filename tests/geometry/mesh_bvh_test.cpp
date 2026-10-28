@@ -1,7 +1,7 @@
 #include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/mesh.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/math/aabb.hpp"
@@ -14,7 +14,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/scene/obj_loader.hpp"
 #include "pt/textures/solid_color.hpp"
-#include "pt/util/arena.hpp"
+#include "support/top_level_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
@@ -26,7 +26,6 @@
 namespace {
 
 using pt::Aabb;
-using pt::Bvh;
 using pt::BvhBuildSettings;
 using pt::Float;
 using pt::HitRecord;
@@ -36,9 +35,11 @@ using pt::MeshData;
 using pt::Point3;
 using pt::Ray;
 using pt::Sampler;
+using pt::TopLevelBvh;
 using pt::Uv;
 using pt::Vec3;
 using pt::operator""_f;
+using pt_test::top_level_of;
 
 const Interval visible{0.0_f, pt::infinity};
 
@@ -175,7 +176,7 @@ bool brute_force_hit(const Mesh& mesh, const Ray& r, const Interval& ray_t, HitR
 
 // Compares one ray and reports whether the reference hit. The message is built only on failure: an
 // INFO per ray and a REQUIRE per field cost more than the traversal they check.
-bool require_same_hit(const Bvh& tree, const Mesh& mesh, const Ray& r, const Interval& ray_t) {
+bool require_same_hit(const TopLevelBvh& tree, const Mesh& mesh, const Ray& r, const Interval& ray_t) {
     HitRecord tree_rec = poisoned_record();
     HitRecord reference_rec;
 
@@ -195,7 +196,7 @@ bool require_same_hit(const Bvh& tree, const Mesh& mesh, const Ray& r, const Int
 }
 
 void require_tree_matches_mesh(const Mesh& mesh, const BvhBuildSettings& settings, std::uint64_t seed) {
-    const Bvh tree(mesh, settings);
+    const TopLevelBvh tree = top_level_of({&mesh}, settings);
     const Aabb bounds = tree.bounding_box();
     Sampler sampler{pt::sampler_seed(seed, 0, 0)};
 
@@ -241,7 +242,7 @@ TEST_CASE("a triangle tree answers exactly like a scan of its mesh", "[geometry]
 
 TEST_CASE("a triangle tree's bounds are the union of its triangles", "[geometry][mesh_bvh]") {
     const Mesh mesh(wavy_grid(8), &material);
-    const Bvh tree(mesh);
+    const TopLevelBvh tree = top_level_of({&mesh});
 
     Aabb expected;
     for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
@@ -261,7 +262,7 @@ TEST_CASE("a triangle tree's bounds are the union of its triangles", "[geometry]
 
 TEST_CASE("a miss leaves the caller's record untouched", "[geometry][mesh_bvh]") {
     const Mesh mesh(wavy_grid(8), &material);
-    const Bvh tree(mesh);
+    const TopLevelBvh tree = top_level_of({&mesh});
 
     // The record is written after traversal, from the winner; a miss has no winner, so nothing at all
     // may be written - including by leaves whose boxes the ray entered without hitting a triangle.
@@ -282,31 +283,11 @@ TEST_CASE("a miss leaves the caller's record untouched", "[geometry][mesh_bvh]")
 
 TEST_CASE("an empty mesh builds an empty tree", "[geometry][mesh_bvh]") {
     const Mesh mesh(MeshData{}, nullptr);
-    const Bvh tree(mesh);
+    const TopLevelBvh tree = top_level_of({&mesh});
 
     REQUIRE(tree.topology().nodes.empty());
     REQUIRE(tree.bounding_box().x.size() < 0.0_f);
 
     HitRecord rec;
     REQUIRE_FALSE(tree.hit(Ray(Point3(0.0_f, 0.0_f, 0.0_f), Vec3(1.0_f, 0.0_f, 0.0_f)), visible, rec));
-}
-
-TEST_CASE("make_mesh_bvh folds its tree into the shared stats", "[geometry][mesh_bvh]") {
-    const Mesh mesh(wavy_grid(8), &material);
-    pt::Arena<pt::Hittable> arena;
-    pt::BvhStats stats;
-
-    const Bvh* first = pt::make_mesh_bvh(arena, mesh, &stats);
-    REQUIRE(stats.bvh_count == 1);
-    REQUIRE(stats.node_count == first->topology().nodes.size());
-    REQUIRE(stats.leaf_count == first->topology().leaf_count);
-    REQUIRE(stats.max_depth == first->topology().max_depth);
-
-    // Totals across trees, as a scene with several meshes reports them.
-    const Bvh* second = pt::make_mesh_bvh(arena, mesh, &stats, BvhBuildSettings{.max_leaf_size = 1});
-    REQUIRE(stats.bvh_count == 2);
-    REQUIRE(stats.node_count == first->topology().nodes.size() + second->topology().nodes.size());
-    REQUIRE(stats.leaf_count == first->topology().leaf_count + second->topology().leaf_count);
-
-    REQUIRE(pt::make_mesh_bvh(arena, mesh) != nullptr);
 }

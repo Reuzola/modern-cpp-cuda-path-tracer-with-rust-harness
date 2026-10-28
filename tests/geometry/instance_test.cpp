@@ -1,7 +1,11 @@
 #include "pt/core/hit_record.hpp"
-#include "pt/geometry/transformed_hittable.hpp"
+#include "pt/geometry/bottom_level_bvh.hpp"
+#include "pt/geometry/instance.hpp"
+#include "pt/geometry/level.hpp"
+#include "pt/geometry/mesh.hpp"
+#include "pt/geometry/scene_graph.hpp"
 #include "pt/geometry/sphere.hpp"
-#include "pt/geometry/triangle.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -9,16 +13,21 @@
 #include "pt/math/transform.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
+#include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <utility>
+#include <vector>
 
 namespace {
 
 using pt::HitRecord;
-using pt::TransformedHittable;
+using pt::Instance;
 using pt::Interval;
+using pt::LevelItem;
 using pt::Point3;
 using pt::Ray;
 using pt::Sphere;
+using pt::TopLevelBvh;
 using pt::Transform;
 using pt::Vec3;
 using pt::operator""_f;
@@ -32,10 +41,20 @@ const Interval visible{0.0_f, pt::infinity};
 // transform did to it, never about the sphere itself.
 const Sphere unit_sphere{Point3(0, 0, 0), 1.0_f, nullptr};
 
+// A child placed by `transform`, as a world holds it: one instance over the child's own bottom-level tree.
+[[nodiscard]] TopLevelBvh place(const LevelItem& child, const Transform& transform) {
+    const std::array<LevelItem, 1> own{child};
+    std::vector<pt::BottomLevelBvh> bottom;
+    bottom.emplace_back(own);
+
+    const std::array<LevelItem, 1> top{Instance(transform, 0)};
+    return TopLevelBvh(top, std::move(bottom));
+}
+
 } // namespace
 
 TEST_CASE("a translated instance is hit where the transform put it", "[geometry][instance]") {
-    const TransformedHittable moved{&unit_sphere, Transform::translation(Vec3(0, 0, 5))};
+    const TopLevelBvh moved = place(&unit_sphere, Transform::translation(Vec3(0, 0, 5)));
 
     HitRecord rec;
     REQUIRE(moved.hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
@@ -51,7 +70,7 @@ TEST_CASE("a translated instance is hit where the transform put it", "[geometry]
 }
 
 TEST_CASE("t means the same distance in both spaces", "[geometry][instance]") {
-    const TransformedHittable grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
+    const TopLevelBvh grown = place(&unit_sphere, Transform::scaling(Vec3(2, 2, 2)));
 
     // A sphere of radius 2 at the origin, so a unit-direction ray from 10 units
     // away stops at 8.
@@ -70,7 +89,7 @@ TEST_CASE("t means the same distance in both spaces", "[geometry][instance]") {
 
 TEST_CASE("normals use the inverse transpose under non-uniform scale", "[geometry][instance]") {
     // Twice as wide in x: the unit sphere becomes an ellipsoid.
-    const TransformedHittable stretched{&unit_sphere, Transform::scaling(Vec3(2, 1, 1))};
+    const TopLevelBvh stretched = place(&unit_sphere, Transform::scaling(Vec3(2, 1, 1)));
 
     // Aimed so that it lands on the object-space point (0.7071, 0.7071, 0),
     // which the transform carries to (1.4142, 0.7071, 0) - a place where the
@@ -97,7 +116,7 @@ TEST_CASE("normals use the inverse transpose under non-uniform scale", "[geometr
 
 TEST_CASE("a rotated instance carries its child around", "[geometry][instance]") {
     const Sphere off_axis{Point3(0, 0, 5), 1.0_f, nullptr};
-    const TransformedHittable turned{&off_axis, Transform::rotation_y(90.0_f)};
+    const TopLevelBvh turned = place(&off_axis, Transform::rotation_y(90.0_f));
 
     // A quarter turn about +y takes +z to +x.
     HitRecord rec;
@@ -109,8 +128,10 @@ TEST_CASE("a rotated instance carries its child around", "[geometry][instance]")
 }
 
 TEST_CASE("instances nest, outermost transform last", "[geometry][instance]") {
-    const TransformedHittable inner{&unit_sphere, Transform::translation(Vec3(3, 0, 0))};
-    const TransformedHittable outer{&inner, Transform::rotation_y(90.0_f)};
+    pt::SceneGraph graph;
+    const pt::TransformNode* inner = graph.add_transform(Transform::translation(Vec3(3, 0, 0)), &unit_sphere);
+    const std::array<pt::SceneNode, 1> roots{graph.add_transform(Transform::rotation_y(90.0_f), inner)};
+    const TopLevelBvh outer = pt::build_levels(pt::plan_levels(roots));
 
     // The child is moved to +x, then the rotation carries +x to -z.
     HitRecord rec;
@@ -118,14 +139,14 @@ TEST_CASE("instances nest, outermost transform last", "[geometry][instance]") {
     require_near(rec.t, 4.0_f, 1e-3);
     require_vec_near(rec.p, Point3(0, 0, -4), 1e-3);
 
-    // Sharing the child rather than owning it is what makes this cheap: the same
-    // sphere is behind both instances, and a mesh behind fifty of them.
+    // Flattened into one instance: the two matrices compose into a single
+    // placement, so the ray crosses one boundary however deep the nesting.
     require_aabb_near(outer.bounding_box(), Point3(-1, -1, -4), Point3(1, 1, -2), 1e-3);
 }
 
 TEST_CASE("a mirroring transform does not invert orientation", "[geometry][instance]") {
     const Sphere to_the_right{Point3(3, 0, 5), 1.0_f, nullptr};
-    const TransformedHittable mirrored{&to_the_right, Transform::scaling(Vec3(-1, 1, 1))};
+    const TopLevelBvh mirrored = place(&to_the_right, Transform::scaling(Vec3(-1, 1, 1)));
 
     HitRecord rec;
     REQUIRE(mirrored.hit(Ray(Point3(-8, 0, 5), Vec3(1, 0, 0)), visible, rec));
@@ -142,7 +163,7 @@ TEST_CASE("a mirroring transform does not invert orientation", "[geometry][insta
 }
 
 TEST_CASE("a miss leaves the record untouched", "[geometry][instance]") {
-    const TransformedHittable moved{&unit_sphere, Transform::translation(Vec3(0, 0, 5))};
+    const TopLevelBvh moved = place(&unit_sphere, Transform::translation(Vec3(0, 0, 5)));
 
     HitRecord rec;
     rec.t = 42.0_f;
@@ -162,14 +183,14 @@ TEST_CASE("a child's margin is stretched into a world-space bound", "[geometry][
     REQUIRE(unit_sphere.hit(local, visible, child));
 
     // Uniform: every direction doubles.
-    const TransformedHittable grown{&unit_sphere, Transform::scaling(Vec3(2, 2, 2))};
+    const TopLevelBvh grown = place(&unit_sphere, Transform::scaling(Vec3(2, 2, 2)));
     HitRecord uniform;
     REQUIRE(grown.hit(Ray(Point3(0, 0, -20), Vec3(0, 0, 2)), visible, uniform));
     REQUIRE(uniform.spawn_margin >= 2.0_f * child.spawn_margin);
 
     // Non-uniform, and hit across the axis that does not stretch: the bound has to
     // hold for the largest stretch anywhere, not for the one along the ray.
-    const TransformedHittable stretched{&unit_sphere, Transform::scaling(Vec3(3, 1, 1))};
+    const TopLevelBvh stretched = place(&unit_sphere, Transform::scaling(Vec3(3, 1, 1)));
     HitRecord anisotropic;
     REQUIRE(stretched.hit(Ray(Point3(0, 0, -10), Vec3(0, 0, 1)), visible, anisotropic));
     REQUIRE(anisotropic.spawn_margin >= 3.0_f * child.spawn_margin);
@@ -181,9 +202,9 @@ TEST_CASE("an instance adds its own rounding to the margin", "[geometry][instanc
     // a sum whose terms are as large as the translation, so it grows with the
     // translation even though the point itself is exact - doubling the translation
     // doubles it exactly, a product by two being exact.
-    const pt::Triangle child(Point3(-1, -1, 0), Point3(1, -1, 0), Point3(0, 1, 0), nullptr);
-    const TransformedHittable near_instance{&child, Transform::translation(Vec3(1000, 0, 0))};
-    const TransformedHittable far_instance{&child, Transform::translation(Vec3(2000, 0, 0))};
+    const pt::Mesh child(pt::MeshData{.positions = {Point3(-1, -1, 0), Point3(1, -1, 0), Point3(0, 1, 0)}, .indices = {0, 1, 2}}, nullptr);
+    const TopLevelBvh near_instance = place(&child, Transform::translation(Vec3(1000, 0, 0)));
+    const TopLevelBvh far_instance = place(&child, Transform::translation(Vec3(2000, 0, 0)));
 
     HitRecord near_hit;
     HitRecord far_hit;
