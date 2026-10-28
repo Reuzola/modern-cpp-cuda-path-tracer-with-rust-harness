@@ -122,8 +122,10 @@ these differ:
 - How the scene's primitives are grouped into trees — for counters. Records
   taken before primitives were gathered into per-kind sets counted a box's six
   faces as one test, and a medium's boundary or a transformed sphere or quad as
-  none; records taken while a container held one tree per kind count a node test
-  and a leaf test for every entry into one of them.
+  none; records taken while a container held one tree per kind count a node
+  test and a leaf test for every entry into one of them. Records taken while
+  groups and meshes were trees of their own count the same for every entry into
+  one of those.
 - The source revision, or a dirty working tree. The record cannot see the
   latter; this one is discipline, not a check.
 - The machine, or its thermal, power or load state — except for counters; see
@@ -134,11 +136,9 @@ Statistics and timing may be quoted together only from the same record.
 ### Definitions
 
 - **Spread** — the slowest timed run against the fastest, in percent.
-- **Trees** — BVHs the scene builds: one per mesh; one per container (the world,
-  a group) over everything it holds, unless that is a single nested object; one
-  for a box, sphere or quad placed alone under a transform or as a medium's
-  boundary. A shared mesh or group is built once; a shared sphere or quad is
-  copied into every container that holds it.
+- **Trees** — BVHs the scene builds: the world's, one per medium boundary, and
+  one per object placed under transforms, however many place it. Groups and
+  meshes dissolve into the tree holding them; nested transforms compose.
 - **Nodes / Leaves** — size of the flat node array / leaf nodes, each holding a
   contiguous range of primitives.
 - **Depth** — the longest root-to-node path; a single-node tree is depth 0.
@@ -146,9 +146,9 @@ Statistics and timing may be quoted together only from the same record.
   bounds and copying each tree’s primitives into leaf order.
 - **Node tests/ray** — box tests per ray query; both children are tested before
   descending.
-- **Leaf tests/ray** — primitive tests issued by leaves per ray query. Every
-  primitive test in every tree is counted, a box’s faces and a medium’s
-  boundary included.
+- **Leaf tests/ray** — primitive tests issued by leaves per ray query, in every
+  tree, a box's faces and a medium's boundary included, plus one per instance
+  entered.
 - **Total** — the sum of the two, and the comparable aggregate.
 - **Ray queries** — top-level `hit()` calls: primary rays plus every bounce.
 - **Queries/primary** — ray queries per primary ray: a direct measure of path
@@ -390,3 +390,10 @@ intersection, are in this file's history. What is worth keeping:
   separated the causes: in the small scenes most of the gain is the per-tree
   cost — a call, a ray setup and a root test per set — and in `mesh_showcase`
   and `showcase` most is the overlap of sets spanning the same space.
+- Since 2026-10-28 the world is one tree over world-space primitives and one
+  instance per object placed under transforms. One-thread time fell 27% on
+  `neon_cathedral`, 12% on `gilded_orrery` and 3% on `argent_weave`. It rose 4%
+  on `showcase`, whose ground joined the world's tree, where the split prices an
+  instance as one primitive — in a transform of its own the ground is back to
+  its earlier test count — and 10% on `cornell_smoke`, whose transformed media
+  boundaries are now walked through two trees per query.
