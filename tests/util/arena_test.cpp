@@ -88,7 +88,7 @@ TEST_CASE("addresses outlive the arena growing", "[util][arena]") {
 
     // Enough creations to reallocate the internal vector many times. Only the
     // pointer array moves; the objects never do. Every non-owning
-    // `const Hittable*` in the engine - HittableList, Bvh, Scene - depends on
+    // `const Hittable*` in the engine - HittableList, the scene graph - depends on
     // exactly this, and none of them would survive a plain vector<T> arena.
     bool all_intact = true;
     for (int i = 0; i < count; ++i) {

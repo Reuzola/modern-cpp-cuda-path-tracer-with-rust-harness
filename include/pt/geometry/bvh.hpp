@@ -1,17 +1,11 @@
 #pragma once
-#include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
 #include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/primitive_kind.hpp"
-#include "pt/geometry/primitive_store.hpp"
-#include "pt/geometry/quad.hpp"
-#include "pt/geometry/sphere.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include "pt/util/arena.hpp"
 #include "pt/util/stats.hpp"
 #include <array>
 #include <chrono>
@@ -21,7 +15,6 @@
 #include <optional>
 #include <span>
 #include <type_traits>
-#include <variant>
 #include <vector>
 
 namespace pt {
@@ -36,8 +29,6 @@ struct TraversalEntry {
 };
 
 } // namespace detail
-
-class Mesh;
 
 // Deepest node any tree may have; the root is depth 0. It sizes the traversal stack, which holds at
 // most one deferred child per level, and the builder never exceeds it, so no input can overflow it.
@@ -87,10 +78,6 @@ template <typename F>
 concept BvhLeafTest = std::invocable<F&, const BvhNode&, const Interval&> &&
                       std::same_as<std::invoke_result_t<F&, const BvhNode&, const Interval&>, std::optional<Float>>;
 
-// A primitive as a tree is built from it, typed by the kind it takes in a leaf. Read during the build only:
-// a sphere or a quad is copied in, anything else is an opaque child kept by pointer and hit through its own hit().
-using PrimitiveRef = std::variant<const Sphere*, const Quad*, const Hittable*>;
-
 // Iterative, distance-ordered traversal. The near child is descended into directly and the far one
 // is deferred with its entry distance, so a hit found in the near subtree can reject it later with a
 // single comparison instead of a repeated slab test. Shared by every tree; only the leaf differs.
@@ -100,8 +87,8 @@ template <BvhLeafTest LeafTest>
     const std::span<const BvhNode> nodes = topology.nodes;
     if (nodes.empty()) return std::nullopt;
 
-    // Divided once per query, not once per node. It must live here rather than in Ray: Instance builds a
-    // transformed ray per hit, and nested trees (meshes, groups) each see a different one.
+    // Divided once per query, not once per node. It must live here rather than in Ray: a bottom-level tree is
+    // walked with the ray moved into its instance's space, which has a direction of its own.
     const Vec3 inv_dir(1.0_f / r.direction().x(), 1.0_f / r.direction().y(), 1.0_f / r.direction().z());
     Float closest{ray_t.max}; // Narrowing upper bound; the parameter the recursion used to carry
     bool is_hit{false};
@@ -172,39 +159,6 @@ template <BvhLeafTest LeafTest>
     }
 }
 
-// Read-only BVH built via binned SAH. A leaf holds primitives of one kind, laid out in leaf order in that
-// kind's own arrays, so testing it is one switch and a loop over contiguous memory. Spheres and quads are
-// copied in; a mesh's triangles have their corners copied and their attributes read from the mesh; opaque
-// children are kept by pointer. The mesh and the opaque children must outlive the tree.
-class Bvh final : public Hittable {
-public:
-    // Any mix of spheres, quads and opaque children. `primitives` is read during construction only.
-    explicit Bvh(std::span<const PrimitiveRef> primitives, const BvhBuildSettings& settings = {});
-
-    // Every triangle of `mesh`, which a hit reads its attributes from.
-    explicit Bvh(const Mesh& mesh, const BvhBuildSettings& settings = {});
-
-    // Closest hit inside ray_t, or false when the ray misses the tree entirely.
-    [[nodiscard]] bool hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const override;
-
-    // Root bounds, or an empty box when the tree holds no primitives.
-    [[nodiscard]] Aabb bounding_box() const override;
-
-    // The three counters below exist for reporting; traversal never reads them.
-    [[nodiscard]] std::size_t node_count() const noexcept { return topology_.nodes.size(); }
-
-    [[nodiscard]] std::size_t leaf_count() const noexcept { return topology_.leaf_count; }
-
-    [[nodiscard]] int max_depth() const noexcept { return topology_.max_depth; }
-
-    [[nodiscard]] const BvhTopology& topology() const noexcept { return topology_; }
-
-private:
-    BvhTopology topology_;
-    PrimitiveStore store_; // Every leaf of a kind the store holds; an opaque leaf indexes opaque_ instead.
-    std::vector<const Hittable*> opaque_;
-};
-
 /// Builds a binned SAH tree over primitives known by their bounds and kind: entry i of both spans is
 /// primitive i. No leaf mixes kinds, and each leaf records the one it holds. Kinds are labels here, only
 /// ever compared. The result names no primitive type; the caller lays its primitives out in primitive_order.
@@ -218,15 +172,5 @@ private:
 /// Points every leaf at its run in its own kind's arrays. A build numbers slots across all kinds; once its
 /// primitives are laid out kind by kind in leaf order, `kind_slot[k]` is where the k-th landed within its kind.
 void rebase_leaf_offsets(BvhTopology& topology, std::span<const std::uint32_t> kind_slot) noexcept;
-
-/// Builds a tree over `primitives` and stores it in `arena`, which owns it.
-/// `primitives` is not retained; opaque children must outlive the arena.
-/// @param stats If non-null, this tree's counts and build time are folded into it.
-[[nodiscard]] const Bvh* make_bvh(Arena<Hittable>& arena, std::span<const PrimitiveRef> primitives,
-                                  BvhStats* stats = nullptr, const BvhBuildSettings& settings = {});
-
-/// The same for every triangle of `mesh`, which must outlive the arena.
-[[nodiscard]] const Bvh* make_mesh_bvh(Arena<Hittable>& arena, const Mesh& mesh,
-                                       BvhStats* stats = nullptr, const BvhBuildSettings& settings = {});
 
 } // namespace pt

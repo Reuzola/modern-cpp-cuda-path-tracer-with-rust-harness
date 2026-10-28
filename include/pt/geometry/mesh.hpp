@@ -49,15 +49,15 @@ struct MeshData {
     std::vector<Uv> uvs{};
 };
 
-// Shared vertex/index storage for a triangle mesh. Not a Hittable: rays intersect a TriangleBvh
-// built over it, which copies the corners out and comes back here by triangle index for the attributes.
+// Shared vertex/index storage for a triangle mesh. Not a Hittable: rays intersect the trees whose levels
+// hold its triangles, which copy the corners out and come back here by triangle index for the attributes.
 class Mesh {
 public:
     Mesh(MeshData data, const Material* mat);
     ~Mesh() = default;
 
-    // Neither copyable nor movable: a TriangleBvh keeps a Mesh* to read attributes
-    // on a hit, so relocating the object would dangle every tree built over it.
+    // Neither copyable nor movable: a tree keeps a Mesh* to read attributes on a
+    // hit, so relocating the object would dangle every tree that holds its triangles.
     Mesh(const Mesh&) = delete;
     Mesh& operator=(const Mesh&) = delete;
     Mesh(Mesh&&) = delete;

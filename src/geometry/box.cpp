@@ -1,12 +1,9 @@
 #include "pt/geometry/box.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/util/arena.hpp"
-#include <algorithm>
-#include <array>
 #include <cmath>
 
 namespace pt {
@@ -54,12 +51,6 @@ BoxFaces box(Arena<Hittable>& arena, const Point3& a, const Point3& b, const Mat
     const Quad* bottom = arena.create<Quad>(q, u, v, mat);
 
     return BoxFaces{.faces = {front, right, rear, left, top, bottom}};
-}
-
-const Bvh* make_box_bvh(Arena<Hittable>& arena, const BoxFaces& box, BvhStats* stats) {
-    std::array<PrimitiveRef, 6> faces;
-    std::ranges::copy(box.faces, faces.begin());
-    return make_bvh(arena, faces, stats, box_build_settings);
 }
 
 } // namespace pt

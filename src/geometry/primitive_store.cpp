@@ -71,7 +71,6 @@ void PrimitiveStore::fill(const PrimitiveHit& hit, const Ray& r, HitRecord& rec)
     case PrimitiveKind::triangle:
         fill_triangle(r, hit.triangle, rec);
         break;
-    case PrimitiveKind::opaque:
     case PrimitiveKind::instance:
         break; // Excluded above: a child's record is its tree's to fill.
     }

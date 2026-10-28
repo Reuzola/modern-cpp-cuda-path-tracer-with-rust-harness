@@ -1,22 +1,10 @@
 #include "pt/geometry/bvh.hpp"
-#include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
 #include "pt/geometry/bvh_node.hpp"
-#include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
-#include "pt/geometry/primitive_store.hpp"
-#include "pt/geometry/quad.hpp"
-#include "pt/geometry/sphere.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
-#include "pt/math/interval.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include "pt/util/arena.hpp"
-#include "pt/util/overloaded.hpp"
-#include "pt/util/stats.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -27,10 +15,8 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
-#include <optional>
 #include <span>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace pt {
@@ -393,56 +379,6 @@ private:
     }
 };
 
-// Tests one leaf. A leaf is a contiguous run of primitives, which is what (offset, count) encodes.
-// The interval narrows as closer hits are found, so later primitives are rejected earlier. The child fills the record itself.
-[[nodiscard]] std::optional<Float> closest_in_opaque_leaf(std::span<const Hittable* const> prims, const Ray& r, const Interval& ray_t, HitRecord& rec) {
-    bool is_hit = false;
-    Float closest = ray_t.max;
-
-    for (const Hittable* prim : prims) {
-        count_leaf_test();
-        if (prim->hit(r, Interval(ray_t.min, closest), rec)) {
-            is_hit = true;
-            closest = rec.t;
-        }
-    }
-
-    return is_hit ? std::optional<Float>(closest) : std::nullopt;
-}
-
-[[nodiscard]] PrimitiveKind kind_of(const PrimitiveRef& primitive) {
-    // clang-format off
-    return std::visit(Overloaded{
-        [](const Sphere*)   { return PrimitiveKind::sphere; },
-        [](const Quad*)     { return PrimitiveKind::quad;   },
-        [](const Hittable*) { return PrimitiveKind::opaque; },
-    }, primitive);
-    // clang-format on
-}
-
-// The bounds each object reports for itself, from the same shape: the tree is the one a build over the objects would get.
-[[nodiscard]] Aabb primitive_bounds(const PrimitiveRef& primitive) {
-    // clang-format off
-    return std::visit(Overloaded{
-        [](const Sphere* s)   { return sphere_bounds(s->shape()); },
-        [](const Quad* q)     { return quad_bounds(q->shape());   },
-        [](const Hittable* h) { return h->bounding_box();         },
-    }, primitive);
-    // clang-format on
-}
-
-// Timed around the arena call: bounds, build, gather and allocation are all part of what the scene pays.
-template <typename Source>
-[[nodiscard]] const Bvh* create_timed(Arena<Hittable>& arena, BvhStats* stats, const Source& source, const BvhBuildSettings& settings) {
-    const auto start = std::chrono::steady_clock::now();
-    const Bvh* root = arena.create<Bvh>(source, settings);
-    const auto end = std::chrono::steady_clock::now();
-
-    // A scene builds one tree per mesh and group; these are its totals.
-    if (stats != nullptr) stats->record(root->topology(), std::chrono::duration_cast<std::chrono::nanoseconds>(end - start));
-    return root;
-}
-
 } // namespace
 
 void BvhStats::record(const BvhTopology& topology, std::chrono::nanoseconds time) noexcept {
@@ -475,106 +411,6 @@ void rebase_leaf_offsets(BvhTopology& topology, std::span<const std::uint32_t> k
             node.offset = kind_slot[node.offset];
         }
     }
-}
-
-Bvh::Bvh(std::span<const PrimitiveRef> primitives, const BvhBuildSettings& settings) {
-    assert(primitives.size() <= std::numeric_limits<std::uint32_t>::max());
-
-    std::vector<Aabb> bounds;
-    std::vector<PrimitiveKind> kinds;
-    bounds.reserve(primitives.size());
-    kinds.reserve(primitives.size());
-
-    for (const PrimitiveRef& p : primitives) {
-        bounds.push_back(primitive_bounds(p));
-        kinds.push_back(kind_of(p));
-    }
-
-    BvhBuildResult result = build_bvh_topology(bounds, kinds, settings);
-    topology_ = std::move(result.topology);
-
-    const auto count_of = [&kinds](PrimitiveKind kind) {
-        return static_cast<std::size_t>(std::ranges::count(kinds, kind));
-    };
-    store_.reserve(count_of(PrimitiveKind::sphere), count_of(PrimitiveKind::quad), 0);
-    opaque_.reserve(count_of(PrimitiveKind::opaque));
-
-    // Gathered in leaf order, each kind into its own arrays. A slot's index within its kind is recorded as it lands.
-    std::vector<std::uint32_t> kind_slot;
-    kind_slot.reserve(primitives.size());
-
-    for (const std::uint32_t id : result.primitive_order) {
-        // clang-format off
-        std::visit(Overloaded{
-            [&](const Sphere* s)   { kind_slot.push_back(store_.add_sphere(*s)); },
-            [&](const Quad* q)     { kind_slot.push_back(store_.add_quad(*q)); },
-            [&](const Hittable* h) {
-                kind_slot.push_back(static_cast<std::uint32_t>(opaque_.size()));
-                opaque_.push_back(h);
-            },
-        }, primitives[id]);
-        // clang-format on
-    }
-
-    // The build numbers slots across every kind. A leaf is one kind's contiguous run, so its first slot's index
-    // within that kind is where the run starts in that kind's arrays. With a single kind this changes nothing.
-    rebase_leaf_offsets(topology_, kind_slot);
-}
-
-Bvh::Bvh(const Mesh& mesh, const BvhBuildSettings& settings) {
-    assert(mesh.triangle_count() <= std::numeric_limits<std::uint32_t>::max());
-
-    std::vector<Aabb> bounds;
-    bounds.reserve(mesh.triangle_count());
-
-    // The same bounds a per-triangle object would report, in the same order, so the tree is the one it would get.
-    for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
-        const auto [a, b, c] = mesh.triangle(i);
-        bounds.push_back(triangle_bounds(a, b, c));
-    }
-
-    BvhBuildResult result = build_bvh_topology(bounds, PrimitiveKind::triangle, settings);
-    topology_ = std::move(result.topology);
-    store_.reserve(0, 0, result.primitive_order.size());
-
-    const std::uint32_t source = store_.add_mesh(mesh);
-    // Gathered in leaf order: this copy is what the intersection test reads, the mesh's buffers never.
-    for (std::size_t k = 0; k < result.primitive_order.size(); ++k) {
-        [[maybe_unused]] const std::uint32_t slot = store_.add_triangle(source, result.primitive_order[k]);
-        assert(slot == k); // One kind throughout, so a slot is already its index in the triangle arrays: nothing to rebase.
-    }
-}
-
-bool Bvh::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    PrimitiveHit hit;
-
-    const std::optional<Float> found = bvh_closest_hit(
-        topology_, r, ray_t,
-        [this, &r, &rec, &hit](const BvhNode& leaf, const Interval& open) -> std::optional<Float> {
-            if (leaf.kind != PrimitiveKind::opaque) return store_.closest_in_leaf(leaf, r, open, hit);
-
-            const std::optional<Float> closest = closest_in_opaque_leaf(std::span(opaque_).subspan(leaf.offset, leaf.count), r, open, rec);
-            if (!closest) return std::nullopt;
-            hit.kind = PrimitiveKind::opaque;
-            return closest;
-        });
-
-    if (!found) return false;
-
-    // Written once, for the hit that survived: a miss leaves the caller's record untouched. An opaque child
-    // wrote the record itself when it won; a nearer winner of another kind would have taken `hit.kind`.
-    if (hit.kind != PrimitiveKind::opaque) store_.fill(hit, r, rec);
-    return true;
-}
-
-Aabb Bvh::bounding_box() const { return topology_.nodes.empty() ? Aabb() : topology_.nodes[0].bbox; }
-
-const Bvh* make_bvh(Arena<Hittable>& arena, std::span<const PrimitiveRef> primitives, BvhStats* stats, const BvhBuildSettings& settings) {
-    return create_timed(arena, stats, primitives, settings);
-}
-
-const Bvh* make_mesh_bvh(Arena<Hittable>& arena, const Mesh& mesh, BvhStats* stats, const BvhBuildSettings& settings) {
-    return create_timed(arena, stats, mesh, settings);
 }
 
 } // namespace pt

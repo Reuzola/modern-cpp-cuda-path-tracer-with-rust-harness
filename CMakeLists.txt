@@ -154,7 +154,6 @@ add_library(pathtracer_core STATIC
   src/geometry/box.cpp
   src/geometry/bvh.cpp
   src/geometry/constant_medium.cpp
-  src/geometry/group_builder.cpp
   src/geometry/instance.cpp
   src/geometry/level.cpp
   src/geometry/mesh.cpp
@@ -163,7 +162,6 @@ add_library(pathtracer_core STATIC
   src/geometry/scene_graph.cpp
   src/geometry/sphere.cpp
   src/geometry/top_level_bvh.cpp
-  src/geometry/transformed_hittable.cpp
   src/geometry/triangle.cpp
 
   src/textures/checker_texture.cpp

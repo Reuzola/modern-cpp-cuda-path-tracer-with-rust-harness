@@ -9,7 +9,6 @@ enum class PrimitiveKind : std::uint8_t {
     sphere,
     quad,
     triangle,
-    opaque,   // A child hit through its own virtual hit(): a mesh's tree, an instance or a nested group.
     instance, // A placement of a bottom-level tree, entered by moving the ray into its space.
 };
 

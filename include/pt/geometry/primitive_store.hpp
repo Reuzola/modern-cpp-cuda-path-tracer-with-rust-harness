@@ -173,7 +173,6 @@ inline std::optional<Float> PrimitiveStore::closest_in_leaf(const BvhNode& leaf,
     case PrimitiveKind::triangle:
         t = detail::closest_in_run<TriangleCorners>(triangles_.corners, leaf, r, open, hit.triangle);
         break;
-    case PrimitiveKind::opaque:
     case PrimitiveKind::instance:
         break; // Excluded above: a leaf of children is its tree's to walk.
     }

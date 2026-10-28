@@ -33,7 +33,6 @@ add_executable(pathtracer_tests
   geometry/mesh_bvh_test.cpp
   geometry/primitive_bvh_test.cpp
   geometry/primitive_store_test.cpp
-  geometry/group_builder_test.cpp
   geometry/bvh_test.cpp
   geometry/top_level_bvh_test.cpp
   geometry/scene_graph_test.cpp
