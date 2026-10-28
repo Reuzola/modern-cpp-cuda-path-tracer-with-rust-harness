@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <utility>
@@ -124,11 +125,11 @@ template <typename Tree, typename... Args>
 } // namespace
 
 const GroupNode* SceneGraph::add_group(std::vector<SceneNode> children) {
-    return &groups_.emplace_back(GroupNode{.children = std::move(children)});
+    return groups_.emplace_back(std::make_unique<GroupNode>(GroupNode{.children = std::move(children)})).get();
 }
 
 const TransformNode* SceneGraph::add_transform(const Transform& transform, SceneNode child) {
-    return &transforms_.emplace_back(TransformNode{.transform = transform, .child = child});
+    return transforms_.emplace_back(std::make_unique<TransformNode>(TransformNode{.transform = transform, .child = child})).get();
 }
 
 LevelPlan plan_levels(std::span<const SceneNode> roots) {

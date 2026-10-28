@@ -4,7 +4,7 @@
 #include "pt/geometry/level.hpp"
 #include "pt/geometry/top_level_bvh.hpp"
 #include "pt/math/transform.hpp"
-#include <deque>
+#include <memory>
 #include <span>
 #include <variant>
 #include <vector>
@@ -40,9 +40,10 @@ public:
     [[nodiscard]] const TransformNode* add_transform(const Transform& transform, SceneNode child);
 
 private:
-    // Deques, not vectors: a node's address is its identity, so growing the graph must never move one.
-    std::deque<GroupNode> groups_;
-    std::deque<TransformNode> transforms_;
+    // A node's address is its identity, so growing the graph must never move one. Held by unique_ptr rather
+    // than in a deque, whose move may allocate: a scene holding this graph promises a move that cannot throw.
+    std::vector<std::unique_ptr<GroupNode>> groups_;
+    std::vector<std::unique_ptr<TransformNode>> transforms_;
 };
 
 // One level as flattening leaves it, before its tree is built.
