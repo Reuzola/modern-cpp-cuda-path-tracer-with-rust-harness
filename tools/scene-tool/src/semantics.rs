@@ -21,24 +21,43 @@ fn dot(a: &[f64; 3], b: &[f64; 3]) -> f64 {
 }
 
 fn cross(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
-    [ a[1] * b[2] - a[2] * b[1],
-      a[2] * b[0] - a[0] * b[2],
-      a[0] * b[1] - a[1] * b[0], ]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 
-fn check_material(name: &str, location: &str, scene: &Scene, names: &mut NameTable, diagnostics: &mut Vec<Diagnostic>) {
+fn check_material(
+    name: &str,
+    location: &str,
+    scene: &Scene,
+    names: &mut NameTable,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     if !scene.materials.contains_key(name) {
-        diagnostics.push(Diagnostic::error(location.to_string(), format!("undefined material '{name}'")));
+        diagnostics.push(Diagnostic::error(
+            location.to_string(),
+            format!("undefined material '{name}'"),
+        ));
     }
     names.used_materials.insert(name.to_string());
 }
 
-fn check_texture(texture: &Texture, location: &str, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) {
+fn check_texture(
+    texture: &Texture,
+    location: &str,
+    base_dir: &Path,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     match texture {
         Texture::Image { filename } => {
             let resolved = base_dir.join(filename);
             if !resolved.is_file() {
-                diagnostics.push(Diagnostic::warning(location.to_string(), format!("image file not found: '{}'", resolved.display())));
+                diagnostics.push(Diagnostic::warning(
+                    location.to_string(),
+                    format!("image file not found: '{}'", resolved.display()),
+                ));
             }
         }
 
@@ -66,8 +85,13 @@ fn check_texture_refs(scene: &Scene, diagnostics: &mut Vec<Diagnostic>) {
         match material {
             Material::Lambertian { texture }
             | Material::DiffuseLight { texture }
-            | Material::Isotropic { texture } if !scene.textures.contains_key(texture) => {
-                diagnostics.push(Diagnostic::error(format!("/materials/{name}"), format!("undefined texture '{texture}'")));
+            | Material::Isotropic { texture }
+                if !scene.textures.contains_key(texture) =>
+            {
+                diagnostics.push(Diagnostic::error(
+                    format!("/materials/{name}"),
+                    format!("undefined texture '{texture}'"),
+                ));
             }
             _ => {}
         }
@@ -78,7 +102,10 @@ fn check_black_scene(scene: &Scene, names: &NameTable, diagnostics: &mut Vec<Dia
     let background_is_black = scene.render.background.iter().all(|c| *c == 0.0);
 
     let has_light = names.used_materials.iter().any(|name| {
-        matches!(scene.materials.get(name), Some(Material::DiffuseLight { .. }))
+        matches!(
+            scene.materials.get(name),
+            Some(Material::DiffuseLight { .. })
+        )
     });
 
     // Warning instead of error because scene is valid but all dark.
@@ -96,26 +123,30 @@ fn object_name(obj: &Object) -> Option<&String> {
         | Object::Mesh { name, .. }
         | Object::Group { name, .. }
         | Object::Transform { name, .. }
-        | Object::ConstantMedium { name, .. } => {
-            name.as_ref()
-        }
+        | Object::ConstantMedium { name, .. } => name.as_ref(),
     }
 }
 
 /// Walks one child and returns the sampleable names it carries.
-fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> Vec<String> {
+fn walk_child(
+    child: &ObjectOrRef,
+    location: &str,
+    scene: &Scene,
+    names: &mut NameTable,
+    base_dir: &Path,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<String> {
     match child {
-        ObjectOrRef::Ref(name) => {
-            match names.defined.get(name) {
-                Some(carried) => {
-                    carried.clone()
-                }
-                None => {
-                    diagnostics.push(Diagnostic::error(location.to_string(), format!("undefined object '{name}'")));
-                    Vec::new()
-                }
+        ObjectOrRef::Ref(name) => match names.defined.get(name) {
+            Some(carried) => carried.clone(),
+            None => {
+                diagnostics.push(Diagnostic::error(
+                    location.to_string(),
+                    format!("undefined object '{name}'"),
+                ));
+                Vec::new()
             }
-        }
+        },
 
         ObjectOrRef::Inline(object) => {
             if matches!(object.as_ref(), Object::ConstantMedium { .. }) {
@@ -131,10 +162,16 @@ fn walk_child(child: &ObjectOrRef, location: &str, scene: &Scene, names: &mut Na
 
 /// Walks one object and returns the sampleable names it carries: itself if it is a named sphere or quad,
 /// and whatever its group children carry. A transform carries nothing: what it holds is placed in its space.
-fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTable, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> Vec<String> {
+fn walk_object(
+    obj: &Object,
+    location: &str,
+    scene: &Scene,
+    names: &mut NameTable,
+    base_dir: &Path,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<String> {
     let mut carried = match obj {
-        Object::Sphere { material, .. }
-        | Object::Box { material, .. } => {
+        Object::Sphere { material, .. } | Object::Box { material, .. } => {
             check_material(material, location, scene, names, diagnostics);
             Vec::new()
         }
@@ -148,7 +185,10 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             // the threshold independent of scene scale. Squared to avoid the square roots.
             let epsilon = 1e-8;
             if dot(&n, &n) <= epsilon * epsilon * dot(u, u) * dot(v, v) {
-                diagnostics.push(Diagnostic::error(location.to_string(), "degenerate quad: 'u' and 'v' are parallel".to_string()));
+                diagnostics.push(Diagnostic::error(
+                    location.to_string(),
+                    "degenerate quad: 'u' and 'v' are parallel".to_string(),
+                ));
             }
 
             Vec::new()
@@ -157,12 +197,17 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
         // An error rather than the warning a missing image texture gets: the loader
         // substitutes a placeholder for an unreadable image, but a mesh that fails to
         // load leaves no geometry behind, so the render stops.
-        Object::Mesh { filename, material, .. } => {
+        Object::Mesh {
+            filename, material, ..
+        } => {
             check_material(material, location, scene, names, diagnostics);
 
             let resolved = base_dir.join(filename);
             if !resolved.is_file() {
-                diagnostics.push(Diagnostic::error(location.to_string(), format!("mesh file not found: '{}'", resolved.display())));
+                diagnostics.push(Diagnostic::error(
+                    location.to_string(),
+                    format!("mesh file not found: '{}'", resolved.display()),
+                ));
             }
 
             Vec::new()
@@ -172,7 +217,14 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             let mut carried = Vec::new();
             for (index, child) in children.iter().enumerate() {
                 let child_location = format!("{location}/children/{index}");
-                carried.extend(walk_child(child, &child_location, scene, names, base_dir, diagnostics));
+                carried.extend(walk_child(
+                    child,
+                    &child_location,
+                    scene,
+                    names,
+                    base_dir,
+                    diagnostics,
+                ));
             }
             carried
         }
@@ -183,11 +235,17 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
             Vec::new()
         }
 
-        Object::ConstantMedium { boundary, phase_function, name, .. } => {
+        Object::ConstantMedium {
+            boundary,
+            phase_function,
+            name,
+            ..
+        } => {
             if name.is_some() {
                 diagnostics.push(Diagnostic::error(
                     location.to_string(),
-                    "constant_medium cannot be named: media are not part of the object graph".to_string(),
+                    "constant_medium cannot be named: media are not part of the object graph"
+                        .to_string(),
                 ));
             }
 
@@ -195,7 +253,14 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
 
             // A boundary bounds a volume and is no part of the world, so it carries nothing either.
             let child_location = format!("{location}/boundary");
-            walk_child(boundary, &child_location, scene, names, base_dir, diagnostics);
+            walk_child(
+                boundary,
+                &child_location,
+                scene,
+                names,
+                base_dir,
+                diagnostics,
+            );
 
             Vec::new()
         }
@@ -208,15 +273,26 @@ fn walk_object(obj: &Object, location: &str, scene: &Scene, names: &mut NameTabl
         }
 
         // A later definition replaces an earlier one, as it does in the loader's own table.
-        if names.defined.insert(name.clone(), carried.clone()).is_some() {
-            diagnostics.push(Diagnostic::error(location.to_string(), format!("duplicate object name '{name}'")));
+        if names
+            .defined
+            .insert(name.clone(), carried.clone())
+            .is_some()
+        {
+            diagnostics.push(Diagnostic::error(
+                location.to_string(),
+                format!("duplicate object name '{name}'"),
+            ));
         }
     }
 
     carried
 }
 
-fn check_object_refs(scene: &Scene, base_dir: &Path, diagnostics: &mut Vec<Diagnostic>) -> NameTable {
+fn check_object_refs(
+    scene: &Scene,
+    base_dir: &Path,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> NameTable {
     let mut names = NameTable::default();
     for (index, object) in scene.objects.iter().enumerate() {
         let location = format!("/objects/{index}");
@@ -234,7 +310,10 @@ fn check_importance_targets(scene: &Scene, names: &NameTable, diagnostics: &mut 
         let location = format!("/importance_targets/{index}");
 
         if !names.defined.contains_key(name) {
-            diagnostics.push(Diagnostic::error(location, format!("undefined object '{name}'")));
+            diagnostics.push(Diagnostic::error(
+                location,
+                format!("undefined object '{name}'"),
+            ));
             continue;
         }
 
@@ -267,11 +346,14 @@ pub fn validate_semantics(scene: &Scene, base_dir: &Path) -> Vec<Diagnostic> {
 mod tests {
     use super::*;
     use crate::report::Severity;
-    use crate::test_support::{MINIMAL_SCENE, parse_scene, lit_scene, scenes_dir, shipped_scene_files};
+    use crate::test_support::{
+        lit_scene, parse_scene, scenes_dir, shipped_scene_files, MINIMAL_SCENE,
+    };
     use tempfile::TempDir;
 
     /// The one object in the minimal scene, as it appears in the fixture.
-    const SPHERE: &str = r#"{ "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" }"#;
+    const SPHERE: &str =
+        r#"{ "type": "sphere", "center": [0, 0, 0], "radius": 1, "material": "grey" }"#;
 
     /// A mesh referring to a file the fixture may or may not create.
     const MESH: &str = r#"{ "type": "mesh", "filename": "bunny.obj", "material": "grey" }"#;
@@ -347,7 +429,11 @@ mod tests {
 
         assert_eq!(diagnostic.severity, Severity::Error);
         assert_eq!(diagnostic.location, "/objects/0");
-        assert!(diagnostic.message.contains("gold"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("gold"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     #[test]
@@ -445,19 +531,29 @@ mod tests {
 
         assert_eq!(diagnostic.severity, Severity::Error);
         assert_eq!(diagnostic.location, "/objects/0");
-        assert!(diagnostic.message.contains("named"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("named"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     // The pair above only proves the rules fire; this one proves they do not
     // over-fire on the placement every shipped scene actually uses.
     #[test]
     fn a_top_level_unnamed_constant_medium_is_accepted() {
-        assert_eq!(locations(&analyse(&with_objects(MEDIUM))), Vec::<&str>::new());
+        assert_eq!(
+            locations(&analyse(&with_objects(MEDIUM))),
+            Vec::<&str>::new()
+        );
     }
 
     #[test]
     fn an_undefined_importance_target_is_reported() {
-        let json = lit_scene().replace(r#""objects": ["#, r#""importance_targets": ["lamp"], "objects": ["#);
+        let json = lit_scene().replace(
+            r#""objects": ["#,
+            r#""importance_targets": ["lamp"], "objects": ["#,
+        );
 
         let found = analyse(&json);
 
@@ -477,7 +573,11 @@ mod tests {
         let diagnostic = only(&found);
 
         assert_eq!(diagnostic.location, "/importance_targets/0");
-        assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("sampleable"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     // A transform wraps its child but is not itself sampleable, so a light that
@@ -495,7 +595,11 @@ mod tests {
         let diagnostic = only(&found);
 
         assert_eq!(diagnostic.location, "/importance_targets/0");
-        assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("sampleable"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     #[test]
@@ -587,7 +691,10 @@ mod tests {
     // is enough to satisfy it.
     #[test]
     fn a_mesh_file_that_exists_produces_no_finding() {
-        assert_eq!(locations(&analyse_in(&with_objects(MESH), &["bunny.obj"])), Vec::<&str>::new());
+        assert_eq!(
+            locations(&analyse_in(&with_objects(MESH), &["bunny.obj"])),
+            Vec::<&str>::new()
+        );
     }
 
     // A mesh goes through check_material like every other primitive, which also
@@ -601,14 +708,20 @@ mod tests {
         let diagnostic = only(&found);
 
         assert_eq!(diagnostic.location, "/objects/0");
-        assert!(diagnostic.message.contains("gold"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("gold"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     // base_dir now has to reach the recursive walk, not just the top-level pass:
     // a mesh nested inside a transform is checked, and at its own location.
     #[test]
     fn a_nested_mesh_is_checked_at_the_location_holding_it() {
-        let json = with_objects(&format!(r#"{{ "type": "transform", "translate": [0, 0, 0], "object": {MESH} }}"#));
+        let json = with_objects(&format!(
+            r#"{{ "type": "transform", "translate": [0, 0, 0], "object": {MESH} }}"#
+        ));
 
         let found = analyse_in(&json, &[]);
 
@@ -620,21 +733,32 @@ mod tests {
     // two from drifting apart.
     #[test]
     fn a_mesh_cannot_be_an_importance_target() {
-        let json = with_objects(&MESH.replace(r#""type": "mesh""#, r#""type": "mesh", "name": "bunny""#))
-            .replace(r#""objects": ["#, r#""importance_targets": ["bunny"], "objects": ["#);
+        let json =
+            with_objects(&MESH.replace(r#""type": "mesh""#, r#""type": "mesh", "name": "bunny""#))
+                .replace(
+                    r#""objects": ["#,
+                    r#""importance_targets": ["bunny"], "objects": ["#,
+                );
 
         let found = analyse_in(&json, &["bunny.obj"]);
         let diagnostic = only(&found);
 
         assert_eq!(diagnostic.location, "/importance_targets/0");
-        assert!(diagnostic.message.contains("sampleable"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("sampleable"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     /// A named sphere, for the placement rules below to move around.
     const LAMP: &str = r#"{ "type": "sphere", "name": "lamp", "center": [0, 0, 0], "radius": 1, "material": "grey" }"#;
 
     fn with_targets(json: &str, targets: &str) -> String {
-        json.replace(r#""objects": ["#, &format!(r#""importance_targets": [{targets}], "objects": ["#))
+        json.replace(
+            r#""objects": ["#,
+            &format!(r#""importance_targets": [{targets}], "objects": ["#),
+        )
     }
 
     // Light sampling aims at a target's own shape, which a transform moves away
@@ -645,7 +769,9 @@ mod tests {
     fn a_target_placed_only_under_a_transform_is_reported() {
         let sun = LAMP.replace(r#""name": "lamp""#, r#""name": "sun""#);
         let json = with_targets(
-            &with_objects(&format!(r#"{sun}, {{ "type": "transform", "translate": [0, 3, 0], "object": {LAMP} }}"#)),
+            &with_objects(&format!(
+                r#"{sun}, {{ "type": "transform", "translate": [0, 3, 0], "object": {LAMP} }}"#
+            )),
             r#""sun", "lamp""#,
         );
 
@@ -654,7 +780,11 @@ mod tests {
 
         assert_eq!(diagnostic.severity, Severity::Error);
         assert_eq!(diagnostic.location, "/importance_targets/1");
-        assert!(diagnostic.message.contains("world space"), "{}", diagnostic.message);
+        assert!(
+            diagnostic.message.contains("world space"),
+            "{}",
+            diagnostic.message
+        );
     }
 
     // The transform's whole subtree is in its space, however deep: a group below
@@ -677,7 +807,10 @@ mod tests {
     // A boundary is no part of the world at all, transformed or not.
     #[test]
     fn a_medium_boundary_does_not_place_its_shape_in_world_space() {
-        let medium = MEDIUM.replace(r#""boundary": { "type": "sphere","#, r#""boundary": { "type": "sphere", "name": "shell","#);
+        let medium = MEDIUM.replace(
+            r#""boundary": { "type": "sphere","#,
+            r#""boundary": { "type": "sphere", "name": "shell","#,
+        );
         let json = with_targets(&with_objects(&medium), r#""shell""#);
 
         let found = analyse(&json);
@@ -690,7 +823,9 @@ mod tests {
     #[test]
     fn a_target_copied_under_a_transform_is_accepted() {
         let json = with_targets(
-            &with_objects(&format!(r#"{LAMP}, {{ "type": "transform", "translate": [0, 3, 0], "object": "lamp" }}"#)),
+            &with_objects(&format!(
+                r#"{LAMP}, {{ "type": "transform", "translate": [0, 3, 0], "object": "lamp" }}"#
+            )),
             r#""lamp""#,
         );
 
