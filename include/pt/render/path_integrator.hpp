@@ -1,5 +1,6 @@
 #pragma once
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/render/integrator.hpp"
@@ -8,14 +9,13 @@
 
 namespace pt {
 
-class Hittable;
 class ImportanceTargets;
 class Sampler;
 
 class PathIntegrator final : public Integrator {
 public:
-    PathIntegrator(const Hittable& world, std::span<const ConstantMedium> media,
-        const ImportanceTargets& targets, const Color& background, int max_depth)
+    PathIntegrator(const TopLevelBvh& world, std::span<const ConstantMedium> media,
+                   const ImportanceTargets& targets, const Color& background, int max_depth)
         : world_(world), media_(media), targets_(targets), background_(background), max_depth_(max_depth) {}
 
     [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override;
@@ -27,7 +27,7 @@ public:
     }
 
 private:
-    const Hittable& world_;
+    const TopLevelBvh& world_;
     std::span<const ConstantMedium> media_;
     const ImportanceTargets& targets_;
     Color background_;

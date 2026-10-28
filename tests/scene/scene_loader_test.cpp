@@ -1,4 +1,3 @@
-#include "pt/core/hittable.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/interval.hpp"
@@ -328,8 +327,8 @@ constexpr std::string_view transformed_mesh_scene = R"json({
   ]
 })json";
 
-// Two placements of one file under one material. The geometry is loaded,
-// triangulated and accelerated once; both instances refer to that one subtree.
+// Two placements of one file under one material. The geometry is loaded and
+// triangulated once, and both instances share one bottom-level tree.
 constexpr std::string_view shared_mesh_scene = R"json({
   "version": 2,
   "camera": { "lookfrom": [0, 0, 5], "lookat": [0, 0, 0], "vfov": 40 },
@@ -824,8 +823,7 @@ TEST_CASE("a mesh cannot be an importance target", "[scene][loader][mesh]") {
     const TempSceneDir fixture(std::string(mesh_scene).insert(mesh_scene.size() - 1, R"(,"importance_targets": ["cube"])"));
     fixture.write_sibling("cube.obj", cube_obj);
 
-    // A mesh enters the world as a BvhNode over its triangles, and neither the
-    // node nor a triangle implements Sampleable.
+    // A mesh enters the world as triangles in a tree's store, and no triangle implements Sampleable.
     check_load_error(fixture.scene_path(), "/importance_targets/0", "is not sampleable");
 }
 

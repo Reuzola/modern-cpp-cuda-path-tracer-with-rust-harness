@@ -1,29 +1,29 @@
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
-#include <cassert>
 #include <cmath>
+#include <utility>
 
 namespace pt {
 
-ConstantMedium::ConstantMedium(const Hittable* boundary, Float density, const Material* phase_function)
-    : boundary_(boundary), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) { assert(boundary != nullptr); }
+ConstantMedium::ConstantMedium(TopLevelBvh boundary, Float density, const Material* phase_function)
+    : boundary_(std::move(boundary)), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) {}
 
 bool ConstantMedium::sample_interaction(const Ray& r, const Interval& ray_t, Sampler& sampler, HitRecord& rec) const {
     HitRecord rec1;
     HitRecord rec2;
 
-    if (!boundary_->hit(r, Interval::universe, rec1)) return false;
+    if (!boundary_.hit(r, Interval::universe, rec1)) return false;
 
     // Open intervals naturally reject the entry hit at its own distance without nudging. This avoids
     // fixed t-offsets, whose actual world-space distance varies with the ray direction's length.
-    if (!boundary_->hit(r, Interval(rec1.t, infinity), rec2)) return false;
+    if (!boundary_.hit(r, Interval(rec1.t, infinity), rec2)) return false;
 
     if (rec1.t < ray_t.min) rec1.t = ray_t.min;
     if (rec2.t > ray_t.max) rec2.t = ray_t.max;

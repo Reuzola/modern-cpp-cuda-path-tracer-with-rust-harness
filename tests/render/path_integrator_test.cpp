@@ -1,7 +1,7 @@
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
 #include "pt/materials/lambertian.hpp"
@@ -16,6 +16,7 @@
 #include "pt/sampling/importance_targets.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "support/test_support.hpp"
+#include "support/top_level_support.hpp"
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -30,7 +31,6 @@ using pt::Color;
 using pt::ConstantMedium;
 using pt::DiffuseLight;
 using pt::Float;
-using pt::HittableList;
 using pt::ImportanceTargets;
 using pt::Isotropic;
 using pt::Lambertian;
@@ -42,12 +42,14 @@ using pt::Ray;
 using pt::Sampler;
 using pt::SolidColor;
 using pt::Sphere;
+using pt::TopLevelBvh;
 using pt::Vec3;
 using pt::operator""_f;
 using pt_test::consumed_draws;
 using pt_test::make_sampler;
 using pt_test::require_color_near;
 using pt_test::require_near;
+using pt_test::top_level_of;
 
 // Wound so that its normal is -z: a ray travelling towards +z meets its front.
 [[nodiscard]] Quad facing_camera(Float z, const pt::Material* mat) {
@@ -69,7 +71,7 @@ const Color background{0.2_f, 0.4_f, 0.6_f};
 } // namespace
 
 TEST_CASE("a path that hits nothing returns the background", "[render][integrator]") {
-    const HittableList empty_world;
+    const TopLevelBvh empty_world;
     const PathIntegrator integrator{empty_world, no_media, no_targets, background, 8};
 
     Sampler sampler = make_sampler(111);
@@ -87,8 +89,7 @@ TEST_CASE("an exhausted path is black, not background", "[render][integrator]") 
     const DiffuseLight lamp{&white};
     const Quad light = facing_camera(2.0_f, &lamp);
 
-    HittableList world;
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&light});
 
     // Depth is checked before anything else, so even a light directly in view
     // contributes nothing once the budget is spent.
@@ -108,8 +109,7 @@ TEST_CASE("a light ends the path with its emission", "[render][integrator]") {
     const DiffuseLight lamp{&bright};
     const Quad light = facing_camera(2.0_f, &lamp);
 
-    HittableList world;
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&light});
 
     const PathIntegrator integrator{world, no_media, no_targets, background, 8};
 
@@ -126,8 +126,7 @@ TEST_CASE("the back of a light is not a light", "[render][integrator]") {
     const DiffuseLight lamp{&bright};
     const Quad turned_away = facing_away(2.0_f, &lamp);
 
-    HittableList world;
-    world.add(&turned_away);
+    const TopLevelBvh world = top_level_of({&turned_away});
 
     const PathIntegrator integrator{world, no_media, no_targets, Color(0, 0, 0), 8};
 
@@ -147,9 +146,7 @@ TEST_CASE("a specular bounce carries its attenuation forward", "[render][integra
     const Quad reflector = facing_camera(2.0_f, &mirror);
     const Quad light = facing_away(-2.0_f, &lamp);
 
-    HittableList world;
-    world.add(&reflector);
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&reflector, &light});
 
     // Depth two: one bounce off the mirror, then the light.
     const PathIntegrator two_bounces{world, no_media, no_targets, Color(0, 0, 0), 2};
@@ -177,9 +174,7 @@ TEST_CASE("the depth budget can be changed between passes", "[render][integrator
     const Quad reflector = facing_camera(2.0_f, &mirror);
     const Quad light = facing_away(-2.0_f, &lamp);
 
-    HittableList world;
-    world.add(&reflector);
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&reflector, &light});
 
     PathIntegrator integrator{world, no_media, no_targets, Color(0, 0, 0), 1};
 
@@ -200,8 +195,7 @@ TEST_CASE("the diffuse estimator weighs a lambertian bounce by one", "[render][i
     const Lambertian matte{&albedo};
     const Quad surface = facing_camera(2.0_f, &matte);
 
-    HittableList world;
-    world.add(&surface);
+    const TopLevelBvh world = top_level_of({&surface});
 
     // A uniform white background stands in for a uniformly lit sky: whichever
     // direction the bounce takes, it returns the same radiance.
@@ -223,8 +217,7 @@ TEST_CASE("importance sampling changes the samples, not the answer", "[render][i
     const Lambertian matte{&albedo};
     const Quad surface = facing_camera(2.0_f, &matte);
 
-    HittableList world;
-    world.add(&surface);
+    const TopLevelBvh world = top_level_of({&surface});
 
     // A target the mixture will aim at. It is deliberately not part of the world:
     // rays sent towards it pass through and reach the same uniform background, so
@@ -265,14 +258,13 @@ TEST_CASE("a medium in front of a surface hides it", "[render][integrator]") {
     const Isotropic soot{&black};
 
     const Quad light = facing_camera(5.0_f, &lamp);
-    HittableList world;
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&light});
 
     // Dense enough that a free path of two units is never sampled: the mean free
     // path is a fiftieth of a unit.
     const Sphere boundary{Point3(0, 0, 2), 1.0_f, nullptr};
     std::vector<ConstantMedium> media;
-    media.emplace_back(&boundary, 50.0_f, &soot);
+    media.emplace_back(top_level_of({&boundary}), 50.0_f, &soot);
 
     const PathIntegrator integrator{world, media, no_targets, Color(0, 0, 0), 8};
 
@@ -280,7 +272,7 @@ TEST_CASE("a medium in front of a surface hides it", "[render][integrator]") {
 
     // The scattering event replaces the surface hit, and a black phase function
     // absorbs the path there. Free-flight sampling happens in the integrator
-    // rather than inside Hittable::hit precisely so it can compete with the
+    // rather than inside the world query precisely so it can compete with the
     // surface on distance like this.
     require_color_near(integrator.radiance(forward, sampler), Color(0, 0, 0));
 }
@@ -292,13 +284,12 @@ TEST_CASE("a medium behind a surface is not sampled", "[render][integrator]") {
     const Isotropic soot{&black};
 
     const Quad light = facing_camera(5.0_f, &lamp);
-    HittableList world;
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&light});
 
     // The same dense fog, moved behind the light.
     const Sphere boundary{Point3(0, 0, 8), 1.0_f, nullptr};
     std::vector<ConstantMedium> media;
-    media.emplace_back(&boundary, 50.0_f, &soot);
+    media.emplace_back(top_level_of({&boundary}), 50.0_f, &soot);
 
     const PathIntegrator integrator{world, media, no_targets, Color(0, 0, 0), 8};
 
@@ -316,8 +307,7 @@ TEST_CASE("the same ray and seed give the same radiance", "[render][integrator]"
     const Lambertian matte{&albedo};
     const Quad surface = facing_camera(2.0_f, &matte);
 
-    HittableList world;
-    world.add(&surface);
+    const TopLevelBvh world = top_level_of({&surface});
 
     const PathIntegrator integrator{world, no_media, no_targets, background, 5};
 
@@ -346,8 +336,7 @@ TEST_CASE("a bounce at scene scale does not shadow itself", "[render][integrator
     constexpr Float scale = 10'000.0_f;
     const Quad surface(Point3(scale - 1, scale - 1, scale), Vec3(2, 0.3_f, 0.7_f), Vec3(0.3_f, 2, -0.4_f), &matte);
 
-    HittableList world;
-    world.add(&surface);
+    const TopLevelBvh world = top_level_of({&surface});
 
     const PathIntegrator integrator{world, no_media, no_targets, Color(1, 1, 1), 2};
 
@@ -375,8 +364,7 @@ TEST_CASE("a light sample with no density costs its weight, not the pixel", "[re
     const Lambertian matte{&albedo};
     const Quad surface = facing_camera(2.0_f, &matte);
 
-    HittableList world;
-    world.add(&surface);
+    const TopLevelBvh world = top_level_of({&surface});
 
     // A target sphere enclosing the shading point, kept out of the world like the
     // target above. From inside a sphere there is no cone to sample: the light half
@@ -436,9 +424,7 @@ namespace {
     const Sphere ground{Point3(0, -1000, 0), 1000.0_f, &ground_material};
     const Sphere light{distance * Point3(0.8660254_f, cos_theta, 0), radius, &lamp};
 
-    HittableList world;
-    world.add(&ground);
-    world.add(&light);
+    const TopLevelBvh world = top_level_of({&ground, &light});
 
     ImportanceTargets targets;
     targets.add(&light);

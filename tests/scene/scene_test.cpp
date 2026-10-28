@@ -105,16 +105,14 @@ TEST_CASE("the arenas own what the scene creates", "[scene]") {
     {
         Scene scene;
         for (int i = 0; i < 4; ++i) {
-            scene.add_object(scene.create_object<CountedHittable>());
+            static_cast<void>(scene.create_object<CountedHittable>());
         }
         REQUIRE(live_objects == 4);
     }
 
-    // Destroyed exactly once each, and in an order that works: the world holds
-    // non-owning pointers into the object arena, and members are destroyed in
-    // reverse declaration order, so the arena outlives the list that points into
-    // it. Reordering those members compiles cleanly and leaves the destructor
-    // reading freed memory.
+    // Destroyed exactly once each: the arena owns what the scene creates whether or
+    // not anything places it. The world copies the shapes it tests and keeps no
+    // pointer into the arena, so nothing it holds can outlive what it reads.
     REQUIRE(live_objects == 0);
 }
 

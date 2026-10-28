@@ -11,6 +11,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "support/test_support.hpp"
+#include "support/top_level_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 
@@ -30,6 +31,7 @@ using pt::operator""_f;
 using pt_test::make_sampler;
 using pt_test::require_near;
 using pt_test::require_vec_near;
+using pt_test::top_level_of;
 using pt_test::widen;
 
 const Interval visible{0.0_f, pt::infinity};
@@ -63,7 +65,7 @@ const Ray forward{Point3(0, 0, 0), Vec3(0, 0, 1)};
 
 TEST_CASE("the interaction distance is the exponential free path", "[geometry][medium]") {
     constexpr Float density = 0.5_f;
-    const ConstantMedium medium{&cloud, density, nullptr};
+    const ConstantMedium medium{top_level_of({&cloud}), density, nullptr};
 
     // The same stream by hand: this pins the transform from a uniform draw to a
     // distance, and pins the number of draws to one at the same time.
@@ -82,7 +84,7 @@ TEST_CASE("the interaction distance is the exponential free path", "[geometry][m
 
 TEST_CASE("the free path is a distance, not a ray parameter", "[geometry][medium]") {
     constexpr Float density = 0.5_f;
-    const ConstantMedium medium{&cloud, density, nullptr};
+    const ConstantMedium medium{top_level_of({&cloud}), density, nullptr};
 
     // Twice as long a direction: entry lands at t = 2.5 rather than 5, and the
     // sampled distance has to be divided by the direction's length before it can
@@ -102,7 +104,7 @@ TEST_CASE("the free path is a distance, not a ray parameter", "[geometry][medium
 }
 
 TEST_CASE("the record describes a scattering event, not a surface", "[geometry][medium]") {
-    const ConstantMedium medium{&cloud, 0.5_f, nullptr};
+    const ConstantMedium medium{top_level_of({&cloud}), 0.5_f, nullptr};
 
     Sampler sampler = make_sampler(33);
     HitRecord rec;
@@ -119,7 +121,7 @@ TEST_CASE("the record describes a scattering event, not a surface", "[geometry][
 TEST_CASE("a thin medium lets rays through", "[geometry][medium]") {
     // Mean free path of a thousand units against a segment of twenty: the sampled
     // distance runs past the far wall every time, and the ray leaves unscattered.
-    const ConstantMedium thin{&cloud, 0.001_f, nullptr};
+    const ConstantMedium thin{top_level_of({&cloud}), 0.001_f, nullptr};
 
     Sampler sampler = make_sampler(34);
     int interactions = 0;
@@ -135,7 +137,7 @@ TEST_CASE("a thin medium lets rays through", "[geometry][medium]") {
 }
 
 TEST_CASE("a dense medium scatters immediately", "[geometry][medium]") {
-    const ConstantMedium dense{&cloud, 50.0_f, nullptr};
+    const ConstantMedium dense{top_level_of({&cloud}), 50.0_f, nullptr};
 
     Sampler sampler = make_sampler(35);
 
@@ -152,7 +154,7 @@ TEST_CASE("a dense medium scatters immediately", "[geometry][medium]") {
 
 TEST_CASE("the mean free path is the reciprocal of the density", "[geometry][medium]") {
     constexpr Float density = 1.0_f;
-    const ConstantMedium medium{&cloud, density, nullptr};
+    const ConstantMedium medium{top_level_of({&cloud}), density, nullptr};
 
     Sampler sampler = make_sampler(36);
 
@@ -182,7 +184,7 @@ TEST_CASE("the mean free path is the reciprocal of the density", "[geometry][med
 TEST_CASE("an unbounded boundary carries no medium", "[geometry][medium]") {
     // A quad is a surface, not a volume: the ray enters and never comes out.
     const Quad open{Point3(-5, -5, 5), Vec3(10, 0, 0), Vec3(0, 10, 0), nullptr};
-    const ConstantMedium impossible{&open, 1.0_f, nullptr};
+    const ConstantMedium impossible{top_level_of({&open}), 1.0_f, nullptr};
 
     Sampler sampler = make_sampler(37);
     HitRecord rec;
@@ -192,12 +194,12 @@ TEST_CASE("an unbounded boundary carries no medium", "[geometry][medium]") {
     REQUIRE_FALSE(impossible.sample_interaction(forward, visible, sampler, rec));
 
     // And a ray that misses the boundary entirely stops at the first test.
-    const ConstantMedium normal{&cloud, 1.0_f, nullptr};
+    const ConstantMedium normal{top_level_of({&cloud}), 1.0_f, nullptr};
     REQUIRE_FALSE(normal.sample_interaction(Ray(Point3(50, 0, 0), Vec3(0, 0, 1)), visible, sampler, rec));
 }
 
 TEST_CASE("the caller's interval clips the segment", "[geometry][medium]") {
-    const ConstantMedium medium{&cloud, 50.0_f, nullptr};
+    const ConstantMedium medium{top_level_of({&cloud}), 50.0_f, nullptr};
     Sampler sampler = make_sampler(38);
     HitRecord rec;
 
@@ -215,7 +217,7 @@ TEST_CASE("the caller's interval clips the segment", "[geometry][medium]") {
 }
 
 TEST_CASE("a ray starting inside begins scattering at once", "[geometry][medium]") {
-    const ConstantMedium medium{&cloud, 1.0_f, nullptr};
+    const ConstantMedium medium{top_level_of({&cloud}), 1.0_f, nullptr};
 
     // Origin at the centre of the volume, and an interval that reaches behind it.
     // The entry distance is negative there and gets pulled up to the origin, so a
@@ -235,7 +237,7 @@ TEST_CASE("a medium far from the origin still finds its exit", "[geometry][const
     // what actually separates the two hits.
     constexpr Float scale = 100'000.0_f;
     const Sphere boundary{Point3(scale, scale, scale), 1.0_f, nullptr};
-    const ConstantMedium medium{&boundary, 50.0_f, nullptr};
+    const ConstantMedium medium{top_level_of({&boundary}), 50.0_f, nullptr};
 
     const Point3 origin(scale, scale, scale - 10.0_f);
     const Ray r(origin, Vec3(0, 0, 1));
@@ -249,8 +251,7 @@ TEST_CASE("a medium far from the origin still finds its exit", "[geometry][const
 
 TEST_CASE("a mesh boundary holds its medium for a ray that starts inside", "[geometry][medium]") {
     const pt::Mesh mesh(closed_cube(), nullptr);
-    const pt::Bvh boundary(mesh);
-    const ConstantMedium medium{&boundary, 50.0_f, nullptr};
+    const ConstantMedium medium{top_level_of({&mesh}), 50.0_f, nullptr};
 
     Sampler sampler = make_sampler(40);
 

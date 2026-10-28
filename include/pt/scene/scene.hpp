@@ -3,8 +3,9 @@
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
-#include "pt/geometry/group_builder.hpp"
 #include "pt/geometry/mesh.hpp"
+#include "pt/geometry/scene_graph.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/scalar.hpp"
@@ -55,11 +56,14 @@ public:
     Scene& operator=(Scene&&) noexcept = default;
 
     // The built world; empty until build_bvh() has run.
-    [[nodiscard]] const Hittable& world() const noexcept;
+    [[nodiscard]] const TopLevelBvh& world() const noexcept { return world_; }
 
     [[nodiscard]] const ImportanceTargets& importance_targets() const noexcept { return importance_targets_; }
 
     [[nodiscard]] Arena<Hittable>& object_arena() noexcept { return objects_; }
+
+    // Where groups and transforms are created; the objects they hold come from create_object() and create_mesh().
+    [[nodiscard]] SceneGraph& graph() noexcept { return graph_; }
 
     template <typename T, typename... Args>
     [[nodiscard]] const T* create_texture(Args&&... args) {
@@ -88,14 +92,15 @@ public:
     [[nodiscard]] std::size_t mesh_count() const noexcept { return meshes_.size(); }
 
     // Staged: the object joins the world when build_bvh() builds it.
-    void add_object(GeometryRef object);
+    void add_object(SceneNode object);
 
     void add_importance_target(const Sampleable* target);
 
     // Builds the world from every staged object. Once only: an object staged afterwards would join nothing.
     void build_bvh();
 
-    void add_medium(GeometryRef boundary, Float density, const Material* phase_function);
+    // Built at once: a boundary is flattened into a tree of its own and never joins the world.
+    void add_medium(SceneNode boundary, Float density, const Material* phase_function);
 
     [[nodiscard]] std::span<const ConstantMedium> media() const noexcept { return media_; }
 
@@ -108,8 +113,10 @@ private:
     Arena<Material> materials_;
     std::vector<std::unique_ptr<Mesh>> meshes_;
     Arena<Hittable> objects_;
-    GroupBuilder staged_;             // Objects waiting for build_bvh()
-    const Hittable* world_ = nullptr; // Built by build_bvh(); points into objects_
+    SceneGraph graph_;             // The groups and transforms staged objects are made of
+    std::vector<SceneNode> roots_; // Objects waiting for build_bvh()
+    TopLevelBvh world_;            // Empty until build_bvh(); reads meshes_ and the materials, never objects_
+    bool built_{};
     std::vector<ConstantMedium> media_;
     ImportanceTargets importance_targets_;
     BvhStats bvh_stats_{};

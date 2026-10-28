@@ -1,13 +1,10 @@
 #include "pt/scene/scene_loader.hpp"
-#include "pt/core/hittable.hpp"
 #include "pt/core/sampleable.hpp"
 #include "pt/geometry/box.hpp"
-#include "pt/geometry/bvh.hpp"
 #include "pt/geometry/constant_medium.hpp"
-#include "pt/geometry/group_builder.hpp"
-#include "pt/geometry/transformed_hittable.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/quad.hpp"
+#include "pt/geometry/scene_graph.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
@@ -44,6 +41,7 @@
 #include <system_error>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace pt {
 
@@ -56,11 +54,11 @@ struct LoadContext {
     std::filesystem::path base_dir;
     std::map<std::string, const Texture*> textures;
     std::map<std::string, const Material*> materials;
-    std::map<std::string, GeometryRef> objects; // Named objects, typed as their containers will route them.
+    std::map<std::string, SceneNode> objects; // Named objects, as nodes any number of parents may hold
 
-    // Keyed by resolved path and material, so the same OBJ under the same
-    // material is read, triangulated and accelerated exactly once.
-    std::map<std::pair<std::string, const Material*>, const Hittable*> meshes;
+    // Keyed by resolved path and material, so the same OBJ under the same material is read and
+    // triangulated once. Every placement then holds the same node, which is what lets them share one tree.
+    std::map<std::pair<std::string, const Material*>, const Mesh*> meshes;
 };
 
 template <typename Value>
@@ -195,9 +193,9 @@ template <typename Value>
     return it->second;
 }
 
-[[nodiscard]] GeometryRef build_child(const Json& j, LoadContext& ctx);
+[[nodiscard]] SceneNode build_child(const Json& j, LoadContext& ctx);
 
-[[nodiscard]] GeometryRef child_at(const Json& j, LoadContext& ctx, std::string_view key) {
+[[nodiscard]] SceneNode child_at(const Json& j, LoadContext& ctx, std::string_view key) {
     const Json& child = field(j, key);
 
     try {
@@ -223,7 +221,7 @@ void build_medium(const Json& j, LoadContext& ctx) {
     if (j.contains("name"))
         throw SceneError("Object type 'constant_medium' cannot be named: media are not part of the object graph");
 
-    const GeometryRef boundary = child_at(j, ctx, "boundary");
+    const SceneNode boundary = child_at(j, ctx, "boundary");
     const Float density = read_number(field(j, "density"));
     if (density <= 0) throw SceneError(std::format("Field 'density' must be positive, got {}", density));
     const Material* phase_function = find_material(ctx, j, "phase_function");
@@ -231,9 +229,9 @@ void build_medium(const Json& j, LoadContext& ctx) {
     ctx.scene.add_medium(boundary, density, phase_function);
 }
 
-[[nodiscard]] GeometryRef build_object(const Json& j, LoadContext& ctx) {
+[[nodiscard]] SceneNode build_object(const Json& j, LoadContext& ctx) {
     const std::string& type = read_string(field(j, "type"));
-    GeometryRef result;
+    SceneNode result;
 
     if (type == "sphere") {
         const Vec3 center = read_vec3(field(j, "center"));
@@ -279,23 +277,19 @@ void build_medium(const Json& j, LoadContext& ctx) {
             result = it->second;
         } else {
             const Mesh* mesh = build_mesh(ctx, resolved, mat);
-
-            // The triangles get a tree of their own for the same reason a group's children do: a mesh is
-            // thousands of primitives, and acceleration is the renderer's decision rather than the scene
-            // author's, so the format does not name it.
-            const Hittable* tree = make_mesh_bvh(ctx.scene.object_arena(), *mesh, &ctx.scene.bvh_stats());
-            ctx.meshes.emplace(key, tree);
-            result = tree;
+            ctx.meshes.emplace(key, mesh);
+            result = mesh;
         }
     } else if (type == "group") {
         const Json& children = field(j, "children");
         if (!children.is_array() || children.empty()) throw SceneError("Field 'children' must be a non-empty array");
 
-        GroupBuilder group;
+        std::vector<SceneNode> nodes;
+        nodes.reserve(children.size());
         std::size_t index = 0;
         for (const auto& element : children) {
             try {
-                group.add(build_child(element, ctx));
+                nodes.push_back(build_child(element, ctx));
             } catch (SceneError& e) {
                 e.prepend(std::format("/children/{}", index));
                 throw;
@@ -303,12 +297,11 @@ void build_medium(const Json& j, LoadContext& ctx) {
             ++index;
         }
 
-        // The children are organised into a BVH: acceleration is the renderer's
-        // decision, not the scene author's, so the format does not name it.
-        // Spheres and quads go into their kinds' sets, everything else stays a child of the group's tree.
-        result = std::move(group).build(ctx.scene.object_arena(), &ctx.scene.bvh_stats());
+        // Which trees the children end up in is decided when the world is built: acceleration is the
+        // renderer's decision, not the scene author's, so the format does not name it.
+        result = ctx.scene.graph().add_group(std::move(nodes));
     } else if (type == "transform") {
-        const GeometryRef child = child_at(j, ctx, "object");
+        const SceneNode child = child_at(j, ctx, "object");
         const Vec3 offset = j.contains("translate") ? read_vec3(j.at("translate")) : Vec3(0, 0, 0);
         const Vec3 rotation = j.contains("rotate") ? read_vec3(j.at("rotate")) : Vec3(0, 0, 0);
         const Vec3 scale = j.contains("scale") ? read_vec3(j.at("scale")) : Vec3(1, 1, 1);
@@ -324,8 +317,7 @@ void build_medium(const Json& j, LoadContext& ctx) {
                                     Transform::rotation_x(rotation.x()) *
                                     Transform::scaling(scale);
 
-        // An instance wraps exactly one child: a lone sphere or quad gets a set of its own for it.
-        result = ctx.scene.create_object<TransformedHittable>(seal(ctx.scene.object_arena(), child, &ctx.scene.bvh_stats()), transform);
+        result = ctx.scene.graph().add_transform(transform, child);
     } else if (type == "constant_medium") {
         throw SceneError("Object type 'constant_medium' may only appear as a top-level entry in 'objects'");
     } else {
@@ -336,7 +328,7 @@ void build_medium(const Json& j, LoadContext& ctx) {
     return result;
 }
 
-[[nodiscard]] GeometryRef build_child(const Json& j, LoadContext& ctx) {
+[[nodiscard]] SceneNode build_child(const Json& j, LoadContext& ctx) {
     if (j.is_string()) {
         const std::string& name = read_string(j);
 
@@ -449,13 +441,12 @@ void parse_importance_targets(const Json& doc, LoadContext& ctx) {
             if (it == ctx.objects.end())
                 throw SceneError(std::format("Undefined object '{}'. Defined objects: {}", name, available_names(ctx.objects)));
 
-            // Only a sphere or a quad named for itself is sampleable: a box, a group, a mesh or a transform reaches here as a Hittable.
+            // Only a sphere or a quad named for itself is sampleable: a box, a mesh, a group or a transform is not.
             // clang-format off
             const Sampleable* target = std::visit(Overloaded{
                 [](const Sphere* sphere) -> const Sampleable* { return sphere; },
                 [](const Quad* quad)     -> const Sampleable* { return quad; },
-                [](const BoxFaces&)      -> const Sampleable* { return nullptr; },
-                [](const Hittable*)      -> const Sampleable* { return nullptr; },
+                [](const auto&)          -> const Sampleable* { return nullptr; },
             }, it->second);
             // clang-format on
 

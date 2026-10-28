@@ -1,7 +1,7 @@
 #include "pt/render/path_integrator.hpp"
 #include "pt/core/hit_record.hpp"
-#include "pt/core/hittable.hpp"
 #include "pt/geometry/constant_medium.hpp"
+#include "pt/geometry/top_level_bvh.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
@@ -34,7 +34,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     Float t_limit = hit_surface ? rec.t : infinity;
     bool hit_medium{false};
 
-    // Free-flight sampling happens here rather than inside Hittable::hit so that
+    // Free-flight sampling happens here rather than inside the world query so that
     // the sampler stream advances with the light path, not with traversal order.
     for (const ConstantMedium& medium : media_) {
         HitRecord candidate;
