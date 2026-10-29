@@ -16,7 +16,9 @@ class PathIntegrator final : public Integrator {
 public:
     PathIntegrator(const TopLevelBvh& world, std::span<const ConstantMedium> media,
                    const ImportanceTargets& targets, const Color& background, int max_depth)
-        : world_(world), media_(media), targets_(targets), background_(background), max_depth_(max_depth) {}
+        : world_(world), media_(media), targets_(targets), background_(background), max_depth_(max_depth) {
+        assert(max_depth > 0);
+    }
 
     [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override;
 
@@ -31,7 +33,7 @@ private:
     std::span<const ConstantMedium> media_;
     const ImportanceTargets& targets_;
     Color background_;
-    int max_depth_;
+    int max_depth_; // Segments a path may have, the camera's included: 1 sees emitters and nothing they light.
 
     [[nodiscard]] Color trace(const Ray& r, int depth, Sampler& sampler) const;
 };
