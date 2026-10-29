@@ -1,3 +1,4 @@
+#include "pt/core/hit_record.hpp"
 #include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
@@ -22,6 +23,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -31,6 +33,7 @@ using pt::Color;
 using pt::ConstantMedium;
 using pt::DiffuseLight;
 using pt::Float;
+using pt::HitRecord;
 using pt::ImportanceTargets;
 using pt::Isotropic;
 using pt::Lambertian;
@@ -40,7 +43,9 @@ using pt::Point3;
 using pt::Quad;
 using pt::Ray;
 using pt::Sampler;
+using pt::ScatterRecord;
 using pt::SolidColor;
+using pt::SpecularBounce;
 using pt::Sphere;
 using pt::TopLevelBvh;
 using pt::Vec3;
@@ -60,6 +65,30 @@ using pt_test::top_level_of;
 [[nodiscard]] Quad facing_away(Float z, const pt::Material* mat) {
     return Quad(Point3(-1, -1, z), Vec3(2, 0, 0), Vec3(0, 2, 0), mat);
 }
+
+// A mirror that also glows. Between two of them a path never ends on its own:
+// every vertex both emits and continues, so the result is a sum over every vertex
+// the budget allows, each weighted by the attenuation of the bounces before it.
+class GlowingMirror final : public pt::Material {
+public:
+    GlowingMirror(const Color& emission, const Color& albedo) : emission_(emission), albedo_(albedo) {}
+
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec, Sampler&) const override {
+        const Vec3 reflected = pt::reflect(pt::unit_vector(r_in.direction()), rec.normal);
+        return ScatterRecord{
+            .attenuation = albedo_,
+            .bounce = SpecularBounce{.scattered = rec.spawn_ray(reflected, r_in.time())},
+        };
+    }
+
+    // Both faces glow: the two mirrors face each other, and the test is about
+    // weighting, not about which side of a light emits.
+    [[nodiscard]] Color emitted(const Ray&, const HitRecord&) const override { return emission_; }
+
+private:
+    Color emission_;
+    Color albedo_;
+};
 
 const Ray forward{Point3(0, 0, 0), Vec3(0, 0, 1)};
 
@@ -85,23 +114,25 @@ TEST_CASE("a path that hits nothing returns the background", "[render][integrato
 }
 
 TEST_CASE("an exhausted path is black, not background", "[render][integrator]") {
-    const SolidColor white{Color(1, 1, 1)};
-    const DiffuseLight lamp{&white};
-    const Quad light = facing_camera(2.0_f, &lamp);
+    const Metal mirror{Color(0.5_f, 0.5_f, 0.5_f), 0.0_f};
+    const Quad reflector = facing_camera(2.0_f, &mirror);
 
-    const TopLevelBvh world = top_level_of({&light});
+    const TopLevelBvh world = top_level_of({&reflector});
 
-    // Depth is checked before anything else, so even a light directly in view
-    // contributes nothing once the budget is spent.
-    const PathIntegrator integrator{world, no_media, no_targets, background, 0};
+    // With two segments the reflection leaves the scene and comes back with the
+    // background: the mirror does lead somewhere, so a black answer below can
+    // only be the budget's doing.
+    const PathIntegrator escaping{world, no_media, no_targets, background, 2};
+    Sampler first = make_sampler(112);
+    require_color_near(escaping.radiance(forward, first), 0.5_f * background);
 
-    Sampler sampler = make_sampler(112);
-
-    // Black rather than the background: an exhausted path is a path whose
-    // remaining contribution is unknown, and guessing the background there would
-    // add light that no surface emitted. The bias shows up as glowing edges deep
-    // inside a Cornell box.
-    require_color_near(integrator.radiance(forward, sampler), Color(0, 0, 0));
+    // With one, the budget is spent at the mirror. Black rather than the
+    // background: an exhausted path is a path whose remaining contribution is
+    // unknown, and guessing the background there would add light that no surface
+    // emitted. The bias shows up as glowing edges deep inside a Cornell box.
+    const PathIntegrator exhausted{world, no_media, no_targets, background, 1};
+    Sampler second = make_sampler(129);
+    require_color_near(exhausted.radiance(forward, second), Color(0, 0, 0));
 }
 
 TEST_CASE("a light ends the path with its emission", "[render][integrator]") {
@@ -188,6 +219,38 @@ TEST_CASE("the depth budget can be changed between passes", "[render][integrator
 
     Sampler second = make_sampler(118);
     require_color_near(integrator.radiance(forward, second), Color(0.5_f, 0.5_f, 0.5_f));
+}
+
+TEST_CASE("each vertex adds its emission, weighted by the bounces before it", "[render][integrator]") {
+    // Short binary fractions throughout: every product and partial sum below is
+    // exact in float, whatever order the integrator adds the terms in.
+    const Color glow(1.0_f, 2.0_f, 0.5_f);
+    const Color albedo(0.5_f, 0.25_f, 0.75_f);
+    const GlowingMirror glowing{glow, albedo};
+
+    // Face to face across the origin: a ray along +z bounces between them on the
+    // axis and never leaves, so only the budget can end the path.
+    const Quad ahead = facing_camera(2.0_f, &glowing);
+    const Quad behind = facing_away(-2.0_f, &glowing);
+
+    const TopLevelBvh world = top_level_of({&ahead, &behind});
+
+    // Four segments, four vertices. The background is not black, so mistaking an
+    // exhausted budget for an escape would show in the sum.
+    const PathIntegrator integrator{world, no_media, no_targets, background, 4};
+
+    Sampler sampler = make_sampler(128);
+    const Color result = integrator.radiance(forward, sampler);
+
+    // glow * (1 + a + a^2 + a^3), channel by channel. A vertex too many reads
+    // 1.9375 in red, one too few 1.75, and weighting each vertex's emission by
+    // its own attenuation as well as the earlier ones 0.9375.
+    const Color expected(1.875_f, 2.65625_f, 1.3671875_f);
+    INFO("radiance " << pt_test::hex_color(result) << ", expected " << pt_test::hex_color(expected));
+    REQUIRE(pt_test::same_bits(result, expected));
+
+    // A chain of polished reflections decides nothing at random.
+    REQUIRE(consumed_draws(sampler, 128, 0));
 }
 
 TEST_CASE("the diffuse estimator weighs a lambertian bounce by one", "[render][integrator]") {
