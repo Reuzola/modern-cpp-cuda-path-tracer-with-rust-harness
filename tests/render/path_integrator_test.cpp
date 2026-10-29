@@ -148,7 +148,7 @@ TEST_CASE("a light ends the path with its emission", "[render][integrator]") {
     require_color_near(integrator.radiance(forward, sampler), Color(4, 3, 2));
 
     // A light absorbs: scatter returns nothing, so the emission is the whole
-    // answer and the recursion stops without a further draw.
+    // answer and the path stops without a further draw.
     REQUIRE(consumed_draws(sampler, 113, 0));
 }
 
@@ -251,6 +251,34 @@ TEST_CASE("each vertex adds its emission, weighted by the bounces before it", "[
 
     // A chain of polished reflections decides nothing at random.
     REQUIRE(consumed_draws(sampler, 128, 0));
+}
+
+TEST_CASE("a path as long as its budget allows does not grow the call stack", "[render][integrator]") {
+    const GlowingMirror glowing{Color(1, 1, 1), Color(1, 1, 1)};
+    const Metal plain{Color(1, 1, 1), 0.0_f};
+
+    // The same axis as above, with lossless mirrors: the throughput stays exactly one,
+    // so nothing fades, nothing underflows, and every vertex of the budget is visited.
+    const Quad ahead = facing_camera(2.0_f, &glowing);
+    const Quad behind = facing_away(-2.0_f, &plain);
+
+    const TopLevelBvh world = top_level_of({&ahead, &behind});
+
+    // Far deeper than any scene asks for. A tracer that kept one call frame per vertex
+    // would need a frame for each of these, and they do not fit in a thread's stack.
+    constexpr int budget = 100'000;
+    const PathIntegrator integrator{world, no_media, no_targets, background, budget};
+
+    Sampler sampler = make_sampler(130);
+    const Color result = integrator.radiance(forward, sampler);
+
+    // Every second vertex glows: 50000 unit terms, a whole number well inside the range
+    // where float counts exactly.
+    const Color expected(50'000, 50'000, 50'000);
+    INFO("radiance " << pt_test::hex_color(result) << ", expected " << pt_test::hex_color(expected));
+    REQUIRE(pt_test::same_bits(result, expected));
+
+    REQUIRE(consumed_draws(sampler, 130, 0));
 }
 
 TEST_CASE("the diffuse estimator weighs a lambertian bounce by one", "[render][integrator]") {

@@ -16,62 +16,93 @@
 #include "pt/sampling/sampleable_pdf.hpp"
 #include "pt/util/overloaded.hpp"
 #include "pt/util/stats.hpp"
+#include <optional>
 #include <variant>
 
 namespace pt {
 
-Color PathIntegrator::radiance(const Ray& r, Sampler& sampler) const {
-    return trace(r, max_depth_, sampler);
+namespace {
+
+// Where a path goes after a vertex, and what that bounce multiplies its throughput by.
+struct Bounce {
+    Ray ray;
+    Color weight;
+};
+
+[[nodiscard]] std::optional<Bounce> sample_diffuse(const Pdf& pdf, const Point3& origin, const Ray& r_in,
+                                                   const HitRecord& rec, const Color& attenuation, Sampler& sampler) {
+    const Vec3 direction = pdf.generate(sampler);
+    const Float pdf_value = pdf.value(direction);
+
+    // A direction drawn where its own density is zero - rounding at the horizon, a light's
+    // edge, the inside of a light - estimates nothing, and dividing by it would leave the
+    // pixel NaN for good. The path ends here and keeps what it has gathered.
+    if (!(pdf_value > 0)) return std::nullopt;
+
+    const Ray scattered(origin, direction, r_in.time());
+    const Float scattering_pdf = rec.mat->scattering_pdf(r_in, rec, scattered);
+
+    // The densities divide as scalars first: a pdf that matches the material gives about one, and the colour is scaled once.
+    return Bounce{.ray = scattered, .weight = attenuation * (scattering_pdf / pdf_value)};
 }
 
-Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
-    if (depth <= 0) return Color(0, 0, 0);
+[[nodiscard]] std::optional<Bounce> sample_bounce(const Ray& r_in, const HitRecord& rec, const ScatterRecord& sr,
+                                                  const ImportanceTargets& targets, Sampler& sampler) {
+    // clang-format off
+    return std::visit(Overloaded{
+        [&](const SpecularBounce& sb) -> std::optional<Bounce> {
+            return Bounce{.ray = sb.scattered, .weight = sr.attenuation};
+        },
+        [&](const DiffuseBounce& db) -> std::optional<Bounce> {
+            const Pdf& surface_pdf = as_pdf(db.sampling_pdf);
 
-    HitRecord rec;
-    if (!next_interaction(r, sampler, rec)) return background_;
+            // Diffuse light leaves on the side the ray arrived from, which is where the geometric
+            // normal faces; a volume's zero normal leaves p itself. The bounce and the light pdf
+            // share this one point - a light judged from anywhere else misjudges its own cone.
+            const Point3 origin = rec.spawn_origin(rec.geometric_normal);
 
-    const Color color_from_emission = rec.mat->emitted(r, rec);
+            if (targets.empty()) return sample_diffuse(surface_pdf, origin, r_in, rec, sr.attenuation, sampler);
 
-    if (const auto sr = rec.mat->scatter(r, rec, sampler)) {
-        const auto shade = [&](const Pdf& p, const Point3& origin) -> Color {
-            const Vec3 direction = p.generate(sampler);
-            const Float pdf_value = p.value(direction);
+            const SampleablePdf target_pdf(targets, origin);
+            const MixturePdf mixed_pdf(surface_pdf, target_pdf);
+            return sample_diffuse(mixed_pdf, origin, r_in, rec, sr.attenuation, sampler);
+        },
+    }, sr.bounce);
+    // clang-format on
+}
 
-            // A direction drawn where its own density is zero - rounding at the horizon, a light's
-            // edge, the inside of a light - estimates nothing, and dividing by it would leave the
-            // pixel NaN for good. This follows the bounce's last draw, so it shortens no other path.
-            if (!(pdf_value > 0)) return Color(0, 0, 0);
-            const Ray scattered(origin, direction, r.time());
+} // namespace
 
-            const Float scattering_pdf = rec.mat->scattering_pdf(r, rec, scattered);
-            const Color sample_color = trace(scattered, depth - 1, sampler);
+Color PathIntegrator::radiance(Ray ray, Sampler& sampler) const {
+    // Built front to back: each vertex adds its emission scaled by the product of the bounces
+    // before it, so however long the path gets, this is all the state it carries.
+    Color throughput(1, 1, 1);
+    Color estimate(0, 0, 0);
 
-            return (sr->attenuation * scattering_pdf * sample_color) / pdf_value;
-        };
+    for (int depth = 0; depth < max_depth_; ++depth) {
+        HitRecord rec;
+        if (!next_interaction(ray, sampler, rec)) {
+            estimate += throughput * background_;
+            break;
+        }
 
-        // clang-format off
-        return color_from_emission + std::visit(Overloaded{
-            [&](const SpecularBounce& sb) -> Color {
-                return sr->attenuation * trace(sb.scattered, depth - 1, sampler);
-            },
-            [&](const DiffuseBounce& db) -> Color {
-                const auto& surface_pdf = as_pdf(db.sampling_pdf);
+        estimate += throughput * rec.mat->emitted(ray, rec);
 
-                // Diffuse light leaves on the side the ray arrived from, which is where the geometric
-                // normal faces; a volume's zero normal leaves p itself. The bounce and the light pdf
-                // share this one point - a light judged from anywhere else misjudges its own cone.
-                const Point3 origin = rec.spawn_origin(rec.geometric_normal);
+        // The budget counts segments and this vertex ends the last one: a bounce sampled here
+        // would never be traced, so nothing is drawn for it.
+        if (depth + 1 == max_depth_) break;
 
-                if (targets_.empty()) return shade(surface_pdf, origin);
+        const std::optional<ScatterRecord> sr = rec.mat->scatter(ray, rec, sampler);
+        if (!sr) break;
 
-                const SampleablePdf target_pdf(targets_, origin);
-                const MixturePdf mixed_pdf(surface_pdf, target_pdf);
-                return shade(mixed_pdf, origin);
-            }
-        }, sr->bounce);
-        // clang-format on
+        const std::optional<Bounce> bounce = sample_bounce(ray, rec, *sr, targets_, sampler);
+        if (!bounce) break;
+
+        throughput *= bounce->weight;
+        ray = bounce->ray;
     }
-    return color_from_emission;
+
+    return estimate;
 }
 
 bool PathIntegrator::next_interaction(const Ray& r, Sampler& sampler, HitRecord& rec) const {

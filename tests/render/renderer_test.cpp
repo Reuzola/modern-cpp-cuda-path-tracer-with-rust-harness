@@ -55,7 +55,7 @@ constexpr CameraSettings straight_ahead{
 /// integrator would make every expectation here depend on a scene as well.
 class StubIntegrator final : public Integrator {
 public:
-    [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override {
+    [[nodiscard]] Color radiance(Ray r, Sampler& sampler) const override {
         calls_.fetch_add(1, std::memory_order_relaxed);
 
         // Reads the stream, so two samples that were seeded identically produce
@@ -79,7 +79,7 @@ public:
     // stop_at_call counts from 1; 0 never requests a stop.
     StoppingIntegrator(std::stop_source source, int stop_at_call) : source_(std::move(source)), stop_at_call_(stop_at_call) {}
 
-    [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override {
+    [[nodiscard]] Color radiance(Ray r, Sampler& sampler) const override {
         const int call = calls_.fetch_add(1, std::memory_order_relaxed) + 1;
         if (call == stop_at_call_) source_.request_stop();
 

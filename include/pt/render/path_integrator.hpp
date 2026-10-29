@@ -21,7 +21,7 @@ public:
         assert(max_depth > 0);
     }
 
-    [[nodiscard]] Color radiance(const Ray& r, Sampler& sampler) const override;
+    [[nodiscard]] Color radiance(Ray ray, Sampler& sampler) const override;
 
     // Set between passes only: render_pass() reads this while tracing.
     void set_max_depth(int depth) noexcept {
@@ -35,8 +35,6 @@ private:
     const ImportanceTargets& targets_;
     Color background_;
     int max_depth_; // Segments a path may have, the camera's included: 1 sees emitters and nothing they light.
-
-    [[nodiscard]] Color trace(const Ray& r, int depth, Sampler& sampler) const;
 
     // The next point the path meets: the closest surface, or a scattering event sampled
     // inside a medium in front of it. False if the ray escapes; rec is then unspecified.

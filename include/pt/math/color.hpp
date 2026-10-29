@@ -21,6 +21,13 @@ public:
         return *this;
     }
 
+    constexpr Color& operator*=(const Color& c) noexcept {
+        r_ *= c.r_;
+        g_ *= c.g_;
+        b_ *= c.b_;
+        return *this;
+    }
+
     [[nodiscard]] static Color random(Sampler& sampler) noexcept;
 
     [[nodiscard]] static Color random(Float min, Float max, Sampler& sampler) noexcept;
@@ -51,5 +58,8 @@ private:
     const Float inv = 1.0_f / t;
     return inv * c;
 }
+
+// Contract guards: these fail the build if a member below silently loses constexpr.
+static_assert((Color(1, 2, 3) *= Color(2, 0.5_f, 0)).g() == 1.0_f);
 
 } // namespace pt

@@ -58,7 +58,7 @@ public:
     RendezvousIntegrator(const pt::Integrator& inner, std::size_t threads_to_meet)
         : inner_(inner), threads_to_meet_(threads_to_meet) {}
 
-    [[nodiscard]] pt::Color radiance(const pt::Ray& r, pt::Sampler& sampler) const override {
+    [[nodiscard]] pt::Color radiance(pt::Ray r, pt::Sampler& sampler) const override {
         meet();
         return inner_.radiance(r, sampler);
     }

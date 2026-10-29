@@ -8,7 +8,8 @@ class Sampler;
 
 class Integrator {
 public:
-    [[nodiscard]] virtual Color radiance(const Ray& r, Sampler& sampler) const = 0;
+    // By value: an integrator walks a path by replacing the ray, segment by segment.
+    [[nodiscard]] virtual Color radiance(Ray ray, Sampler& sampler) const = 0;
 
 protected:
     ~Integrator() = default;
