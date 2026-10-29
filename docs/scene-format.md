@@ -83,7 +83,7 @@ render.height` and is never stated twice.
 | `width` | integer ≥ 1 | yes | |
 | `height` | integer ≥ 1 | yes | |
 | `samples_per_pixel` | integer ≥ 1 | yes | Rounded down to a perfect square. |
-| `max_depth` | integer ≥ 1 | yes | Maximum ray bounces. |
+| `max_depth` | integer ≥ 1 | yes | Maximum segments per path, the camera ray included: `1` shows emitters only. |
 | `background` | color | yes | Radiance returned by escaping rays. |
 | `seed` | integer ≥ 0 | no | Base seed for deterministic sampling. |
 | `tone_map` | object | no | See below. |

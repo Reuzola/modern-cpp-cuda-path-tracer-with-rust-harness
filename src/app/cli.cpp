@@ -62,7 +62,7 @@ std::variant<CliOptions, int> parse_command_line(int argc, char** argv) {
 
     app.add_option("-s,--spp", opts.samples_per_pixel, "samples per pixel")->check(positive_int);
 
-    app.add_option("-d,--max-depth", opts.max_depth, "maximum ray bounce depth")->check(positive_int);
+    app.add_option("-d,--max-depth", opts.max_depth, "maximum segments per path, the camera ray included")->check(positive_int);
 
     app.add_option("-S,--seed", opts.seed, "random seed");
 

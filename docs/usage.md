@@ -20,7 +20,7 @@ described in [scene-format.md](scene-format.md).
 | `-f`, `--format` | `png` | `ppm`, `png` or `exr`. |
 | `-w`, `--width`, `-H`, `--height` | from the scene | Must be given together. |
 | `-s`, `--spp` | from the scene | Samples per pixel. |
-| `-d`, `--max-depth` | from the scene | Maximum bounces along a path. |
+| `-d`, `--max-depth` | from the scene | Maximum segments per path, the camera ray included. |
 | `-S`, `--seed` | from the scene | Base seed for sampling. |
 | `-t`, `--threads` | every hardware thread | Threads to render with, the calling one included. `-1` leaves one free. |
 | `-l`, `--log-level` | `info` | `info`, `warning`, `error` or `off`. |
@@ -83,7 +83,7 @@ taken months apart can be concatenated. The fields are specified in
 | `<scene>` | — | Path to the scene file. Required. |
 | `-w`, `--width`, `-H`, `--height` | from the scene | Must be given together. |
 | `-s`, `--spp` | from the scene | Samples per pixel, rounded down to a square as in the renderer. |
-| `-d`, `--max-depth` | from the scene | Maximum bounces along a path. |
+| `-d`, `--max-depth` | from the scene | Maximum segments per path, the camera ray included. |
 | `-S`, `--seed` | from the scene | Base seed for sampling. |
 | `-t`, `--threads` | every hardware thread but one | Threads that render. The window's own thread is not counted. `-1` gives the default. |
 | `-f`, `--max-fps` | vsync | Pace frames with a timer at this rate instead of vsync. `0` removes pacing altogether. |

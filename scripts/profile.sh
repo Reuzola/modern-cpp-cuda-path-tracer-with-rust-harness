@@ -135,10 +135,11 @@ while read -r scene width height spp; do
         "${output_dir}/${name}.folded" \
         > "${output_dir}/${name}.svg"
 
-    # Reversed: stacks are merged from the leaf up, so a function reached at
-    # many recursion depths appears once. PathIntegrator::trace recurses to the
-    # scene's maximum depth, which scatters its callees across that many stripes
-    # in the forward graph.
+    # Reversed: stacks are merged from the leaf up, so a function reached through
+    # several callers, or at several depths of the recursive BVH build, appears
+    # once. The intersection kernels are reached from the world query, from
+    # instance trees and from medium boundaries, and the forward graph splits
+    # them into that many stripes.
     inferno-flamegraph \
         --reverse \
         --title "${name} (reversed)" \
