@@ -28,24 +28,7 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
     if (depth <= 0) return Color(0, 0, 0);
 
     HitRecord rec;
-
-    count_ray_query();
-    const bool hit_surface = world_.hit(r, Interval(0.0_f, infinity), rec);
-    Float t_limit = hit_surface ? rec.t : infinity;
-    bool hit_medium{false};
-
-    // Free-flight sampling happens here rather than inside the world query so that
-    // the sampler stream advances with the light path, not with traversal order.
-    for (const ConstantMedium& medium : media_) {
-        HitRecord candidate;
-        if (medium.sample_interaction(r, Interval(0.0_f, t_limit), sampler, candidate)) {
-            t_limit = candidate.t;
-            rec = candidate;
-            hit_medium = true;
-        }
-    }
-
-    if (!hit_surface && !hit_medium) return background_;
+    if (!next_interaction(r, sampler, rec)) return background_;
 
     const Color color_from_emission = rec.mat->emitted(r, rec);
 
@@ -89,6 +72,26 @@ Color PathIntegrator::trace(const Ray& r, int depth, Sampler& sampler) const {
         // clang-format on
     }
     return color_from_emission;
+}
+
+bool PathIntegrator::next_interaction(const Ray& r, Sampler& sampler, HitRecord& rec) const {
+    count_ray_query();
+    const bool hit_surface = world_.hit(r, Interval(0.0_f, infinity), rec);
+    Float t_limit = hit_surface ? rec.t : infinity;
+    bool hit_medium{false};
+
+    // Free-flight sampling happens here rather than inside the world query so that
+    // the sampler stream advances with the light path, not with traversal order.
+    for (const ConstantMedium& medium : media_) {
+        HitRecord candidate;
+        if (medium.sample_interaction(r, Interval(0.0_f, t_limit), sampler, candidate)) {
+            t_limit = candidate.t;
+            rec = candidate;
+            hit_medium = true;
+        }
+    }
+
+    return hit_surface || hit_medium;
 }
 
 } // namespace pt

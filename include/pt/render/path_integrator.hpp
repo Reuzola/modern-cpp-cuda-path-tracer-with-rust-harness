@@ -11,6 +11,7 @@ namespace pt {
 
 class ImportanceTargets;
 class Sampler;
+struct HitRecord;
 
 class PathIntegrator final : public Integrator {
 public:
@@ -36,6 +37,10 @@ private:
     int max_depth_; // Segments a path may have, the camera's included: 1 sees emitters and nothing they light.
 
     [[nodiscard]] Color trace(const Ray& r, int depth, Sampler& sampler) const;
+
+    // The next point the path meets: the closest surface, or a scattering event sampled
+    // inside a medium in front of it. False if the ray escapes; rec is then unspecified.
+    [[nodiscard]] bool next_interaction(const Ray& r, Sampler& sampler, HitRecord& rec) const;
 };
 
 } // namespace pt
