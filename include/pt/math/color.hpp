@@ -14,6 +14,11 @@ public:
     [[nodiscard]] constexpr Float g() const noexcept { return g_; }
     [[nodiscard]] constexpr Float b() const noexcept { return b_; }
 
+    // Exactly zero in every channel: a factor that removes everything after it. Not a test for dim.
+    [[nodiscard]] constexpr bool is_black() const noexcept {
+        return r_ == 0 && g_ == 0 && b_ == 0;
+    }
+
     constexpr Color& operator+=(const Color& c) noexcept {
         r_ += c.r_;
         g_ += c.g_;
@@ -61,5 +66,6 @@ private:
 
 // Contract guards: these fail the build if a member below silently loses constexpr.
 static_assert((Color(1, 2, 3) *= Color(2, 0.5_f, 0)).g() == 1.0_f);
+static_assert(Color(0, 0, 0).is_black() && !Color(0, 0, 0x1p-149_f).is_black());
 
 } // namespace pt

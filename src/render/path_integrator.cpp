@@ -99,6 +99,10 @@ Color PathIntegrator::radiance(Ray ray, Sampler& sampler) const {
         if (!bounce) break;
 
         throughput *= bounce->weight;
+
+        // Nothing past here can reach the camera: a light sample the material does not scatter
+        // into, a black albedo, an underflow. Every later term would be exactly zero.
+        if (throughput.is_black()) break;
         ray = bounce->ray;
     }
 

@@ -3,6 +3,7 @@
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/top_level_bvh.hpp"
+#include "pt/materials/dielectric.hpp"
 #include "pt/materials/diffuse_light.hpp"
 #include "pt/materials/isotropic.hpp"
 #include "pt/materials/lambertian.hpp"
@@ -31,6 +32,7 @@ namespace {
 
 using pt::Color;
 using pt::ConstantMedium;
+using pt::Dielectric;
 using pt::DiffuseLight;
 using pt::Float;
 using pt::HitRecord;
@@ -279,6 +281,29 @@ TEST_CASE("a path as long as its budget allows does not grow the call stack", "[
     REQUIRE(pt_test::same_bits(result, expected));
 
     REQUIRE(consumed_draws(sampler, 130, 0));
+}
+
+TEST_CASE("a path whose throughput reaches zero stops there", "[render][integrator]") {
+    const Metal black_mirror{Color(0, 0, 0), 0.0_f};
+    const Dielectric glass{1.5_f};
+
+    // The black mirror sends the ray straight back, onto a pane of glass. Glass draws once
+    // at every hit to choose between reflecting and refracting, so whether the path went on
+    // past the mirror shows in the sampler.
+    const Quad mirror_ahead = facing_camera(2.0_f, &black_mirror);
+    const Quad glass_behind = facing_away(-2.0_f, &glass);
+
+    const TopLevelBvh world = top_level_of({&mirror_ahead, &glass_behind});
+
+    const PathIntegrator integrator{world, no_media, no_targets, background, 8};
+
+    Sampler sampler = make_sampler(131);
+
+    // Black either way: past a zero factor nothing can add to the estimate.
+    require_color_near(integrator.radiance(forward, sampler), Color(0, 0, 0));
+
+    // But the glass was never reached. A path that kept going would have drawn there.
+    REQUIRE(consumed_draws(sampler, 131, 0));
 }
 
 TEST_CASE("the diffuse estimator weighs a lambertian bounce by one", "[render][integrator]") {
