@@ -23,9 +23,11 @@ namespace pt {
 
 namespace {
 
-// Where a path goes after a vertex, and what that bounce multiplies its throughput by.
+// Where a path goes after a vertex, and what that bounce multiplies its throughput by. Not a
+// Ray: the loop builds its ray in place from these, and a bounce never changes the path's time.
 struct Bounce {
-    Ray ray;
+    Point3 origin;
+    Vec3 direction;
     Color weight;
 };
 
@@ -43,7 +45,7 @@ struct Bounce {
     const Float scattering_pdf = rec.mat->scattering_pdf(r_in, rec, scattered);
 
     // The densities divide as scalars first: a pdf that matches the material gives about one, and the colour is scaled once.
-    return Bounce{.ray = scattered, .weight = attenuation * (scattering_pdf / pdf_value)};
+    return Bounce{.origin = origin, .direction = direction, .weight = attenuation * (scattering_pdf / pdf_value)};
 }
 
 [[nodiscard]] std::optional<Bounce> sample_bounce(const Ray& r_in, const HitRecord& rec, const ScatterRecord& sr,
@@ -51,7 +53,7 @@ struct Bounce {
     // clang-format off
     return std::visit(Overloaded{
         [&](const SpecularBounce& sb) -> std::optional<Bounce> {
-            return Bounce{.ray = sb.scattered, .weight = sr.attenuation};
+            return Bounce{.origin = sb.scattered.origin(), .direction = sb.scattered.direction(), .weight = sr.attenuation};
         },
         [&](const DiffuseBounce& db) -> std::optional<Bounce> {
             const Pdf& surface_pdf = as_pdf(db.sampling_pdf);
@@ -103,7 +105,7 @@ Color PathIntegrator::radiance(Ray ray, Sampler& sampler) const {
         // Nothing past here can reach the camera: a light sample the material does not scatter
         // into, a black albedo, an underflow. Every later term would be exactly zero.
         if (throughput.is_black()) break;
-        ray = bounce->ray;
+        ray = Ray(bounce->origin, bounce->direction, ray.time());
     }
 
     return estimate;

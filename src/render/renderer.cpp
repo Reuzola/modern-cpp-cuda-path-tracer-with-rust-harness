@@ -1,6 +1,5 @@
 #include "pt/render/renderer.hpp"
 #include "pt/math/color.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -92,11 +91,11 @@ Color Renderer::render_sample(int x, int y, int pass_index) const {
     const int s_j = pass_index / sqrt_spp_;
 
     Sampler sampler(sampler_seed(seed_, pixel_index, static_cast<std::uint64_t>(pass_index)));
-
     const Vec3 offset = sample_square_stratified(s_i, s_j, recip_sqrt_spp_, sampler);
-    const Ray ray = camera_.generate_ray(x, y, offset, sampler);
 
-    return integrator_.radiance(ray, sampler);
+    // Built straight into the parameter: a prvalue argument is never copied. Copying a ray
+    // that was just written makes the loads that read it back wait for the stores to retire.
+    return integrator_.radiance(camera_.generate_ray(x, y, offset, sampler), sampler);
 }
 
 void Renderer::render_tile(Accumulator& acc, const Tile& tile, int pass_index) const {
