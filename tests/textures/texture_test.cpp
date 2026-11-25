@@ -1,8 +1,11 @@
 #include "pt/math/color.hpp"
+#include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/checker_texture.hpp"
+#include "pt/textures/noise_texture.hpp"
 #include "pt/textures/solid_color.hpp"
+#include "pt/textures/texture.hpp"
 #include "support/probe_texture.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
@@ -119,4 +122,25 @@ TEST_CASE("the checker is a solid texture, not a surface pattern", "[textures][c
     // than travelling with it.
     require_color_near(checker.value(0.0_f, 0.0_f, Point3(0.5_f, 0.5_f, 0.5_f)), white);
     require_color_near(checker.value(0.9_f, 0.1_f, Point3(0.5_f, 0.5_f, 0.5_f)), white);
+}
+
+TEST_CASE("a texture says whether it reads uv", "[textures]") {
+    const pt::SolidColor red{pt::Color(1, 0, 0)};
+    const pt_test::ProbeTexture probe{pt::Color(0, 1, 0)};
+    pt::Sampler sampler = pt_test::make_sampler(91);
+    const pt::NoiseTexture noise{4.0_f, sampler};
+
+    // A colour from nothing, or from the point alone.
+    REQUIRE_FALSE(red.reads_uv());
+    REQUIRE_FALSE(noise.reads_uv());
+
+    // A checker picks its cell from the point and passes uv on to whichever child it picked: it reads uv exactly
+    // when one of its children does, on either side.
+    REQUIRE_FALSE(pt::CheckerTexture(1.0_f, &red, &red).reads_uv());
+    REQUIRE(pt::CheckerTexture(1.0_f, &red, &probe).reads_uv());
+    REQUIRE(pt::CheckerTexture(1.0_f, &probe, &red).reads_uv());
+
+    // A texture that does not say, and a missing one, are taken to read uv.
+    REQUIRE(probe.reads_uv());
+    REQUIRE(pt::texture_reads_uv(nullptr));
 }

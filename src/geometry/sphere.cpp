@@ -1,5 +1,6 @@
 #include "pt/geometry/sphere.hpp"
 #include "pt/core/hit_record.hpp"
+#include "pt/materials/material.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
@@ -114,9 +115,18 @@ void fill_sphere_record(const Ray& r, const SphereShape& sphere, Float t, const 
     rec.p = center + sphere.radius * outward_normal;
     rec.spawn_margin = gamma(spawn_margin_order) * sphere.radius;
     rec.set_face_normal(r, outward_normal);
-    const auto [u, v] = sphere_uv(outward_normal);
-    rec.u = u;
-    rec.v = v;
+
+    // Coordinates only for a material that reads them: the two inverse trigonometric calls are most of a sphere's
+    // fill, and a solid colour, a metal or a glass never looks at them. Without a material to ask, they are computed.
+    if (mat == nullptr || mat->reads_uv()) {
+        const auto [u, v] = sphere_uv(outward_normal);
+        rec.u = u;
+        rec.v = v;
+    } else {
+        rec.u = 0.0_f;
+        rec.v = 0.0_f;
+    }
+
     rec.mat = mat;
 }
 

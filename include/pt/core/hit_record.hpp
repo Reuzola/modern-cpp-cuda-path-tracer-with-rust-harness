@@ -16,6 +16,8 @@ struct HitRecord {
     // which have no surface to escape and must spawn from the sample point itself.
     Vec3 geometric_normal;
     Float t{};
+
+    // Texture coordinates, guaranteed only to a material that reads them: for any other a fill may leave them zero.
     Float u{};
     Float v{};
 

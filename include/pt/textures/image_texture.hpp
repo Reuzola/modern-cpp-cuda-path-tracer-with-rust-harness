@@ -10,7 +10,7 @@ namespace pt {
 
 class ImageTexture final : public Texture {
 public:
-    explicit ImageTexture(const std::string& filename) : image_(filename) {}
+    explicit ImageTexture(const std::string& filename) : Texture(true), image_(filename) {}
 
     [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 

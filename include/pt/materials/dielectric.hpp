@@ -11,7 +11,7 @@ class Sampler;
 
 class Dielectric final : public Material {
 public:
-    explicit Dielectric(Float refraction_index) : refraction_index_(refraction_index) {}
+    explicit Dielectric(Float refraction_index) : Material(false), refraction_index_(refraction_index) {}
 
     [[nodiscard]] std::optional<ScatterRecord> scatter(const Vec3& incoming, const HitRecord& rec, Sampler& sampler) const override;
 

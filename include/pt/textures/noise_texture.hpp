@@ -11,7 +11,7 @@ class Sampler;
 
 class NoiseTexture final : public Texture {
 public:
-    NoiseTexture(Float scale, Sampler& sampler) : noise_(sampler), scale_(scale) {}
+    NoiseTexture(Float scale, Sampler& sampler) : Texture(false), noise_(sampler), scale_(scale) {}
 
     [[nodiscard]] Color value(Float u, Float v, const Point3& p) const override;
 

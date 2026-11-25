@@ -13,6 +13,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
+#include "support/probe_texture.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -172,4 +173,42 @@ TEST_CASE("a report replaces the whole record, its kind included", "[geometry][p
     REQUIRE(store.closest_in_leaf(triangle_leaf, up, visible, kept));
     REQUIRE_FALSE(store.closest_in_leaf(sphere_leaf, up, Interval(0.0_f, kept.t), kept));
     REQUIRE(kept.kind == PrimitiveKind::triangle);
+}
+
+TEST_CASE("a sphere's coordinates are filled only for a material that reads them", "[geometry][primitive_store]") {
+    // Three copies of one sphere, met at (0, 0, 9) where the outward normal is -z: u = 0.75, v = 0.5 on its map.
+    const pt_test::ProbeTexture probe{pt::Color(0.5_f, 0.5_f, 0.5_f)};
+    const pt::Lambertian textured{&probe};
+    const pt::Sphere mapped{Point3(0, 0, 10), 1.0_f, &textured};
+    const pt::Sphere plain{Point3(0, 0, 10), 1.0_f, &material_a};
+    const pt::Sphere bare{Point3(0, 0, 10), 1.0_f, nullptr};
+
+    PrimitiveStore store;
+    REQUIRE(store.add_sphere(mapped) == 0U);
+    REQUIRE(store.add_sphere(plain) == 1U);
+    REQUIRE(store.add_sphere(bare) == 2U);
+
+    const Ray up{Point3(0, 0, 0), Vec3(0, 0, 1)};
+    const auto record_of = [&](std::uint32_t slot) {
+        // Over coordinates a previous hit left behind: skipping the computation has to clear them, not keep them.
+        HitRecord rec;
+        rec.u = 0.125_f;
+        rec.v = 0.375_f;
+        store.fill(PrimitiveHit{.t = 9.0_f, .slot = slot, .kind = PrimitiveKind::sphere}, up, rec);
+        return rec;
+    };
+
+    const HitRecord read = record_of(0);
+    require_near(read.u, 0.75_f);
+    require_near(read.v, 0.5_f);
+
+    // A solid colour never looks: nothing is computed, and nothing stale survives.
+    const HitRecord skipped = record_of(1);
+    REQUIRE(skipped.u == 0.0_f);
+    REQUIRE(skipped.v == 0.0_f);
+
+    // Nothing to ask: computed, as the safe answer.
+    const HitRecord unasked = record_of(2);
+    require_near(unasked.u, 0.75_f);
+    require_near(unasked.v, 0.5_f);
 }

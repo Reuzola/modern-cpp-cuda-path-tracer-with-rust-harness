@@ -38,6 +38,18 @@ public:
     [[nodiscard]] virtual Color emitted(const Vec3& incoming, const HitRecord& rec) const;
 
     [[nodiscard]] virtual Float scattering_pdf(const Vec3& incoming, const HitRecord& rec, const Vec3& scattered) const;
+
+    // Whether shading this material can read the hit's u and v. Fixed at construction from its textures, so a fill
+    // can skip coordinates nothing would look up.
+    [[nodiscard]] bool reads_uv() const noexcept { return reads_uv_; }
+
+protected:
+    // A material that does not say is taken to read uv, for the reason a texture is.
+    Material() noexcept = default;
+    explicit Material(bool reads_uv) noexcept : reads_uv_(reads_uv) {}
+
+private:
+    bool reads_uv_ = true;
 };
 
 } // namespace pt

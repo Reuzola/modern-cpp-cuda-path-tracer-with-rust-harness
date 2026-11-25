@@ -417,3 +417,24 @@ TEST_CASE("a shading normal facing away still scatters a finite direction", "[ma
     REQUIRE(std::isfinite(out.y()));
     REQUIRE(std::isfinite(out.z()));
 }
+
+TEST_CASE("a material reads uv only through a texture that does", "[materials]") {
+    // A sphere's coordinates are computed only for a material that answers yes, so a wrong no would show up as a
+    // texture sampled at one corner of its image. A wrong yes only costs time, which is why an unsure answer is yes.
+    const SolidColor solid{Color(0.5_f, 0.5_f, 0.5_f)};
+    const ProbeTexture probe{Color(0.5_f, 0.5_f, 0.5_f)};
+
+    REQUIRE_FALSE(Lambertian{&solid}.reads_uv());
+    REQUIRE(Lambertian{&probe}.reads_uv());
+    REQUIRE_FALSE(DiffuseLight{&solid}.reads_uv());
+    REQUIRE(DiffuseLight{&probe}.reads_uv());
+    REQUIRE_FALSE(Isotropic{&solid}.reads_uv());
+    REQUIRE(Isotropic{&probe}.reads_uv());
+
+    // Neither looks anything up.
+    REQUIRE_FALSE(Metal{Color(1, 1, 1), 0.0_f}.reads_uv());
+    REQUIRE_FALSE(Dielectric{1.5_f}.reads_uv());
+
+    // A material that does not say is taken to read them.
+    REQUIRE(PlainMaterial{}.reads_uv());
+}

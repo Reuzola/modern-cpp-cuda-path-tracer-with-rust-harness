@@ -10,7 +10,7 @@
 
 namespace pt {
 
-Metal::Metal(const Color& albedo, Float fuzz) : albedo_(albedo), fuzz_(std::clamp(fuzz, 0.0_f, 1.0_f)) {}
+Metal::Metal(const Color& albedo, Float fuzz) : Material(false), albedo_(albedo), fuzz_(std::clamp(fuzz, 0.0_f, 1.0_f)) {}
 
 std::optional<ScatterRecord> Metal::scatter(const Vec3& incoming, const HitRecord& rec, Sampler& sampler) const {
     const Vec3 reflected = reflect(unit_vector(incoming), rec.normal);
