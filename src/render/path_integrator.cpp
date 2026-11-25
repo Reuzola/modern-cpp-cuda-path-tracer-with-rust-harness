@@ -113,22 +113,30 @@ Color PathIntegrator::radiance(Ray ray, Sampler& sampler) const {
 
 bool PathIntegrator::next_interaction(const Ray& r, Sampler& sampler, HitRecord& rec) const {
     count_ray_query();
-    const bool hit_surface = world_.hit(r, Interval(0.0_f, infinity), rec);
-    Float t_limit = hit_surface ? rec.t : infinity;
-    bool hit_medium{false};
+    SurfaceHit surface;
+    const bool hit_surface = world_.intersect(r, Interval(0.0_f, infinity), surface);
+    Float t_limit = hit_surface ? surface.t() : infinity;
 
     // Free-flight sampling happens here rather than inside the world query so that
     // the sampler stream advances with the light path, not with traversal order.
+    const ConstantMedium* scattering = nullptr;
+
+    // Each medium sees only the segment in front of the nearest event so far, so the last one to report is the nearest.
     for (const ConstantMedium& medium : media_) {
-        HitRecord candidate;
-        if (medium.sample_interaction(r, Interval(0.0_f, t_limit), sampler, candidate)) {
-            t_limit = candidate.t;
-            rec = candidate;
-            hit_medium = true;
+        if (const std::optional<Float> t = medium.sample_distance(r, Interval(0.0_f, t_limit), sampler)) {
+            t_limit = *t;
+            scattering = &medium;
         }
     }
 
-    return hit_surface || hit_medium;
+    if (scattering != nullptr) {
+        scattering->fill(r, t_limit, rec);
+        return true;
+    }
+
+    if (!hit_surface) return false;
+    world_.fill(surface, r, rec);
+    return true;
 }
 
 } // namespace pt

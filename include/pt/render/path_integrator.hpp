@@ -36,8 +36,9 @@ private:
     Color background_;
     int max_depth_; // Segments a path may have, the camera's included: 1 sees emitters and nothing they light.
 
-    // The next point the path meets: the closest surface, or a scattering event sampled
-    // inside a medium in front of it. False if the ray escapes; rec is then unspecified.
+    // The next point the path meets: the closest surface, or a scattering event sampled inside a medium in
+    // front of it. False if the ray escapes, leaving rec untouched. Only the winner is filled: a surface a
+    // medium hides costs its query, never its record.
     [[nodiscard]] bool next_interaction(const Ray& r, Sampler& sampler, HitRecord& rec) const;
 };
 

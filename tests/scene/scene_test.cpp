@@ -1,5 +1,6 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
+#include "pt/geometry/constant_medium.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/materials/lambertian.hpp"
@@ -15,6 +16,7 @@
 #include "pt/textures/solid_color.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <optional>
 #include <utility>
 
 namespace {
@@ -177,7 +179,10 @@ TEST_CASE("media live beside the world, not inside it", "[scene]") {
     REQUIRE_FALSE(scene.world().hit(forward, visible, rec));
 
     Sampler sampler = make_sampler(102);
-    REQUIRE(scene.media().front().sample_interaction(forward, visible, sampler, rec));
+    const pt::ConstantMedium& medium = scene.media().front();
+    const std::optional<Float> t = medium.sample_distance(forward, visible, sampler);
+    REQUIRE(t);
+    medium.fill(forward, *t, rec);
 }
 
 TEST_CASE("building the world puts every staged object in it", "[scene]") {
