@@ -192,26 +192,28 @@ TEST_CASE("a triangle is hit from both sides and flips only the shading normal",
     HitRecord rec;
 
     SECTION("front face, hit from +z") {
-        const Ray r = ray_from_above(0.25_f, 0.25_f);
-        REQUIRE(tri.hit(r, visible, rec));
+        REQUIRE(tri.hit(ray_from_above(0.25_f, 0.25_f), visible, rec));
         REQUIRE(rec.front_face);
         require_vec_near(rec.normal, geometric_normal);
-
-        TriangleHit out;
-        REQUIRE(pt::intersect_triangle(r, visible, v0, v1, v2, out));
-        require_vec_near(out.normal, geometric_normal);
     }
     SECTION("back face, hit from -z") {
         const Ray r(Point3(0.25_f, 0.25_f, -1.0_f), Vec3(0.0_f, 0.0_f, 1.0_f));
         REQUIRE(tri.hit(r, visible, rec));
         REQUIRE_FALSE(rec.front_face);
         require_vec_near(rec.normal, -geometric_normal);
-
-        // The geometric normal follows the winding order, not the viewing side.
-        TriangleHit out;
-        REQUIRE(pt::intersect_triangle(r, visible, v0, v1, v2, out));
-        require_vec_near(out.normal, geometric_normal);
     }
+}
+
+TEST_CASE("the geometric normal follows the winding order, not the viewing side", "[geometry][triangle]") {
+    // The test reports no normal: the fill forms it from the corners, and the winding alone decides its side.
+    require_vec_near(pt::triangle_normal(v0, v1, v2), Vec3(0, 0, 1));
+    require_vec_near(pt::triangle_normal(v0, v2, v1), Vec3(0, 0, -1));
+
+    // Unit length whatever the triangle's size: a normal that kept the area would scale every dot product the
+    // shading takes with it.
+    const Vec3 large = pt::triangle_normal(Point3(0, 0, 0), Point3(300, 0, 0), Point3(0, 0, 200));
+    require_near(large.length(), 1.0_f);
+    require_vec_near(large, Vec3(0, -1, 0));
 }
 
 TEST_CASE("the bounding box encloses every vertex", "[geometry][triangle]") {
@@ -262,9 +264,9 @@ TEST_CASE("a small triangle is hit whatever the ray direction is scaled to", "[g
 }
 
 TEST_CASE("a degenerate triangle is rejected", "[geometry][triangle]") {
-    // Collinear vertices at any scale: the determinant is exactly zero and the
-    // normal would be a NaN. The rejection is what the guard is for; that it costs
-    // nothing on the hot path is why the second guard sits on the normal instead.
+    // Collinear vertices at any scale: the determinant is exactly zero, and the normal the fill would form
+    // is a NaN. The rejection is what the guard is for; that it costs nothing on the hot path is why the
+    // second guard, on the edges' cross product, runs only once a hit is otherwise accepted.
     for (const Float scale : {1.0_f, 1000.0_f}) {
         const Point3 v_0(scale, scale, 1);
         const Point3 v_1(scale + 1, scale, 1);

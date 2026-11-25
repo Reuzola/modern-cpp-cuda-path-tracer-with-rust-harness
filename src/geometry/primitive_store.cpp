@@ -7,6 +7,7 @@
 #include "pt/geometry/triangle.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
+#include "pt/math/vec3.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -63,33 +64,34 @@ void PrimitiveStore::fill(const PrimitiveHit& hit, const Ray& r, HitRecord& rec)
 
     switch (hit.kind) {
     case PrimitiveKind::sphere:
-        fill_sphere_record(r, spheres_.shapes[hit.sphere.slot], hit.sphere.hit, spheres_.materials[hit.sphere.slot], rec);
+        fill_sphere_record(r, spheres_.shapes[hit.slot], hit.t, spheres_.materials[hit.slot], rec);
         break;
     case PrimitiveKind::quad:
-        fill_quad_record(r, quads_.shapes[hit.quad.slot], hit.quad.hit, quads_.materials[hit.quad.slot], rec);
+        fill_quad_record(r, quads_.shapes[hit.slot], QuadHit{.t = hit.t, .alpha = hit.u, .beta = hit.v}, quads_.materials[hit.slot], rec);
         break;
     case PrimitiveKind::triangle:
-        fill_triangle(r, hit.triangle, rec);
+        fill_triangle(r, hit, rec);
         break;
     case PrimitiveKind::instance:
         break; // Excluded above: a child's record is its tree's to fill.
     }
 }
 
-void PrimitiveStore::fill_triangle(const Ray& r, const SlotHit<TriangleHit>& winner, HitRecord& rec) const noexcept {
-    const std::uint32_t entry = triangles_.mesh_of.empty() ? 0 : triangles_.mesh_of[winner.slot];
+void PrimitiveStore::fill_triangle(const Ray& r, const PrimitiveHit& hit, HitRecord& rec) const noexcept {
+    const std::uint32_t entry = triangles_.mesh_of.empty() ? 0 : triangles_.mesh_of[hit.slot];
     const Mesh& mesh = *triangles_.meshes[entry];
-    const TriangleCorners& tri = triangles_.corners[winner.slot];
-    const std::uint32_t id = triangles_.ids[winner.slot];
-    const Uv uv = mesh.texture_uv(id, winner.hit.b1, winner.hit.b2);
+    const TriangleCorners& tri = triangles_.corners[hit.slot];
+    const Vec3 normal = triangle_normal(tri.v0, tri.v1, tri.v2);
+    const std::uint32_t id = triangles_.ids[hit.slot];
+    const Uv uv = mesh.texture_uv(id, hit.u, hit.v);
 
-    rec.t = winner.hit.t;
-    rec.p = barycentric_point(tri.v0, tri.v1, tri.v2, winner.hit.b1, winner.hit.b2);
+    rec.t = hit.t;
+    rec.p = barycentric_point(tri.v0, tri.v1, tri.v2, hit.u, hit.v);
     rec.spawn_margin = 0.0_f; // Written explicitly: the caller reuses records across queries.
     rec.u = uv.u;
     rec.v = uv.v;
     rec.mat = mesh.material();
-    rec.set_face_normal(r, winner.hit.normal, mesh.shading_normal(id, winner.hit.b1, winner.hit.b2, winner.hit.normal));
+    rec.set_face_normal(r, normal, mesh.shading_normal(id, hit.u, hit.v, normal));
 }
 
 } // namespace pt

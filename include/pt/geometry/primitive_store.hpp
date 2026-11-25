@@ -21,28 +21,26 @@ namespace pt {
 class Material;
 class Mesh;
 
-// One candidate of one kind: its slot in that kind's arrays, and what that kind's test returned.
-template <typename Hit>
-struct SlotHit {
-    std::uint32_t slot{};
-    Hit hit{};
-};
-
-// The nearest candidate a query has met so far, one entry per kind rather than one shared variant: each
-// kernel writes only its own. A leaf reports only a candidate nearer than every earlier one, so `kind`,
-// set by the latest report, names the winner.
+// The nearest candidate a query has met so far, in the one shape every kind's test reports: the distance and
+// the two parameters of the surface it met there. A leaf reports only a candidate nearer than every earlier one,
+// and a report overwrites the whole record, kind included, so the record always names the winner whole.
 struct PrimitiveHit {
-    SlotHit<Float> sphere;
-    SlotHit<QuadHit> quad;
-    SlotHit<TriangleHit> triangle;
+    Float t{};
+    // The kind's own surface coordinates, not texture coordinates: b1 and b2 for a triangle, alpha and beta
+    // for a quad. A sphere reports none; its fill rebuilds everything from the point.
+    Float u{};
+    Float v{};
+    std::uint32_t slot{}; // Into the arrays of `kind`
     PrimitiveKind kind{};
 };
+
+// Three scalars, a slot and a kind: what a query carries from report to report and hands to the fill.
+static_assert(sizeof(PrimitiveHit) == 3 * sizeof(Float) + 2 * sizeof(std::uint32_t));
 
 // The leaf scan runs in every traversal's inner loop, so it lives in the header where each tree's traversal can inline it.
 namespace detail {
 
-// How a leaf reaches one kind's stored shapes: the geometric test, and the distance its hit carries.
-// Specialised per stored shape; the leaf scan below is written against this and nothing else.
+// How a leaf reaches one kind's stored shapes: the geometric test, and how its result becomes a report.
 template <typename Shape>
 struct ShapeTraits;
 
@@ -50,6 +48,7 @@ struct ShapeTraits;
 template <>
 struct ShapeTraits<SphereShape> {
     using Hit = Float;
+    static constexpr PrimitiveKind kind = PrimitiveKind::sphere;
 
     [[nodiscard]] static bool intersect(const Ray& r, const Interval& ray_t, const SphereShape& shape, Hit& out) noexcept {
         const std::optional<Float> t = intersect_sphere(r, ray_t, shape);
@@ -58,36 +57,44 @@ struct ShapeTraits<SphereShape> {
         return true;
     }
 
-    [[nodiscard]] static Float distance(const Hit& hit) noexcept { return hit; }
+    [[nodiscard]] static constexpr PrimitiveHit report(const Hit& hit, std::uint32_t slot) noexcept {
+        return {.t = hit, .slot = slot, .kind = kind};
+    }
 };
 
 template <>
 struct ShapeTraits<QuadShape> {
     using Hit = QuadHit;
+    static constexpr PrimitiveKind kind = PrimitiveKind::quad;
 
     [[nodiscard]] static bool intersect(const Ray& r, const Interval& ray_t, const QuadShape& shape, Hit& out) noexcept {
         return intersect_quad(r, ray_t, shape, out);
     }
 
-    [[nodiscard]] static Float distance(const Hit& hit) noexcept { return hit.t; }
+    [[nodiscard]] static constexpr PrimitiveHit report(const Hit& hit, std::uint32_t slot) noexcept {
+        return {.t = hit.t, .u = hit.alpha, .v = hit.beta, .slot = slot, .kind = kind};
+    }
 };
 
 template <>
 struct ShapeTraits<TriangleCorners> {
     using Hit = TriangleHit;
+    static constexpr PrimitiveKind kind = PrimitiveKind::triangle;
 
     [[nodiscard]] static bool intersect(const Ray& r, const Interval& ray_t, const TriangleCorners& shape, Hit& out) noexcept {
         return intersect_triangle(r, ray_t, shape.v0, shape.v1, shape.v2, out);
     }
 
-    [[nodiscard]] static Float distance(const Hit& hit) noexcept { return hit.t; }
+    [[nodiscard]] static constexpr PrimitiveHit report(const Hit& hit, std::uint32_t slot) noexcept {
+        return {.t = hit.t, .u = hit.b1, .v = hit.b2, .slot = slot, .kind = kind};
+    }
 };
 
 // Tests one leaf's run inside `open`, narrowing as it goes. Every candidate that narrows overwrites `winner`,
 // so the last write is the leaf's nearest; returns its distance, or nothing.
 template <typename Shape>
 [[nodiscard]] std::optional<Float> closest_in_run(std::span<const Shape> shapes, const BvhNode& leaf, const Ray& r,
-                                                  const Interval& open, SlotHit<typename ShapeTraits<Shape>::Hit>& winner) noexcept {
+                                                  const Interval& open, PrimitiveHit& winner) noexcept {
     Float closest = open.max;
     bool leaf_hit{false};
 
@@ -97,8 +104,8 @@ template <typename Shape>
 
         typename ShapeTraits<Shape>::Hit candidate{};
         if (ShapeTraits<Shape>::intersect(r, Interval(open.min, closest), shapes[slot], candidate)) {
-            closest = ShapeTraits<Shape>::distance(candidate);
-            winner = {.slot = slot, .hit = candidate};
+            winner = ShapeTraits<Shape>::report(candidate, slot);
+            closest = winner.t;
             leaf_hit = true;
         }
     }
@@ -127,8 +134,8 @@ public:
     // The mesh must outlive the store.
     [[nodiscard]] std::uint32_t add_mesh(const Mesh& mesh);
 
-    // Tests one leaf of a kind this store holds inside `open`, narrowing as it goes. A candidate that narrows is
-    // written into `hit`, and a leaf that found one sets `hit.kind` to its own. Returns the nearest distance, or nothing.
+    // Tests one leaf of a kind this store holds inside `open`, narrowing as it goes.
+    // A candidate that narrows overwrites `hit`, its kind included.
     [[nodiscard]] std::optional<Float> closest_in_leaf(const BvhNode& leaf, const Ray& r, const Interval& open, PrimitiveHit& hit) const noexcept;
 
     // Writes the record of the candidate `hit` names. `r` must be the ray it was found with: a sphere reprojects
@@ -156,7 +163,7 @@ private:
     ShapeArrays<QuadShape> quads_;
     TriangleArrays triangles_;
 
-    void fill_triangle(const Ray& r, const SlotHit<TriangleHit>& winner, HitRecord& rec) const noexcept;
+    void fill_triangle(const Ray& r, const PrimitiveHit& hit, HitRecord& rec) const noexcept;
 };
 
 inline std::optional<Float> PrimitiveStore::closest_in_leaf(const BvhNode& leaf, const Ray& r, const Interval& open, PrimitiveHit& hit) const noexcept {
@@ -165,19 +172,18 @@ inline std::optional<Float> PrimitiveStore::closest_in_leaf(const BvhNode& leaf,
     std::optional<Float> t;
     switch (leaf.kind) {
     case PrimitiveKind::sphere:
-        t = detail::closest_in_run<SphereShape>(spheres_.shapes, leaf, r, open, hit.sphere);
+        t = detail::closest_in_run<SphereShape>(spheres_.shapes, leaf, r, open, hit);
         break;
     case PrimitiveKind::quad:
-        t = detail::closest_in_run<QuadShape>(quads_.shapes, leaf, r, open, hit.quad);
+        t = detail::closest_in_run<QuadShape>(quads_.shapes, leaf, r, open, hit);
         break;
     case PrimitiveKind::triangle:
-        t = detail::closest_in_run<TriangleCorners>(triangles_.corners, leaf, r, open, hit.triangle);
+        t = detail::closest_in_run<TriangleCorners>(triangles_.corners, leaf, r, open, hit);
         break;
     case PrimitiveKind::instance:
         break; // Excluded above: a leaf of children is its tree's to walk.
     }
 
-    if (t) hit.kind = leaf.kind;
     return t;
 }
 

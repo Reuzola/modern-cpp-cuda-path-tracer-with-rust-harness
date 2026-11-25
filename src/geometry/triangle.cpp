@@ -17,6 +17,11 @@ constexpr int t_error_order = 8;
 
 } // namespace
 
+Vec3 triangle_normal(const Point3& v0, const Point3& v1, const Point3& v2) noexcept {
+    const Vec3 normal = cross(v1 - v0, v2 - v0);
+    return normal / std::sqrt(normal.length_squared());
+}
+
 // Uses an out-parameter over std::optional to eliminate hot-path allocation/padding overhead.
 bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
                         const Point3& v1, const Point3& v2, TriangleHit& out) noexcept {
@@ -55,16 +60,13 @@ bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
     const Float t_error = gamma(t_error_order) * dot(component_abs(e2), abs_cross(tvec, e1)) * std::fabs(inv_det);
     if (std::fabs(t) <= t_error) return false;
 
+    // A zero-area triangle has no normal for the fill to form; rejected here, by the edges the fill will
+    // form it from, so nothing the test accepts can fail there.
+    if (!(cross(e1, e2).length_squared() > 0)) return false; // NaN-safe: catches zero area and underflow
+
     out.t = t;
     out.b1 = b1;
     out.b2 = b2;
-
-    // A zero-area triangle has no normal; normalising it would put a NaN in the record.
-    const Vec3 normal = cross(e1, e2);
-    const Float area_squared = normal.length_squared();
-    if (!(area_squared > 0)) return false; // NaN-safe: catches zero area and underflow
-    out.normal = normal / std::sqrt(area_squared);
-
     return true;
 }
 

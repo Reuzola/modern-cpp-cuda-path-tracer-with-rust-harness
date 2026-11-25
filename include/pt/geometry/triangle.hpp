@@ -13,7 +13,6 @@ struct TriangleHit {
     Float t{};
     Float b1{};
     Float b2{};
-    Vec3 normal;
 };
 
 // What a triangle's intersection test reads, and all it reads: its corners, copied out of the mesh's
@@ -32,6 +31,10 @@ static_assert(std::is_trivially_copyable_v<TriangleCorners>);
 [[nodiscard]] constexpr Point3 barycentric_point(const Point3& v0, const Point3& v1, const Point3& v2, Float b1, Float b2) noexcept {
     return (1.0_f - b1 - b2) * v0 + b1 * v1 + b2 * v2;
 }
+
+// The unit normal of a triangle the test accepted, from the same edges the test formed, so the winding
+// decides its side. Kept out of intersect_triangle so it runs for the closest hit only.
+[[nodiscard]] Vec3 triangle_normal(const Point3& v0, const Point3& v1, const Point3& v2) noexcept;
 
 [[nodiscard]] bool intersect_triangle(const Ray& r, const Interval& ray_t, const Point3& v0,
                                       const Point3& v1, const Point3& v2, TriangleHit& out) noexcept;

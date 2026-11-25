@@ -104,8 +104,8 @@ const pt::Lambertian material{&albedo};
 }
 
 // The reference: every triangle, read through the mesh's own index buffer, nearest one filled in. It
-// shares nothing with the tree but the intersection test and Mesh's attribute lookups, so a tree that
-// gathered the wrong corners, kept the wrong id or filled from the wrong candidate disagrees with it.
+// shares nothing with the tree but the intersection test, triangle_normal and Mesh's attribute lookups,
+// so a tree that gathered the wrong corners, kept the wrong id or filled from the wrong candidate disagrees with it.
 bool brute_force_hit(const Mesh& mesh, const Ray& r, const Interval& ray_t, HitRecord& rec) {
     bool found = false;
     std::size_t nearest = 0;
@@ -125,6 +125,7 @@ bool brute_force_hit(const Mesh& mesh, const Ray& r, const Interval& ray_t, HitR
     if (!found) return false;
 
     const auto [pa, pb, pc] = mesh.triangle(nearest);
+    const pt::Vec3 normal = pt::triangle_normal(pa, pb, pc);
     const Uv uv = mesh.texture_uv(nearest, best.b1, best.b2);
     rec.t = best.t;
     rec.p = pt::barycentric_point(pa, pb, pc, best.b1, best.b2);
@@ -132,7 +133,7 @@ bool brute_force_hit(const Mesh& mesh, const Ray& r, const Interval& ray_t, HitR
     rec.u = uv.u;
     rec.v = uv.v;
     rec.mat = mesh.material();
-    rec.set_face_normal(r, best.normal, mesh.shading_normal(nearest, best.b1, best.b2, best.normal));
+    rec.set_face_normal(r, normal, mesh.shading_normal(nearest, best.b1, best.b2, normal));
     return true;
 }
 

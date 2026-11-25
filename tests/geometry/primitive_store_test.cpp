@@ -3,6 +3,7 @@
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/primitive_kind.hpp"
 #include "pt/geometry/primitive_store.hpp"
+#include "pt/geometry/sphere.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
@@ -80,7 +81,7 @@ void require_hit_reads(const PrimitiveStore& store, const pt::BvhNode& leaf, Flo
     const std::optional<Float> t = store.closest_in_leaf(leaf, up, visible, hit);
     REQUIRE(t);
     REQUIRE(hit.kind == PrimitiveKind::triangle);
-    REQUIRE(hit.triangle.slot == expected.slot);
+    REQUIRE(hit.slot == expected.slot);
 
     HitRecord rec;
     store.fill(hit, up, rec);
@@ -128,4 +129,47 @@ TEST_CASE("a mesh registered after the first triangles leaves those on their own
     const pt::BvhNode leaf = leaf_over(2);
     require_hit_reads(store, leaf, 0.0_f, {.slot = 0, .mat = &material_a, .uv = 0.25_f});
     require_hit_reads(store, leaf, 3.0_f, {.slot = 1, .mat = &material_b, .uv = 0.75_f});
+}
+
+TEST_CASE("a report replaces the whole record, its kind included", "[geometry][primitive_store]") {
+    // A sphere straight ahead at nine and a triangle in front of it at five: two leaves of two kinds, met in an
+    // order a traversal can meet them. The second report has to replace the first entirely - a kind left over
+    // from the sphere would send the fill to the sphere's arrays with the triangle's slot and parameters.
+    const pt::Sphere ball{Point3(0, 0, 10), 1.0_f, &material_b};
+    const Mesh mesh(triangles_at({0.0_f}, 0.25_f), &material_a);
+
+    PrimitiveStore store;
+    REQUIRE(store.add_sphere(ball) == 0U);
+    const std::uint32_t m = store.add_mesh(mesh);
+    REQUIRE(store.add_triangle(m, 0) == 0U);
+
+    pt::BvhNode sphere_leaf;
+    sphere_leaf.offset = 0;
+    sphere_leaf.count = 1;
+    sphere_leaf.kind = PrimitiveKind::sphere;
+    const pt::BvhNode triangle_leaf = leaf_over(1);
+
+    const Ray up{Point3(0, 0, 0), Vec3(0, 0, 1)};
+
+    PrimitiveHit hit;
+    const std::optional<Float> far = store.closest_in_leaf(sphere_leaf, up, visible, hit);
+    REQUIRE(far);
+    REQUIRE(hit.kind == PrimitiveKind::sphere);
+
+    const std::optional<Float> near = store.closest_in_leaf(triangle_leaf, up, Interval(0.0_f, *far), hit);
+    REQUIRE(near);
+    REQUIRE(hit.kind == PrimitiveKind::triangle);
+    REQUIRE(hit.slot == 0U);
+    require_near(hit.t, 5.0_f);
+
+    HitRecord rec;
+    store.fill(hit, up, rec);
+    REQUIRE(rec.mat == &material_a);
+    require_near(rec.u, 0.25_f);
+
+    // The other order: the sphere comes second and farther, so it does not report and the triangle stays.
+    PrimitiveHit kept;
+    REQUIRE(store.closest_in_leaf(triangle_leaf, up, visible, kept));
+    REQUIRE_FALSE(store.closest_in_leaf(sphere_leaf, up, Interval(0.0_f, kept.t), kept));
+    REQUIRE(kept.kind == PrimitiveKind::triangle);
 }

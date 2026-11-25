@@ -57,7 +57,7 @@ bool Triangle::hit(const pt::Ray& r, const pt::Interval& ray_t, pt::HitRecord& r
     rec.u = tri_hit.b1;
     rec.v = tri_hit.b2;
     rec.mat = mat_;
-    rec.set_face_normal(r, tri_hit.normal);
+    rec.set_face_normal(r, pt::triangle_normal(v0_, v1_, v2_));
 
     return true;
 }
