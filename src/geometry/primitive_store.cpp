@@ -87,7 +87,7 @@ void PrimitiveStore::fill_triangle(const Ray& r, const PrimitiveHit& hit, HitRec
 
     rec.t = hit.t;
     rec.p = barycentric_point(tri.v0, tri.v1, tri.v2, hit.u, hit.v);
-    rec.spawn_margin = 0.0_f; // Written explicitly: the caller reuses records across queries.
+    rec.spawn_margin = 0.0_f; // Written explicitly: the record handed in may hold another hit.
     rec.u = uv.u;
     rec.v = uv.v;
     rec.mat = mesh.material();

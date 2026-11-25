@@ -53,6 +53,7 @@ using pt::Mesh;
 using pt::Point3;
 using pt::Ray;
 using pt::Sampler;
+using pt::SurfaceHit;
 using pt::TopLevelBvh;
 using pt::Transform;
 using pt::Vec3;
@@ -191,8 +192,8 @@ struct Winners {
 };
 
 void require_same_answer(const TopLevelBvh& tree, const TwoLevelScene& scene, const Ray& r, const Interval& ray_t, Winners& winners) {
-    HitRecord rec;
-    const bool hit = tree.hit(r, ray_t, rec);
+    SurfaceHit found;
+    const bool hit = tree.intersect(r, ray_t, found);
     const std::optional<ReferenceHit> expected = reference_hit(scene.reference(), r, ray_t);
 
     INFO("origin (" << r.origin().x() << ", " << r.origin().y() << ", " << r.origin().z() << ")  direction ("
@@ -200,8 +201,18 @@ void require_same_answer(const TopLevelBvh& tree, const TwoLevelScene& scene, co
     REQUIRE(hit == expected.has_value());
     if (!expected) return;
 
+    // The report alone already tells the level the winner sat on, before anything is filled.
+    const bool top_level = scene.is_top_level(expected->index);
+    REQUIRE((found.instance == SurfaceHit::no_instance) == top_level);
+
+    HitRecord rec;
+    tree.fill(found, r, rec);
     REQUIRE(same_record(rec, expected->rec));
-    ++(scene.is_top_level(expected->index) ? winners.top_level : winners.instanced);
+
+    // The distance a caller clips against before filling - the integrator's media do - is the one the record gets.
+    REQUIRE(same_bits(found.t(), rec.t));
+
+    ++(top_level ? winners.top_level : winners.instanced);
 }
 
 } // namespace
@@ -268,6 +279,12 @@ TEST_CASE("a miss through either level leaves the record untouched", "[geometry]
     rec.t = 42.0_f;
     REQUIRE_FALSE(tree.hit(Ray(Point3(0, 0, 500), Vec3(0, 0, 1)), visible, rec));
     REQUIRE(rec.t == 42.0_f);
+
+    // The report a query writes into follows the same contract: only a reported candidate writes it, and a miss reports none.
+    SurfaceHit report{.primitive = {.t = 42.0_f}, .instance = 7};
+    REQUIRE_FALSE(tree.intersect(Ray(Point3(0, 0, 500), Vec3(0, 0, 1)), visible, report));
+    REQUIRE(report.t() == 42.0_f);
+    REQUIRE(report.instance == 7);
 }
 
 TEST_CASE("an empty top level misses everything", "[geometry][top_level_bvh]") {
@@ -275,6 +292,8 @@ TEST_CASE("an empty top level misses everything", "[geometry][top_level_bvh]") {
 
     HitRecord rec;
     REQUIRE_FALSE(empty.hit(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, rec));
+    SurfaceHit report;
+    REQUIRE_FALSE(empty.intersect(Ray(Point3(0, 0, 0), Vec3(0, 0, 1)), visible, report));
     REQUIRE(empty.bounding_box().x.size() < 0.0_f);
     REQUIRE(empty.instance_count() == 0);
 }

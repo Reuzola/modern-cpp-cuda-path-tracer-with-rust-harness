@@ -16,27 +16,30 @@ ConstantMedium::ConstantMedium(TopLevelBvh boundary, Float density, const Materi
     : boundary_(std::move(boundary)), neg_inv_density_(-1.0_f / density), phase_function_(phase_function) {}
 
 bool ConstantMedium::sample_interaction(const Ray& r, const Interval& ray_t, Sampler& sampler, HitRecord& rec) const {
-    HitRecord rec1;
-    HitRecord rec2;
-
-    if (!boundary_.hit(r, Interval::universe, rec1)) return false;
+    // The boundary is asked for distances only: nothing on it is ever shaded, so its records would be filled for nothing.
+    SurfaceHit enter_hit;
+    if (!boundary_.intersect(r, Interval::universe, enter_hit)) return false;
 
     // Open intervals naturally reject the entry hit at its own distance without nudging. This avoids
     // fixed t-offsets, whose actual world-space distance varies with the ray direction's length.
-    if (!boundary_.hit(r, Interval(rec1.t, infinity), rec2)) return false;
+    SurfaceHit exit_hit;
+    if (!boundary_.intersect(r, Interval(enter_hit.t(), infinity), exit_hit)) return false;
 
-    if (rec1.t < ray_t.min) rec1.t = ray_t.min;
-    if (rec2.t > ray_t.max) rec2.t = ray_t.max;
-    if (rec1.t >= rec2.t) return false;
+    Float t_enter = enter_hit.t();
+    Float t_exit = exit_hit.t();
 
-    if (rec1.t < 0) rec1.t = 0;
+    if (t_enter < ray_t.min) t_enter = ray_t.min;
+    if (t_exit > ray_t.max) t_exit = ray_t.max;
+    if (t_enter >= t_exit) return false;
+
+    if (t_enter < 0) t_enter = 0;
 
     const Float ray_length = r.direction().length();
-    const Float distance_inside_boundary = (rec2.t - rec1.t) * ray_length;
+    const Float distance_inside_boundary = (t_exit - t_enter) * ray_length;
     const Float hit_distance = neg_inv_density_ * std::log(sampler.next_scalar_positive());
     if (hit_distance > distance_inside_boundary) return false;
 
-    rec.t = rec1.t + hit_distance / ray_length;
+    rec.t = t_enter + hit_distance / ray_length;
     rec.p = r.at(rec.t);
     rec.normal = Vec3(1, 0, 0);
 

@@ -21,8 +21,8 @@ struct HitRecord {
 
     // World-space distance a spawned origin must clear on top of the ulp offset: covers error,
     // in p and in the primitive's own next test, that grows with the primitive's size rather
-    // than with |p|. Every producer of a hit writes it on every hit - records are reused
-    // across candidates, so a stale value would leak into the next one.
+    // than with |p|. Every producer writes it on every hit: a record handed in may still hold
+    // another hit, and a stale margin would leak from it.
     Float spawn_margin{};
     bool front_face{};
     const Material* mat = nullptr;
