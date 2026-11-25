@@ -31,7 +31,7 @@ struct Bounce {
     Color weight;
 };
 
-[[nodiscard]] std::optional<Bounce> sample_diffuse(const Pdf& pdf, const Point3& origin, const Ray& r_in,
+[[nodiscard]] std::optional<Bounce> sample_diffuse(const Pdf& pdf, const Point3& origin, const Vec3& incoming,
                                                    const HitRecord& rec, const Color& attenuation, Sampler& sampler) {
     const Vec3 direction = pdf.generate(sampler);
     const Float pdf_value = pdf.value(direction);
@@ -41,19 +41,19 @@ struct Bounce {
     // pixel NaN for good. The path ends here and keeps what it has gathered.
     if (!(pdf_value > 0)) return std::nullopt;
 
-    const Ray scattered(origin, direction, r_in.time());
-    const Float scattering_pdf = rec.mat->scattering_pdf(r_in, rec, scattered);
+    const Float scattering_pdf = rec.mat->scattering_pdf(incoming, rec, direction);
 
     // The densities divide as scalars first: a pdf that matches the material gives about one, and the colour is scaled once.
     return Bounce{.origin = origin, .direction = direction, .weight = attenuation * (scattering_pdf / pdf_value)};
 }
 
-[[nodiscard]] std::optional<Bounce> sample_bounce(const Ray& r_in, const HitRecord& rec, const ScatterRecord& sr,
+[[nodiscard]] std::optional<Bounce> sample_bounce(const Vec3& incoming, const HitRecord& rec, const ScatterRecord& sr,
                                                   const ImportanceTargets& targets, Sampler& sampler) {
     // clang-format off
     return std::visit(Overloaded{
         [&](const SpecularBounce& sb) -> std::optional<Bounce> {
-            return Bounce{.origin = sb.scattered.origin(), .direction = sb.scattered.direction(), .weight = sr.attenuation};
+            // Which side the bounce leaves from follows the direction: back off a mirror, through a pane of glass.
+            return Bounce{.origin = rec.spawn_origin(sb.direction), .direction = sb.direction, .weight = sr.attenuation};
         },
         [&](const DiffuseBounce& db) -> std::optional<Bounce> {
             const Pdf& surface_pdf = as_pdf(db.sampling_pdf);
@@ -63,11 +63,11 @@ struct Bounce {
             // share this one point - a light judged from anywhere else misjudges its own cone.
             const Point3 origin = rec.spawn_origin(rec.geometric_normal);
 
-            if (targets.empty()) return sample_diffuse(surface_pdf, origin, r_in, rec, sr.attenuation, sampler);
+            if (targets.empty()) return sample_diffuse(surface_pdf, origin, incoming, rec, sr.attenuation, sampler);
 
             const SampleablePdf target_pdf(targets, origin);
             const MixturePdf mixed_pdf(surface_pdf, target_pdf);
-            return sample_diffuse(mixed_pdf, origin, r_in, rec, sr.attenuation, sampler);
+            return sample_diffuse(mixed_pdf, origin, incoming, rec, sr.attenuation, sampler);
         },
     }, sr.bounce);
     // clang-format on
@@ -88,16 +88,16 @@ Color PathIntegrator::radiance(Ray ray, Sampler& sampler) const {
             break;
         }
 
-        estimate += throughput * rec.mat->emitted(ray, rec);
+        estimate += throughput * rec.mat->emitted(ray.direction(), rec);
 
         // The budget counts segments and this vertex ends the last one: a bounce sampled here
         // would never be traced, so nothing is drawn for it.
         if (depth + 1 == max_depth_) break;
 
-        const std::optional<ScatterRecord> sr = rec.mat->scatter(ray, rec, sampler);
+        const std::optional<ScatterRecord> sr = rec.mat->scatter(ray.direction(), rec, sampler);
         if (!sr) break;
 
-        const std::optional<Bounce> bounce = sample_bounce(ray, rec, *sr, targets_, sampler);
+        const std::optional<Bounce> bounce = sample_bounce(ray.direction(), rec, *sr, targets_, sampler);
         if (!bounce) break;
 
         throughput *= bounce->weight;

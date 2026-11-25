@@ -2,7 +2,6 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/color.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -12,9 +11,9 @@
 
 namespace pt {
 
-std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecord& rec, Sampler& sampler) const {
+std::optional<ScatterRecord> Dielectric::scatter(const Vec3& incoming, const HitRecord& rec, Sampler& sampler) const {
     const Float ri = rec.front_face ? (1.0_f / refraction_index_) : refraction_index_; // ri means refraction index ratio
-    const Vec3 unit_direction = unit_vector(r_in.direction());
+    const Vec3 unit_direction = unit_vector(incoming);
 
     // Clamped at both ends: the shading normal is interpolated and need not face the
     // ray near a silhouette, so this dot product is not bounded below by zero, and
@@ -31,10 +30,7 @@ std::optional<ScatterRecord> Dielectric::scatter(const Ray& r_in, const HitRecor
     else
         direction = refract(unit_direction, rec.normal, ri);
 
-    return ScatterRecord{
-        .attenuation = Color(1.0_f, 1.0_f, 1.0_f),
-        .bounce = SpecularBounce{.scattered = rec.spawn_ray(direction, r_in.time())},
-    };
+    return ScatterRecord{.attenuation = Color(1.0_f, 1.0_f, 1.0_f), .bounce = SpecularBounce{.direction = direction}};
 }
 
 Float Dielectric::reflectance(Float cosine, Float refraction_index) {

@@ -7,7 +7,6 @@
 #include "pt/materials/metal.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -39,7 +38,6 @@ using pt::Lambertian;
 using pt::Material;
 using pt::Metal;
 using pt::Point3;
-using pt::Ray;
 using pt::Sampler;
 using pt::ScatterRecord;
 using pt::SolidColor;
@@ -72,7 +70,7 @@ using pt_test::require_vec_near;
 /// class's own answers.
 class PlainMaterial final : public Material {
 public:
-    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray&, const HitRecord&, Sampler&) const override {
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Vec3&, const HitRecord&, Sampler&) const override {
         return std::nullopt;
     }
 };
@@ -82,13 +80,13 @@ public:
 TEST_CASE("a material emits nothing and carries no density by default", "[materials]") {
     const PlainMaterial plain;
     const HitRecord rec = surface(Vec3(0, 0, -1));
-    const Ray r{Point3(0, 0, -1), Vec3(0, 0, 1)};
+    const Vec3 incoming{0, 0, 1};
 
     // Metal and Dielectric inherit both of these. The zero density is what makes
     // a specular bounce skip the PDF weighting entirely: it is never asked to
     // divide by it.
-    require_color_near(plain.emitted(r, rec), Color(0, 0, 0));
-    require_near(plain.scattering_pdf(r, rec, r), 0.0_f);
+    require_color_near(plain.emitted(incoming, rec), Color(0, 0, 0));
+    require_near(plain.scattering_pdf(incoming, rec, incoming), 0.0_f);
 }
 
 TEST_CASE("lambertian scatters into a cosine lobe about the normal", "[materials][lambertian]") {
@@ -98,7 +96,7 @@ TEST_CASE("lambertian scatters into a cosine lobe about the normal", "[materials
     const HitRecord rec = surface(Vec3(0, 1, 0));
     Sampler sampler = make_sampler(71);
 
-    const auto scattered = material.scatter(Ray(Point3(0, 5, 0), Vec3(0, -1, 0)), rec, sampler);
+    const auto scattered = material.scatter(Vec3(0, -1, 0), rec, sampler);
     REQUIRE(scattered.has_value());
 
     require_color_near(scattered->attenuation, Color(0.4_f, 0.6_f, 0.8_f));
@@ -124,7 +122,7 @@ TEST_CASE("lambertian's density matches the lobe it samples from", "[materials][
     const Lambertian material{&albedo};
 
     const HitRecord rec = surface(Vec3(0, 1, 0));
-    const Ray incoming{Point3(0, 5, 0), Vec3(0, -1, 0)};
+    const Vec3 incoming{0, -1, 0};
 
     Sampler sampler = make_sampler(72);
     const auto scattered = material.scatter(incoming, rec, sampler);
@@ -138,16 +136,15 @@ TEST_CASE("lambertian's density matches the lobe it samples from", "[materials][
     const std::array directions = {Vec3(0, 1, 0), Vec3(1, 1, 0), Vec3(0.2_f, 0.9_f, -0.3_f), Vec3(3, 4, 0)};
 
     for (const Vec3& direction : directions) {
-        const Ray out{rec.p, direction};
-        require_near(material.scattering_pdf(incoming, rec, out), as_pdf(bounce.sampling_pdf).value(direction));
+        require_near(material.scattering_pdf(incoming, rec, direction), as_pdf(bounce.sampling_pdf).value(direction));
     }
 
     // 60 degrees off the normal: cos/pi.
-    require_near(material.scattering_pdf(incoming, rec, Ray(rec.p, Vec3(std::sqrt(3.0_f), 1, 0))), 0.5_f / pt::pi);
+    require_near(material.scattering_pdf(incoming, rec, Vec3(std::sqrt(3.0_f), 1, 0)), 0.5_f / pt::pi);
 
     // Below the surface the density is clamped, not negative. A negative density
     // would come back as negative radiance and no amount of averaging removes it.
-    require_near(material.scattering_pdf(incoming, rec, Ray(rec.p, Vec3(0, -1, 0))), 0.0_f);
+    require_near(material.scattering_pdf(incoming, rec, Vec3(0, -1, 0)), 0.0_f);
 }
 
 TEST_CASE("lambertian looks its colour up where the ray landed", "[materials][lambertian]") {
@@ -158,7 +155,7 @@ TEST_CASE("lambertian looks its colour up where the ray landed", "[materials][la
     rec.p = Point3(4, -5, 6);
 
     Sampler sampler = make_sampler(73);
-    const auto scattered = material.scatter(Ray(Point3(0, 5, 0), Vec3(0, -1, 0)), rec, sampler);
+    const auto scattered = material.scatter(Vec3(0, -1, 0), rec, sampler);
 
     // All three coordinates are forwarded: uv for image and checker lookups, and
     // the world position for the solid textures that ignore uv entirely.
@@ -174,43 +171,29 @@ TEST_CASE("a polished metal reflects exactly", "[materials][metal]") {
     const HitRecord rec = surface(Vec3(0, 1, 0));
 
     Sampler sampler = make_sampler(74);
-    const Ray incoming{Point3(-1, 1, 0), Vec3(1, -1, 0)};
-    const auto scattered = mirror.scatter(incoming, rec, sampler);
+    const auto scattered = mirror.scatter(Vec3(1, -1, 0), rec, sampler);
 
     REQUIRE(scattered.has_value());
     require_color_near(scattered->attenuation, Color(0.9_f, 0.9_f, 0.9_f));
 
-    // A specular bounce is a single direction, so it comes back as a ray rather
-    // than a distribution and skips the PDF machinery altogether.
+    // A specular bounce is a single direction, so it comes back as one rather
+    // than as a distribution and skips the PDF machinery altogether. Where it
+    // leaves from is the integrator's to decide.
     REQUIRE(std::holds_alternative<SpecularBounce>(scattered->bounce));
-    const Ray& out = std::get<SpecularBounce>(scattered->bounce).scattered;
+    const Vec3& out = std::get<SpecularBounce>(scattered->bounce).direction;
 
     // Mirrored about the normal: the tangential component survives, the normal
     // component flips.
-    require_vec_near(unit_vector(out.direction()), unit_vector(Vec3(1, 1, 0)));
-    require_vec_near(out.origin(), rec.p);
+    require_vec_near(unit_vector(out), unit_vector(Vec3(1, 1, 0)));
 
     // Nothing was drawn: the offset is skipped entirely rather than multiplied
     // by zero, so a mirror leaves the stream where it found it.
     REQUIRE(consumed_draws(sampler, 74, 0));
 }
 
-TEST_CASE("a specular bounce keeps the ray's place in the shutter", "[materials][metal]") {
-    const Metal mirror{Color(1, 1, 1), 0.0_f};
-    const HitRecord rec = surface(Vec3(0, 1, 0));
-
-    Sampler sampler = make_sampler(75);
-    const auto scattered = mirror.scatter(Ray(Point3(-1, 1, 0), Vec3(1, -1, 0), 0.375_f), rec, sampler);
-
-    // Motion blur is a property of the path, not of one segment: a reflection off
-    // a mirror must see the rest of the scene frozen at the same instant, or a
-    // moving object appears in two places in the same image.
-    require_near(std::get<SpecularBounce>(scattered->bounce).scattered.time(), 0.375_f);
-}
-
 TEST_CASE("fuzz is clamped to a usable range", "[materials][metal]") {
     const HitRecord rec = surface(Vec3(0, 1, 0));
-    const Ray incoming{Point3(-1, 1, 0), Vec3(1, -1, 0)};
+    const Vec3 incoming{1, -1, 0};
 
     // Below zero it would subtract from the reflected direction and tilt every
     // highlight in one direction; above one the offset dominates the reflection
@@ -218,7 +201,7 @@ TEST_CASE("fuzz is clamped to a usable range", "[materials][metal]") {
     const Metal negative{Color(1, 1, 1), -3.0_f};
     Sampler sampler = make_sampler(76);
     const auto scattered = negative.scatter(incoming, rec, sampler);
-    require_vec_near(unit_vector(std::get<SpecularBounce>(scattered->bounce).scattered.direction()), unit_vector(Vec3(1, 1, 0)));
+    require_vec_near(unit_vector(std::get<SpecularBounce>(scattered->bounce).direction), unit_vector(Vec3(1, 1, 0)));
 
     // Clamped to zero, so it behaves as a polished mirror in every respect,
     // including leaving the sampler untouched.
@@ -243,7 +226,7 @@ TEST_CASE("a fuzzed reflection below the surface is absorbed", "[materials][meta
     // Grazing incidence: the reflected direction lies almost in the surface, so a
     // full-strength offset frequently pushes it underneath.
     const HitRecord rec = surface(Vec3(0, 1, 0));
-    const Ray grazing{Point3(-1, 0.05_f, 0), Vec3(1, -0.05_f, 0)};
+    const Vec3 grazing{1, -0.05_f, 0};
 
     Sampler sampler = make_sampler(78);
     int absorbed = 0;
@@ -258,8 +241,8 @@ TEST_CASE("a fuzzed reflection below the surface is absorbed", "[materials][meta
         // Whatever comes back has to leave the surface. A ray scattered into the
         // geometry immediately hits its own surface from inside and turns into a
         // black speck.
-        const Ray& out = std::get<SpecularBounce>(scattered->bounce).scattered;
-        REQUIRE(dot(out.direction(), rec.normal) > 0.0_f);
+        const Vec3& out = std::get<SpecularBounce>(scattered->bounce).direction;
+        REQUIRE(dot(out, rec.normal) > 0.0_f);
     }
 
     REQUIRE(absorbed > 0);
@@ -270,7 +253,7 @@ TEST_CASE("glass is colourless and always specular", "[materials][dielectric]") 
     const HitRecord rec = surface(Vec3(0, 0, -1));
 
     Sampler sampler = make_sampler(79);
-    const auto scattered = glass.scatter(Ray(Point3(0, 0, -1), Vec3(0, 0, 1)), rec, sampler);
+    const auto scattered = glass.scatter(Vec3(0, 0, 1), rec, sampler);
 
     REQUIRE(scattered.has_value());
 
@@ -287,13 +270,13 @@ TEST_CASE("total internal reflection needs no random number", "[materials][diele
     // index itself and 1.5 * sin(45) exceeds one - there is no outgoing angle.
     const HitRecord rec = surface(Vec3(0, 0, -1), false);
     const Float diagonal = 1.0_f / std::sqrt(2.0_f);
-    const Ray incoming{Point3(-1, 0, -1), Vec3(diagonal, 0, diagonal)};
+    const Vec3 incoming{diagonal, 0, diagonal};
 
     Sampler sampler = make_sampler(80);
     const auto scattered = glass.scatter(incoming, rec, sampler);
 
-    const Ray& out = std::get<SpecularBounce>(scattered->bounce).scattered;
-    require_vec_near(out.direction(), Vec3(diagonal, 0, -diagonal), 1e-3);
+    const Vec3& out = std::get<SpecularBounce>(scattered->bounce).direction;
+    require_vec_near(out, Vec3(diagonal, 0, -diagonal), 1e-3);
 
     // The Fresnel coin is only flipped when refraction is possible: the guard is
     // the left operand of a short-circuiting ||. Drawing here anyway would still
@@ -305,7 +288,7 @@ TEST_CASE("total internal reflection needs no random number", "[materials][diele
 TEST_CASE("four percent reflects at normal incidence", "[materials][dielectric]") {
     const Dielectric glass{1.5_f};
     const HitRecord rec = surface(Vec3(0, 0, -1));
-    const Ray incoming{Point3(0, 0, -1), Vec3(0, 0, 1)};
+    const Vec3 incoming{0, 0, 1};
 
     Sampler sampler = make_sampler(81);
     constexpr int samples = 4096;
@@ -313,10 +296,10 @@ TEST_CASE("four percent reflects at normal incidence", "[materials][dielectric]"
 
     for (int i = 0; i < samples; ++i) {
         const auto scattered = glass.scatter(incoming, rec, sampler);
-        const Ray& out = std::get<SpecularBounce>(scattered->bounce).scattered;
+        const Vec3& out = std::get<SpecularBounce>(scattered->bounce).direction;
 
         // Straight through, or straight back.
-        if (out.direction().z() < 0.0_f) ++reflected;
+        if (out.z() < 0.0_f) ++reflected;
     }
 
     // Schlick's r0 for an index of 1.5 is ((1 - 1/1.5) / (1 + 1/1.5))^2 = 0.04.
@@ -334,7 +317,7 @@ TEST_CASE("refraction bends by Snell's law", "[materials][dielectric]") {
     // Entering the glass at 45 degrees.
     const HitRecord rec = surface(Vec3(0, 0, -1));
     const Float diagonal = 1.0_f / std::sqrt(2.0_f);
-    const Ray incoming{Point3(-1, 0, -1), Vec3(diagonal, 0, diagonal)};
+    const Vec3 incoming{diagonal, 0, diagonal};
 
     // sin(out) = sin(45) / 1.5 = 0.4714, so the transmitted direction is
     // (0.4714, 0, 0.8819) - bent towards the normal on the way in.
@@ -345,13 +328,13 @@ TEST_CASE("refraction bends by Snell's law", "[materials][dielectric]") {
 
     for (int i = 0; i < 64; ++i) {
         const auto scattered = glass.scatter(incoming, rec, sampler);
-        const Ray& out = std::get<SpecularBounce>(scattered->bounce).scattered;
+        const Vec3& out = std::get<SpecularBounce>(scattered->bounce).direction;
 
         // Every outgoing direction is a unit vector, whichever branch produced it.
-        require_near(out.direction().length(), 1.0_f, 1e-3);
+        require_near(out.length(), 1.0_f, 1e-3);
 
-        if (out.direction().z() > 0.0_f) {
-            require_vec_near(out.direction(), expected, 1e-3);
+        if (out.z() > 0.0_f) {
+            require_vec_near(out, expected, 1e-3);
             ++refracted;
         }
     }
@@ -365,7 +348,7 @@ TEST_CASE("a light emits from its front and scatters nothing", "[materials][diff
     const ProbeTexture probe{Color(4, 3, 2)};
     const DiffuseLight light{&probe};
 
-    const Ray incoming{Point3(0, 5, 0), Vec3(0, -1, 0)};
+    const Vec3 incoming{0, -1, 0};
     Sampler sampler = make_sampler(83);
 
     // A light absorbs every path that reaches it: the path ends there and its
@@ -392,7 +375,7 @@ TEST_CASE("an isotropic medium scatters over the whole sphere", "[materials][iso
     const Isotropic phase{&probe};
 
     const HitRecord rec = surface(Vec3(1, 0, 0));
-    const Ray incoming{Point3(0, 0, -1), Vec3(0, 0, 1)};
+    const Vec3 incoming{0, 0, 1};
 
     Sampler sampler = make_sampler(84);
     const auto scattered = phase.scatter(incoming, rec, sampler);
@@ -408,8 +391,8 @@ TEST_CASE("an isotropic medium scatters over the whole sphere", "[materials][iso
     // The arbitrary normal the medium wrote into the record is never consulted,
     // which is why it can be arbitrary.
     constexpr Float uniform = 1.0_f / (4.0_f * pt::pi);
-    require_near(phase.scattering_pdf(incoming, rec, Ray(rec.p, Vec3(0, 0, 1))), uniform);
-    require_near(phase.scattering_pdf(incoming, rec, Ray(rec.p, Vec3(0, 0, -1))), uniform);
+    require_near(phase.scattering_pdf(incoming, rec, Vec3(0, 0, 1)), uniform);
+    require_near(phase.scattering_pdf(incoming, rec, Vec3(0, 0, -1)), uniform);
     require_near(as_pdf(bounce.sampling_pdf).value(Vec3(0, 1, 0)), uniform);
 }
 
@@ -418,7 +401,6 @@ TEST_CASE("a shading normal facing away still scatters a finite direction", "[ma
     // interpolated normal past a silhouette leaves the cosine outside [-1, 1], and
     // everything downstream of it has to stay finite.
     const Dielectric glass{1.5_f};
-    const Ray incoming{Point3(0, 0, -1), Vec3(0, 0, 1)};
 
     HitRecord rec;
     rec.p = Point3(0, 0, 0);
@@ -427,11 +409,11 @@ TEST_CASE("a shading normal facing away still scatters a finite direction", "[ma
     rec.front_face = true;
 
     Sampler sampler = make_sampler(601);
-    const auto scattered = glass.scatter(incoming, rec, sampler);
+    const auto scattered = glass.scatter(Vec3(0, 0, 1), rec, sampler);
 
     REQUIRE(scattered.has_value());
-    const Ray& out = std::get<pt::SpecularBounce>(scattered->bounce).scattered;
-    REQUIRE(std::isfinite(out.direction().x()));
-    REQUIRE(std::isfinite(out.direction().y()));
-    REQUIRE(std::isfinite(out.direction().z()));
+    const Vec3& out = std::get<SpecularBounce>(scattered->bounce).direction;
+    REQUIRE(std::isfinite(out.x()));
+    REQUIRE(std::isfinite(out.y()));
+    REQUIRE(std::isfinite(out.z()));
 }

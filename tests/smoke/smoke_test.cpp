@@ -6,7 +6,6 @@
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -106,15 +105,15 @@ TEST_CASE("every engine layer is linked into the test binary", "[smoke][config]"
     // all, instead of a scattered handful of unrelated suites going red.
     pt::Sampler sampler{1234};
 
-    REQUIRE(pt::log_level() == pt::LogLevel::info);                                                                                                                              // util
-    REQUIRE(pt::Vec3::random(sampler).length_squared() >= 0.0_f);                                                                                                                // math
-    REQUIRE(pt::HitRecord{}.mat == nullptr);                                                                                                                                     // core
-    REQUIRE(pt::Sphere(pt::Point3(0, 0, 0), 1.0_f, nullptr).bounding_box().x.size() > 0.0_f);                                                                                    // geometry
-    REQUIRE(pt::SolidColor(pt::Color(1, 1, 1)).value(0, 0, pt::Point3(0, 0, 0)).r() == 1.0_f);                                                                                   // textures
-    REQUIRE(pt::Lambertian(nullptr).scattering_pdf(pt::Ray(pt::Point3(0, 0, 0), pt::Vec3(0, 0, 1)), pt::HitRecord{}, pt::Ray(pt::Point3(0, 0, 0), pt::Vec3(0, 0, 1))) == 0.0_f); // materials
-    REQUIRE(pt::SpherePdf{}.value(pt::Vec3(0, 0, 1)) > 0.0_f);                                                                                                                   // sampling
-    REQUIRE(pt::make_tiles(4, 4, 2).size() == 4);                                                                                                                                // render
-    REQUIRE(pt::SceneError("linked").location().empty());                                                                                                                        // scene
+    REQUIRE(pt::log_level() == pt::LogLevel::info);                                                                  // util
+    REQUIRE(pt::Vec3::random(sampler).length_squared() >= 0.0_f);                                                    // math
+    REQUIRE(pt::HitRecord{}.mat == nullptr);                                                                         // core
+    REQUIRE(pt::Sphere(pt::Point3(0, 0, 0), 1.0_f, nullptr).bounding_box().x.size() > 0.0_f);                        // geometry
+    REQUIRE(pt::SolidColor(pt::Color(1, 1, 1)).value(0, 0, pt::Point3(0, 0, 0)).r() == 1.0_f);                       // textures
+    REQUIRE(pt::Lambertian(nullptr).scattering_pdf(pt::Vec3(0, 0, 1), pt::HitRecord{}, pt::Vec3(0, 0, 1)) == 0.0_f); // materials
+    REQUIRE(pt::SpherePdf{}.value(pt::Vec3(0, 0, 1)) > 0.0_f);                                                       // sampling
+    REQUIRE(pt::make_tiles(4, 4, 2).size() == 4);                                                                    // render
+    REQUIRE(pt::SceneError("linked").location().empty());                                                            // scene
 
     // io and post are exercised above, where they carry a Float across the
     // library boundary.

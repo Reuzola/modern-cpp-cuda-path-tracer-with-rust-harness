@@ -2,7 +2,6 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/constants.hpp"
-#include "pt/math/ray.hpp"
 #include "pt/math/sampler.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
@@ -13,12 +12,12 @@
 
 namespace pt {
 
-std::optional<ScatterRecord> Lambertian::scatter(const Ray&, const HitRecord& rec, Sampler&) const {
+std::optional<ScatterRecord> Lambertian::scatter(const Vec3&, const HitRecord& rec, Sampler&) const {
     return ScatterRecord{.attenuation = tex_->value(rec.u, rec.v, rec.p), .bounce = DiffuseBounce{.sampling_pdf = CosinePdf(rec.normal)}};
 }
 
-Float Lambertian::scattering_pdf(const Ray&, const HitRecord& rec, const Ray& scattered) const {
-    const Float cos_theta = dot(rec.normal, unit_vector(scattered.direction()));
+Float Lambertian::scattering_pdf(const Vec3&, const HitRecord& rec, const Vec3& scattered) const {
+    const Float cos_theta = dot(rec.normal, unit_vector(scattered));
     return std::max(0.0_f, cos_theta) / pi;
 }
 

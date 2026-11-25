@@ -75,17 +75,14 @@ class GlowingMirror final : public pt::Material {
 public:
     GlowingMirror(const Color& emission, const Color& albedo) : emission_(emission), albedo_(albedo) {}
 
-    [[nodiscard]] std::optional<ScatterRecord> scatter(const Ray& r_in, const HitRecord& rec, Sampler&) const override {
-        const Vec3 reflected = pt::reflect(pt::unit_vector(r_in.direction()), rec.normal);
-        return ScatterRecord{
-            .attenuation = albedo_,
-            .bounce = SpecularBounce{.scattered = rec.spawn_ray(reflected, r_in.time())},
-        };
+    [[nodiscard]] std::optional<ScatterRecord> scatter(const Vec3& incoming, const HitRecord& rec, Sampler&) const override {
+        const Vec3 reflected = pt::reflect(pt::unit_vector(incoming), rec.normal);
+        return ScatterRecord{.attenuation = albedo_, .bounce = SpecularBounce{.direction = reflected}};
     }
 
     // Both faces glow: the two mirrors face each other, and the test is about
     // weighting, not about which side of a light emits.
-    [[nodiscard]] Color emitted(const Ray&, const HitRecord&) const override { return emission_; }
+    [[nodiscard]] Color emitted(const Vec3&, const HitRecord&) const override { return emission_; }
 
 private:
     Color emission_;
@@ -197,6 +194,58 @@ TEST_CASE("a specular bounce carries its attenuation forward", "[render][integra
     const PathIntegrator one_bounce{world, no_media, no_targets, Color(0, 0, 0), 1};
     Sampler shallow = make_sampler(116);
     require_color_near(one_bounce.radiance(forward, shallow), Color(0, 0, 0));
+}
+
+TEST_CASE("a specular bounce keeps the path's place in the shutter", "[render][integrator]") {
+    const SolidColor white{Color(1, 1, 1)};
+    const DiffuseLight lamp{&white};
+    const Metal mirror{Color(0.5_f, 0.5_f, 0.5_f), 0.0_f};
+
+    // A light that crosses the axis behind the camera: its centre is on it at t = 0.375 exactly
+    // (-3 + 8 * 0.375 = 0) and three units off it at shutter open, three times its radius.
+    const Sphere passing{Point3(-3, 0, -3), Point3(5, 0, -3), 1.0_f, &lamp};
+    const Quad reflector = facing_camera(2.0_f, &mirror);
+
+    const TopLevelBvh world = top_level_of({&reflector, &passing});
+    const PathIntegrator integrator{world, no_media, no_targets, Color(0, 0, 0), 2};
+
+    // Motion blur is a property of the path, not of one segment: the reflection has to see the light
+    // where it is at the camera ray's instant, or a moving object shows up twice in one image.
+    Sampler sampler = make_sampler(132);
+    require_color_near(integrator.radiance(Ray(Point3(0, 0, 0), Vec3(0, 0, 1), 0.375_f), sampler), Color(0.5_f, 0.5_f, 0.5_f));
+
+    // The same path at shutter open finds nothing: the scene tells the two instants apart, so the
+    // answer above can only come from the bounce keeping the time.
+    Sampler control = make_sampler(133);
+    require_color_near(integrator.radiance(Ray(Point3(0, 0, 0), Vec3(0, 0, 1), 0.0_f), control), Color(0, 0, 0));
+}
+
+TEST_CASE("a refracted bounce leaves from the far side of the surface", "[render][integrator]") {
+    const SolidColor white{Color(1, 1, 1)};
+    const DiffuseLight lamp{&white};
+    const Dielectric glass{1.5_f};
+
+    // A single pane met head on, and a light behind it. Straight through, a refracted ray keeps its
+    // direction, so whether it reaches the light depends only on where it starts.
+    const Quad pane = facing_camera(2.0_f, &glass);
+    const Quad light = facing_camera(5.0_f, &lamp);
+
+    const TopLevelBvh world = top_level_of({&pane, &light});
+
+    // Two segments: the pane, then the light. A bounce started on the camera's side would meet the
+    // pane again and spend the second segment on it.
+    const PathIntegrator integrator{world, no_media, no_targets, Color(0, 0, 0), 2};
+
+    Sampler sampler = make_sampler(134);
+    constexpr int samples = 256;
+    Float total{0};
+    for (int i = 0; i < samples; ++i) {
+        total += integrator.radiance(forward, sampler).r();
+    }
+
+    // Four percent reflect back into the black background, the rest reach the light: 0.96. One standard
+    // deviation over these samples is sqrt(0.96 * 0.04 / 256) = 0.012; the tolerance is four of them.
+    require_near(total / static_cast<Float>(samples), 0.96_f, 0.05);
 }
 
 TEST_CASE("the depth budget can be changed between passes", "[render][integrator]") {
