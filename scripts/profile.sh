@@ -11,11 +11,14 @@
 # another thread count should go to its own --out directory: the file names
 # do not carry the thread count.
 #
+# The profiling binary is built first, so a profile always describes the sources
+# it sits next to; --no-build skips that, and so does PATHTRACER naming another binary.
+#
 # Output per scene: a raw perf record, a folded stack file, a flame graph, and a
 # flat self-time report. The raw record is kept so a profile can be re-examined
 # without re-running it.
 #
-# Usage: scripts/profile.sh [--out <dir>] [--threads <n>] [scene-name ...]
+# Usage: scripts/profile.sh [--no-build] [--out <dir>] [--threads <n>] [scene-name ...]
 
 set -euo pipefail
 
@@ -40,10 +43,15 @@ renderer="${PATHTRACER:-build/release-profiling/pathtracer}"
 event="cpu-clock"
 frequency=999
 
+build=true
 selected=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+    --no-build)
+        build=false
+        shift
+        ;;
     --out)
         [[ $# -ge 2 ]] || { echo "error: --out needs a value" >&2; exit 2; }
         output_dir="$2"
@@ -74,6 +82,12 @@ for tool in perf inferno-collapse-perf inferno-flamegraph; do
         exit 2
     fi
 done
+
+# A binary older than the sources would be profiled without a word: every symbol
+# still resolves, so nothing in the report says the code it describes is gone.
+if [[ "${build}" == true && -z "${PATHTRACER:-}" ]]; then
+    cmake --build --preset release-profiling --target pathtracer
+fi
 
 if [[ ! -x "${renderer}" ]]; then
     echo "error: renderer not found at '${renderer}'" >&2
@@ -110,6 +124,7 @@ while read -r scene width height spp; do
     # Records go to stdout and are discarded here; this script measures, it does
     # not report timings. perf follows every thread the process starts, so a
     # multi-threaded profile folds all workers into one graph.
+    # Its stdin is closed: the loop reads the manifest from there.
     perf record \
         --event "${event}" \
         --freq "${frequency}" \
@@ -118,7 +133,7 @@ while read -r scene width height spp; do
         -- "${renderer}" "${scene}" \
         --width "${width}" --height "${height}" --spp "${spp}" \
         --threads "${threads}" \
-        --bench --bench-runs 1 --log-level error >/dev/null
+        --bench --bench-runs 1 --log-level error </dev/null >/dev/null
 
     # perf script expands each sample into a stack, inferno folds identical
     # stacks into counts, and the flame graph is drawn from those counts.

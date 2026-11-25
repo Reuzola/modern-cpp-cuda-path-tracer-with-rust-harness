@@ -19,6 +19,9 @@
 # The workload is benchmarks/manifest.txt, unchanged, so a count describes the
 # same render a benchmark record and a profile describe.
 #
+# The release binary is built first, so a count always describes the sources it
+# sits next to; --no-build skips that, and so does PATHTRACER naming another binary.
+#
 # perf is taken from PERF if set, else from PATH if it runs, else the newest
 # binary under /usr/lib/linux-tools: Ubuntu's perf on PATH is a wrapper that
 # refuses to start when no tools package matches the running kernel.
@@ -27,7 +30,7 @@
 # instructions per sample. With --baseline, the baseline's render instructions
 # and the change in percent follow. Lines are printed as they are written.
 #
-# Usage: scripts/count-instructions.sh [--baseline <file>] [--output <file>] [scene-name ...]
+# Usage: scripts/count-instructions.sh [--no-build] [--baseline <file>] [--output <file>] [scene-name ...]
 
 set -euo pipefail
 
@@ -47,9 +50,14 @@ renderer="${PATHTRACER:-build/release/pathtracer}"
 baseline=""
 output="out/instructions.tsv"
 requested=()
+build=true
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+    --no-build)
+        build=false
+        shift
+        ;;
     --baseline)
         [[ $# -ge 2 ]] || { echo "error: --baseline needs a file" >&2; exit 1; }
         baseline="$2"
@@ -74,6 +82,11 @@ while [[ $# -gt 0 ]]; do
         ;;
     esac
 done
+
+# A binary older than the sources would be counted without a word: the change being measured would read as none.
+if [[ "${build}" == true && -z "${PATHTRACER:-}" ]]; then
+    cmake --build --preset release --target pathtracer >&2
+fi
 
 if [[ ! -x "${renderer}" ]]; then
     echo "error: renderer not found at '${renderer}'" >&2
