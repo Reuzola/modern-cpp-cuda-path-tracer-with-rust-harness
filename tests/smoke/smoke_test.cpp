@@ -1,5 +1,4 @@
 #include "pt/core/hit_record.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/io/color.hpp"
 #include "pt/materials/lambertian.hpp"
@@ -109,7 +108,7 @@ TEST_CASE("every engine layer is linked into the test binary", "[smoke][config]"
 
     REQUIRE(pt::log_level() == pt::LogLevel::info);                                                                                                                              // util
     REQUIRE(pt::Vec3::random(sampler).length_squared() >= 0.0_f);                                                                                                                // math
-    REQUIRE(pt::HittableList{}.empty());                                                                                                                                         // core
+    REQUIRE(pt::HitRecord{}.mat == nullptr);                                                                                                                                     // core
     REQUIRE(pt::Sphere(pt::Point3(0, 0, 0), 1.0_f, nullptr).bounding_box().x.size() > 0.0_f);                                                                                    // geometry
     REQUIRE(pt::SolidColor(pt::Color(1, 1, 1)).value(0, 0, pt::Point3(0, 0, 0)).r() == 1.0_f);                                                                                   // textures
     REQUIRE(pt::Lambertian(nullptr).scattering_pdf(pt::Ray(pt::Point3(0, 0, 0), pt::Vec3(0, 0, 1)), pt::HitRecord{}, pt::Ray(pt::Point3(0, 0, 0), pt::Vec3(0, 0, 1))) == 0.0_f); // materials

@@ -5,7 +5,6 @@
 #include "pt/geometry/scene_graph.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/top_level_bvh.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
@@ -16,6 +15,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/transform.hpp"
 #include "pt/math/vec3.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/test_support.hpp"
 #include <array>
 #include <catch2/catch_message.hpp>
@@ -44,8 +44,8 @@ using pt::Onb;
 using pt::Quad;
 using pt::TopLevelBvh;
 using pt::Transform;
-using pt::Triangle;
 using pt_test::make_sampler;
+using pt_test::Triangle;
 
 const Interval visible{0.0_f, pt::infinity};
 

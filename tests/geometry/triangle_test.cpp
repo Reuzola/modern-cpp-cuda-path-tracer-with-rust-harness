@@ -9,6 +9,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -23,9 +24,9 @@ using pt::HitRecord;
 using pt::Interval;
 using pt::Point3;
 using pt::Ray;
-using pt::Triangle;
 using pt::TriangleHit;
 using pt::Vec3;
+using pt_test::Triangle;
 using pt::operator""_f;
 using Catch::Matchers::WithinAbs;
 using pt_test::require_near;

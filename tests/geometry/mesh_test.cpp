@@ -1,7 +1,6 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/geometry/mesh.hpp"
 #include "pt/geometry/top_level_bvh.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/math/color.hpp"
 #include "pt/math/constants.hpp"
@@ -10,6 +9,7 @@
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/test_support.hpp"
 #include "support/top_level_support.hpp"
 #include <catch2/catch_test_macros.hpp>
@@ -30,10 +30,10 @@ using pt::MeshData;
 using pt::Point3;
 using pt::Ray;
 using pt::TopLevelBvh;
-using pt::Triangle;
 using pt::unit_vector;
 using pt::Uv;
 using pt::Vec3;
+using pt_test::Triangle;
 using pt::operator""_f;
 using pt_test::require_uv_near;
 using pt_test::require_vec_near;

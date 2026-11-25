@@ -1,5 +1,4 @@
 #include "pt/geometry/triangle.hpp"
-#include "pt/core/hit_record.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
@@ -81,25 +80,5 @@ Aabb triangle_bounds(const Point3& v0, const Point3& v1, const Point3& v2) noexc
 
     return Aabb(min_corner, max_corner);
 }
-
-Triangle::Triangle(const Point3& v0, const Point3& v1, const Point3& v2, const Material* mat)
-    : v0_(v0), v1_(v1), v2_(v2), mat_(mat), bbox_(triangle_bounds(v0, v1, v2)) {}
-
-bool Triangle::hit(const Ray& r, const Interval& ray_t, HitRecord& rec) const {
-    TriangleHit tri_hit;
-    if (!intersect_triangle(r, ray_t, v0_, v1_, v2_, tri_hit)) return false;
-
-    rec.t = tri_hit.t;
-    rec.p = barycentric_point(v0_, v1_, v2_, tri_hit.b1, tri_hit.b2);
-    rec.spawn_margin = 0.0_f; // Written explicitly: the record is reused across candidates.
-    rec.u = tri_hit.b1;
-    rec.v = tri_hit.b2;
-    rec.mat = mat_;
-    rec.set_face_normal(r, tri_hit.normal);
-
-    return true;
-}
-
-Aabb Triangle::bounding_box() const { return bbox_; }
 
 } // namespace pt

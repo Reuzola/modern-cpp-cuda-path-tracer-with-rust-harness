@@ -1,6 +1,5 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/bvh_node.hpp"
 #include "pt/geometry/level.hpp"
@@ -9,7 +8,6 @@
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/top_level_bvh.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/aabb.hpp"
@@ -23,6 +21,7 @@
 #include "pt/scene/obj_loader.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/top_level_support.hpp"
 #include <algorithm>
 #include <array>
@@ -49,7 +48,6 @@ using pt::BvhBuildSettings;
 using pt::Float;
 using pt::HitRecord;
 using pt::Hittable;
-using pt::HittableList;
 using pt::Interval;
 using pt::LevelItem;
 using pt::Point3;
@@ -57,6 +55,7 @@ using pt::Ray;
 using pt::Sampler;
 using pt::TopLevelBvh;
 using pt::Vec3;
+using pt_test::HittableList;
 using pt::operator""_f;
 using pt_test::top_level_of;
 
@@ -85,7 +84,7 @@ public:
         const auto first = static_cast<std::uint32_t>(triangles_.positions.size());
         triangles_.positions.insert(triangles_.positions.end(), {a, b, c});
         triangles_.indices.insert(triangles_.indices.end(), {first, first + 1, first + 2});
-        list_.add(objects_.create<pt::Triangle>(a, b, c, mesh_material_));
+        list_.add(objects_.create<pt_test::Triangle>(a, b, c, mesh_material_));
     }
 
     [[nodiscard]] const HittableList& list() const noexcept { return list_; }
@@ -223,7 +222,7 @@ public:
 
         for (std::size_t i = 0; i < mesh.triangle_count(); ++i) {
             const auto [a, b, c] = mesh.triangle(i);
-            list_.add(objects_.create<pt::Triangle>(a, b, c, mat));
+            list_.add(objects_.create<pt_test::Triangle>(a, b, c, mat));
         }
     }
 

@@ -1,6 +1,5 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/bvh.hpp"
 #include "pt/geometry/level.hpp"
 #include "pt/geometry/quad.hpp"
@@ -18,6 +17,7 @@
 #include "pt/math/vec3.hpp"
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/test_support.hpp"
 #include "support/top_level_support.hpp"
 #include <catch2/catch_test_macros.hpp>
@@ -34,7 +34,6 @@ using pt::Aabb;
 using pt::BvhBuildSettings;
 using pt::Float;
 using pt::HitRecord;
-using pt::HittableList;
 using pt::Interval;
 using pt::LevelItem;
 using pt::Point3;
@@ -44,6 +43,7 @@ using pt::Sampler;
 using pt::Sphere;
 using pt::TopLevelBvh;
 using pt::Vec3;
+using pt_test::HittableList;
 using pt::operator""_f;
 using pt_test::top_level_of;
 

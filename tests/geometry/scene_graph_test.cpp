@@ -9,7 +9,6 @@
 #include "pt/geometry/scene_graph.hpp"
 #include "pt/geometry/sphere.hpp"
 #include "pt/geometry/top_level_bvh.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/materials/lambertian.hpp"
 #include "pt/materials/material.hpp"
 #include "pt/math/aabb.hpp"
@@ -25,6 +24,7 @@
 #include "pt/util/arena.hpp"
 #include "pt/util/overloaded.hpp"
 #include "support/placed_reference.hpp"
+#include "support/reference_hittables.hpp"
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
@@ -91,7 +91,7 @@ public:
         std::vector<const Hittable*>& standalone = triangles_[mesh];
         for (std::size_t i = 0; i < mesh->triangle_count(); ++i) {
             const auto [a, b, c] = mesh->triangle(i);
-            standalone.push_back(objects_.create<pt::Triangle>(a, b, c, material));
+            standalone.push_back(objects_.create<pt_test::Triangle>(a, b, c, material));
         }
         return mesh;
     }

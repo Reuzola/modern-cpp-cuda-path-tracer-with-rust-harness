@@ -148,7 +148,6 @@ add_library(pathtracer_core STATIC
   src/math/vec3.cpp
 
   src/core/hittable.cpp
-  src/core/hittable_list.cpp
 
   src/geometry/bottom_level_bvh.cpp
   src/geometry/box.cpp

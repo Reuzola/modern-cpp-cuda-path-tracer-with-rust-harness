@@ -21,7 +21,6 @@ add_executable(pathtracer_tests
   math/transform_test.cpp
 
   core/hit_record_test.cpp
-  core/hittable_list_test.cpp
 
   geometry/sphere_test.cpp
   geometry/quad_test.cpp
@@ -63,6 +62,9 @@ add_executable(pathtracer_tests
   render/progress_test.cpp
   render/accumulator_test.cpp
   render/render_session_test.cpp
+
+  support/reference_hittables.cpp
+  support/hittable_list_test.cpp
 )
 
 # PRIVATE: executables have no consumers.

@@ -1,15 +1,14 @@
 #include "pt/core/hit_record.hpp"
 #include "pt/core/hittable.hpp"
-#include "pt/core/hittable_list.hpp"
 #include "pt/geometry/quad.hpp"
 #include "pt/geometry/sphere.hpp"
-#include "pt/geometry/triangle.hpp"
 #include "pt/math/aabb.hpp"
 #include "pt/math/constants.hpp"
 #include "pt/math/interval.hpp"
 #include "pt/math/ray.hpp"
 #include "pt/math/scalar.hpp"
 #include "pt/math/vec3.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/test_support.hpp"
 #include <catch2/catch_test_macros.hpp>
 
@@ -19,11 +18,11 @@ using pt::Aabb;
 using pt::Float;
 using pt::HitRecord;
 using pt::Hittable;
-using pt::HittableList;
 using pt::Interval;
 using pt::Point3;
 using pt::Ray;
 using pt::Vec3;
+using pt_test::HittableList;
 using pt::operator""_f;
 using pt_test::require_aabb_near;
 using pt_test::require_near;
@@ -79,7 +78,7 @@ const Ray forward{Point3(0, 0, 0), Vec3(0, 0, 1)};
 
 } // namespace
 
-TEST_CASE("an empty list hits nothing and bounds nothing", "[core][hittable_list]") {
+TEST_CASE("an empty list hits nothing and bounds nothing", "[support][hittable_list]") {
     const HittableList list;
 
     REQUIRE(list.empty());
@@ -98,7 +97,7 @@ TEST_CASE("an empty list hits nothing and bounds nothing", "[core][hittable_list
     REQUIRE(box.surface_area() == 0.0_f);
 }
 
-TEST_CASE("the single-object constructor is an add", "[core][hittable_list]") {
+TEST_CASE("the single-object constructor is an add", "[support][hittable_list]") {
     const StubHittable object(2.0_f, 1.0_f, Aabb(Point3(-1, -1, -1), Point3(1, 1, 1)));
     const HittableList list(&object);
 
@@ -109,7 +108,7 @@ TEST_CASE("the single-object constructor is an add", "[core][hittable_list]") {
     require_aabb_near(list.bounding_box(), Point3(-1, -1, -1), Point3(1, 1, 1));
 }
 
-TEST_CASE("the bounds are the hull of the members", "[core][hittable_list]") {
+TEST_CASE("the bounds are the hull of the members", "[support][hittable_list]") {
     const StubHittable left(2.0_f, 1.0_f, Aabb(Point3(-3, -1, -1), Point3(-1, 1, 1)));
     const StubHittable right(3.0_f, 2.0_f, Aabb(Point3(1, -2, -1), Point3(3, 2, 4)));
     const StubHittable nowhere(4.0_f, 3.0_f, Aabb{});
@@ -134,7 +133,7 @@ TEST_CASE("the bounds are the hull of the members", "[core][hittable_list]") {
     REQUIRE(list.objects().size() == 3);
 }
 
-TEST_CASE("clear drops the objects and the bounds together", "[core][hittable_list]") {
+TEST_CASE("clear drops the objects and the bounds together", "[support][hittable_list]") {
     const StubHittable object(2.0_f, 1.0_f, Aabb(Point3(-1, -1, -1), Point3(1, 1, 1)));
 
     HittableList list;
@@ -152,7 +151,7 @@ TEST_CASE("clear drops the objects and the bounds together", "[core][hittable_li
     REQUIRE(list.bounding_box().x.min > list.bounding_box().x.max);
 }
 
-TEST_CASE("the nearest object wins, whatever the insertion order", "[core][hittable_list]") {
+TEST_CASE("the nearest object wins, whatever the insertion order", "[support][hittable_list]") {
     const Aabb unit(Point3(-1, -1, -1), Point3(1, 1, 1));
 
     const StubHittable near_object(2.0_f, 10.0_f, unit);
@@ -177,7 +176,7 @@ TEST_CASE("the nearest object wins, whatever the insertion order", "[core][hitta
     require_near(reordered.u, 10.0_f);
 }
 
-TEST_CASE("every object is asked, with the interval narrowed to the closest hit so far", "[core][hittable_list]") {
+TEST_CASE("every object is asked, with the interval narrowed to the closest hit so far", "[support][hittable_list]") {
     const Aabb unit(Point3(-1, -1, -1), Point3(1, 1, 1));
 
     const StubHittable near_object(2.0_f, 10.0_f, unit);
@@ -204,7 +203,7 @@ TEST_CASE("every object is asked, with the interval narrowed to the closest hit 
     require_near(far_object.last_ray_t().max, 2.0_f);
 }
 
-TEST_CASE("the caller's interval bounds the search", "[core][hittable_list]") {
+TEST_CASE("the caller's interval bounds the search", "[support][hittable_list]") {
     const Aabb unit(Point3(-1, -1, -1), Point3(1, 1, 1));
     const StubHittable object(2.0_f, 10.0_f, unit);
 
@@ -224,7 +223,7 @@ TEST_CASE("the caller's interval bounds the search", "[core][hittable_list]") {
     require_near(rec.t, 2.0_f);
 }
 
-TEST_CASE("the winner's whole record survives, and a miss leaves the record alone", "[core][hittable_list]") {
+TEST_CASE("the winner's whole record survives, and a miss leaves the record alone", "[support][hittable_list]") {
     const Aabb unit(Point3(-1, -1, -1), Point3(1, 1, 1));
 
     const StubHittable near_object(2.0_f, 10.0_f, unit);
@@ -253,7 +252,7 @@ TEST_CASE("the winner's whole record survives, and a miss leaves the record alon
     require_near(untouched.t, 42.0_f);
 }
 
-TEST_CASE("at exactly equal distance the first accepting object wins", "[core][hittable_list]") {
+TEST_CASE("at exactly equal distance the first accepting object wins", "[support][hittable_list]") {
     // Two quads covering the same square in z = 2, parameterised in opposite
     // directions, so the same hit point carries different (u, v) and the record
     // says which one answered. The ray is deliberately off-centre: the centre of
@@ -290,14 +289,14 @@ TEST_CASE("at exactly equal distance the first accepting object wins", "[core][h
     require_near(other.v, 0.375_f);
 }
 
-TEST_CASE("a winner without a margin of its own does not inherit one", "[core][hittable_list]") {
+TEST_CASE("a winner without a margin of its own does not inherit one", "[support][hittable_list]") {
     // The list reuses one scratch record across its members. The sphere is asked
     // first and accepted, which writes its nonzero margin there; the closer
     // triangle then displaces it. A triangle's margin is zero - its conservative
     // distance test does that job - and a primitive that skipped writing it would
     // hand the sphere's to the triangle, pushing every spawn from it off by that much.
     const pt::Sphere far_sphere(Point3(0, 0, 10), 1.0_f, nullptr);
-    const pt::Triangle near_triangle(Point3(-1, -1, 2), Point3(1, -1, 2), Point3(0, 1, 2), nullptr);
+    const pt_test::Triangle near_triangle(Point3(-1, -1, 2), Point3(1, -1, 2), Point3(0, 1, 2), nullptr);
 
     // Not vacuous: on its own the sphere does leave a margin behind.
     HitRecord sphere_only;

@@ -25,6 +25,7 @@
 #include "pt/textures/solid_color.hpp"
 #include "pt/util/arena.hpp"
 #include "support/placed_reference.hpp"
+#include "support/reference_hittables.hpp"
 #include "support/test_support.hpp"
 #include <array>
 #include <catch2/catch_message.hpp>
@@ -165,7 +166,7 @@ private:
 
         for (std::size_t i = 0; i < mesh->triangle_count(); ++i) {
             const auto [a, b, c] = mesh->triangle(i);
-            placed.push_back(Placed{.object = objects_.create<pt::Triangle>(a, b, c, material), .instance = std::nullopt});
+            placed.push_back(Placed{.object = objects_.create<pt_test::Triangle>(a, b, c, material), .instance = std::nullopt});
         }
         return mesh;
     }
