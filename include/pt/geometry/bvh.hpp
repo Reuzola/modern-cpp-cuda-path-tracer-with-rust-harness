@@ -23,10 +23,14 @@ namespace detail {
 
 // A deferred far child, already box-tested by its parent. `t_enter` is geometric and never changes,
 // so a single comparison against the narrowed `closest` reproduces the full slab test's verdict.
+// No member initializers, unlike everywhere else: they would make the traversal stack zero itself on
+// every query, and every entry is written by a push before a pop reads it.
 struct TraversalEntry {
-    std::uint32_t index{};
-    Float t_enter{};
+    std::uint32_t index;
+    Float t_enter;
 };
+
+static_assert(std::is_trivially_default_constructible_v<TraversalEntry>);
 
 } // namespace detail
 
@@ -100,7 +104,8 @@ template <BvhLeafTest LeafTest>
 
     // Fixed size and local: hit() is const and will be shared across threads, so no traversal state
     // may live in the object. Capacity is guaranteed by the builder's depth cap, bvh_max_depth.
-    std::array<detail::TraversalEntry, bvh_max_depth> stack;
+    // Left uninitialized on purpose - no braces - so a query does not pay for clearing it.
+    std::array<detail::TraversalEntry, bvh_max_depth> stack; // NOLINT(cppcoreguidelines-pro-type-member-init)
     std::size_t stack_size{};
     std::uint32_t current{};
 
